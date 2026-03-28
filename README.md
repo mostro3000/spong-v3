@@ -666,6 +666,25 @@ packaging/
 
 ## 15. Historial de cambios
 
+### v3.1 — 2026-03 (parte 3)
+
+**Script de migración desde SPONG Perl**
+- `bin/spong-migrate.py` — convierte los archivos de configuración del SPONG original (Perl) al formato YAML v3
+- Soporta `spong.conf` → `spong.yaml`, `spong.hosts` → `hosts.yaml`, `spong.groups` → `groups.yaml`
+- Parser regex puro sin dependencias externas ni Perl instalado
+- Maneja comentarios Perl, hashes anidados, arrays `[...]`, entradas comentadas
+- Modo `--all` detecta automáticamente los archivos en el directorio actual
+
+```bash
+# Uso básico — detecta todo en el directorio actual
+python3 /usr/local/spong/bin/spong-migrate.py --all
+
+# Archivos específicos
+python3 /usr/local/spong/bin/spong-migrate.py \
+  --conf spong.conf --hosts spong.hosts --groups spong.groups \
+  --outdir /usr/local/spong/etc/ --force
+```
+
 ### v3.1 — 2026-03 (parte 2)
 
 **Check on-demand al presionar el badge de estado**

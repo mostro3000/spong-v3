@@ -53,7 +53,7 @@ copy_tree "$SPONG_SRC/web"   "$PKG/usr/local/spong/web"
 # Binarios
 mkdir -p "$PKG/usr/local/spong/bin"
 for f in spong-server spong-network spong-client spong-web spong-ack \
-          spong-cleanup spong-message spong-status spong-client; do
+          spong-cleanup spong-message spong-status spong-client spong-migrate.py; do
     [ -f "$SPONG_SRC/bin/$f" ] && cp "$SPONG_SRC/bin/$f" "$PKG/usr/local/spong/bin/"
 done
 chmod +x "$PKG/usr/local/spong/bin/"*
