@@ -9,7 +9,8 @@
 set -e
 
 VERSION="3.1-1"
-SPONG_SRC="/usr/local/spong"
+# Directorio raíz del repo: funciona tanto en /usr/local/spong como en CI (GitHub Actions)
+SPONG_SRC="$(cd "$(dirname "$0")/.." && pwd)"
 BUILD_DIR="/tmp/spong-deb-build"
 OUT_DIR="$SPONG_SRC/packaging/dist"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
