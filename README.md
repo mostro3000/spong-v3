@@ -26,6 +26,10 @@
 |---|
 | ![Clima](docs/screenshots/05_clima.png) |
 
+| Gráfico ping estilo SmokePing (lightbox) | Gráfico HTTP tiempo de respuesta (lightbox) |
+|---|---|
+| ![Ping graph](docs/screenshots/06_ping_graph.png) | ![HTTP graph](docs/screenshots/07_http_graph.png) |
+
 ---
 
 ## Instalación rápida
