@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}SPONG - {{ _('Reconocidos') }}{% endblock %}
+{% block content %}
+
+<div class="page-title">&#10003; {{ _('Reconocimientos activos') }}</div>
+
+{% if not all_acks %}
+<div class="ok-msg">{{ _('No hay reconocimientos activos.') }}</div>
+{% else %}
+<div class="card">
+<table>
+  <thead>
+    <tr><th>Host</th><th>{{ _('Patrón') }}</th><th>{{ _('Estado actual') }}</th><th>{{ _('Contacto') }}</th><th>{{ _('Hasta') }}</th><th>{{ _('Mensaje') }}</th><th></th></tr>
+  </thead>
+  <tbody>
+  {% for entry in all_acks %}
+  {% set ack = entry.ack %}
+  <tr>
+    <td style="font-weight:500;"><a href="{{ url_for('host_detail', hostname=ack.host) }}">{{ ack.host }}</a></td>
+    <td style="font-size:11px; color:#546e7a;">{{ ack.services }}</td>
+    <td>
+      {% for svc_name, svc in entry.services_status %}
+      <a href="{{ url_for('service_detail', hostname=ack.host, service=svc_name) }}" title="{{ svc.summary }}" style="margin-right:3px;">
+        <span class="badge color-{{ svc.color }}" style="font-size:10px; min-width:auto; padding:1px 6px;">{{ svc_name }}</span>
+      </a>
+      {% endfor %}
+    </td>
+    <td style="font-size:11px;">{{ ack.contact }}</td>
+    <td style="font-size:11px; white-space:nowrap;">
+      {% if ack.end_time == 0 %}
+        <span style="color:#1e88e5; font-weight:600;">{{ _('Sin vencimiento') }}</span>
+      {% else %}
+        {% set remaining = (ack.end_time - time.time()) | int %}
+        <span title="{{ ack.end_time | int | strftime('%Y-%m-%d %H:%M') }}">
+          {% if remaining < 3600 %}<span style="color:#e53935;">{{ remaining // 60 }}m {{ _('restantes') }}</span>
+          {% elif remaining < 86400 %}{{ remaining // 3600 }}h {{ _('restantes') }}
+          {% else %}{{ remaining // 86400 }}d {{ _('restantes') }}{% endif %}
+        </span>
+      {% endif %}
+    </td>
+    <td style="font-size:11px; color:#546e7a;">{{ ack.message }}</td>
+    <td><a class="btn btn-red btn-sm" href="{{ url_for('ack_del', ack_id=ack.host ~ '-' ~ ack.services ~ '-' ~ (ack.end_time|int)) }}">{{ _('Borrar') }}</a></td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+
+<div style="margin-top:14px;">
+  <a class="btn" href="{{ url_for('ack') }}">{{ _('+ Nuevo reconocimiento') }}</a>
+</div>
+
+{% endblock %}

@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}SPONG - {{ _('Reconocer') }}{% endblock %}
+{% block content %}
+
+<div class="page-title">
+  &#10003; {{ _('Reconocer') }}
+  <span class="sub">{{ host }}{% if service != '.*' %} / {{ service }}{% endif %}</span>
+</div>
+
+<div class="card" style="max-width:460px;">
+<div class="card-header">{{ _('Nuevo reconocimiento') }}</div>
+<div class="card-body" style="padding:16px;">
+<form method="POST" action="{{ url_for('ack') }}">
+  <input type="hidden" name="host" value="{{ host }}">
+  <table style="width:100%;">
+    <tr>
+      <td style="padding:5px 0; width:90px; color:#546e7a; font-weight:600; font-size:12px;">Host</td>
+      <td style="padding:5px 0;"><input name="host" value="{{ host }}" style="width:100%;"></td>
+    </tr>
+    <tr>
+      <td style="padding:5px 0; color:#546e7a; font-weight:600; font-size:12px;">{{ _('Servicios') }}</td>
+      <td style="padding:5px 0;"><input name="services" value="{{ service }}" style="width:100%;"></td>
+    </tr>
+    <tr>
+      <td style="padding:5px 0; color:#546e7a; font-weight:600; font-size:12px;">{{ _('Duración') }}</td>
+      <td style="padding:5px 0;">
+        <div style="display:flex; align-items:center; gap:8px;">
+          <input name="hours" type="text" style="width:80px;" placeholder="+4h" id="dur-input">
+          <span style="font-size:11px; color:#90a4ae;">+4h &nbsp;+2d &nbsp;+1m &nbsp;+1a</span>
+        </div>
+        <label style="font-size:11px; color:#546e7a; cursor:pointer; display:flex; align-items:center; gap:5px; margin-top:5px;">
+          <input type="checkbox" id="dur-never"
+            onchange="document.getElementById('dur-input').value = this.checked ? 'never' : (localStorage.getItem('ack_hours')||'+4h');
+                      document.getElementById('dur-input').disabled = this.checked;">
+          {{ _('Sin vencimiento') }}
+        </label>
+      </td>
+    </tr>
+    <tr>
+      <td style="padding:5px 0; color:#546e7a; font-weight:600; font-size:12px;">{{ _('Contacto') }}</td>
+      <td style="padding:5px 0;"><input name="contact" id="ack-contact" style="width:100%;"></td>
+    </tr>
+    <tr>
+      <td style="padding:5px 0; color:#546e7a; font-weight:600; font-size:12px;">{{ _('Mensaje') }}</td>
+      <td style="padding:5px 0;"><textarea name="message" id="ack-message" rows="3" style="width:100%;"></textarea></td>
+    </tr>
+    <tr>
+      <td></td>
+      <td style="padding-top:10px;">
+        <button type="submit" class="btn">&#10003; {{ _('Reconocer') }}</button>
+        <a class="btn" href="{{ url_for('host_detail', hostname=host) }}" style="background:#78909c;">{{ _('Cancelar') }}</a>
+      </td>
+    </tr>
+  </table>
+</form>
+</div>
+</div>
+
+<script>
+(function() {
+  var durInput   = document.getElementById('dur-input');
+  var durNever   = document.getElementById('dur-never');
+  var contactEl  = document.getElementById('ack-contact');
+  var messageEl  = document.getElementById('ack-message');
+
+  // Restore saved values (or use defaults)
+  var savedHours   = localStorage.getItem('ack_hours')   || '+4h';
+  var savedContact = localStorage.getItem('ack_contact') || 'admin@localhost';
+  var savedMessage = localStorage.getItem('ack_message') || 'acknowledged via web';
+
+  if (savedHours === 'never') {
+    durNever.checked   = true;
+    durInput.value     = 'never';
+    durInput.disabled  = true;
+  } else {
+    durInput.value = savedHours;
+  }
+  contactEl.value = savedContact;
+  messageEl.value = savedMessage;
+
+  // Save on submit
+  document.querySelector('form').addEventListener('submit', function() {
+    localStorage.setItem('ack_hours',   durInput.value);
+    localStorage.setItem('ack_contact', contactEl.value);
+    localStorage.setItem('ack_message', messageEl.value);
+  });
+})();
+</script>
+
+{% endblock %}

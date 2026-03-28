@@ -1,0 +1,116 @@
+#!/bin/bash
+set -e
+
+SPONG_DIR="/usr/local/spong"
+
+echo ""
+echo "=== SPONG v3 Client — post-instalación ==="
+echo ""
+
+# 1. Directorios mínimos
+echo "Creando directorios..."
+mkdir -p "$SPONG_DIR/var/database"
+mkdir -p "$SPONG_DIR/tmp"
+chmod -R 755 "$SPONG_DIR/var"
+chmod -R 755 "$SPONG_DIR/tmp"
+chmod +x "$SPONG_DIR/bin/spong-client"
+
+# 2. Configuración interactiva
+SPONG_YAML="$SPONG_DIR/etc/spong.yaml"
+HOSTS_YAML="$SPONG_DIR/etc/hosts.yaml"
+
+if [ ! -f "$SPONG_YAML" ]; then
+    echo "--- Configuración del agente ---"
+    echo ""
+
+    read -p "  Hostname o IP del servidor SPONG [spong-server]: " SERVER_HOST
+    SERVER_HOST=${SERVER_HOST:-spong-server}
+
+    LOCAL_HOST=$(hostname -s)
+    read -p "  Nombre de este host [$LOCAL_HOST]: " THIS_HOST
+    THIS_HOST=${THIS_HOST:-$LOCAL_HOST}
+
+    read -p "  Checks a ejecutar [disk diski cpu memory uptime]: " CHECKS
+    CHECKS=${CHECKS:-"disk diski cpu memory uptime"}
+
+    echo ""
+    echo "Escribiendo configuración..."
+
+    cat > "$SPONG_YAML" << EOF
+# SPONG Client configuration
+# Generado por el instalador — editar según necesidad
+
+server:
+  host: "$SERVER_HOST"
+  update_port: 1998
+  query_port: 1999
+  bb_port: 1984
+
+database:
+  path: "$SPONG_DIR/var/database"
+  archive_path: "$SPONG_DIR/var/archives"
+
+tmp_path: "$SPONG_DIR/tmp"
+
+sleep:
+  default: 300
+  spong-client: 500
+
+checks: "$CHECKS"
+
+thresholds:
+  disk:
+    warn:
+      ALL: 90
+    crit:
+      ALL: 95
+  cpu:
+    warn: 7.0
+    crit: 8.0
+  memory:
+    warn: 90
+    crit: 95
+  hddtemp:
+    warn: 50
+    crit: 60
+
+processes:
+  crit: []
+  warn: []
+
+cleanup:
+  old_service_days: 20
+  old_history_days: 30
+EOF
+
+    cat > "$HOSTS_YAML" << EOF
+# SPONG hosts — cliente local
+# Generado por el instalador
+
+hosts:
+  $THIS_HOST:
+    services: "ping: $CHECKS"
+    contact: "admin"
+    ip_addr: ["127.0.0.1"]
+EOF
+
+    echo "  Configuración guardada en $SPONG_YAML"
+    echo "  Editar $HOSTS_YAML para ajustar servicios y IP real."
+
+else
+    echo "  Configuración existente encontrada — no se sobreescribe."
+fi
+
+# 3. Systemd
+echo "Configurando servicio systemd..."
+systemctl daemon-reload
+systemctl enable spong-client 2>/dev/null || true
+systemctl start  spong-client 2>/dev/null || true
+
+echo ""
+echo "✓ Instalación completa."
+echo ""
+echo "  Estado:        systemctl status spong-client"
+echo "  Logs:          journalctl -u spong-client -f"
+echo "  Configuración: $SPONG_YAML"
+echo ""

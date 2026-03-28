@@ -1,0 +1,7 @@
+#!/usr/bin/env python3
+"""SPONG network monitoring agent entry point."""
+
+import sys
+sys.path.insert(0, "/usr/local/spong")
+from spong.network_agent import main
+main()

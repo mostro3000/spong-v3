@@ -1,0 +1,6 @@
+#!/bin/bash
+set -e
+
+echo "Deteniendo spong-client..."
+systemctl stop    spong-client 2>/dev/null || true
+systemctl disable spong-client 2>/dev/null || true

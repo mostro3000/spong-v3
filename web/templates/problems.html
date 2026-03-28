@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}SPONG - {{ _('Problemas') }}{% endblock %}
+{% block content %}
+
+<div class="page-title">
+  &#9888; {{ _('Problemas actuales') }}
+  {% if issues %}
+  <span class="badge color-red" style="font-size:12px;">{{ issues|length }}</span>
+  {% endif %}
+</div>
+
+{% if not issues %}
+<div class="ok-msg">&#10003; {{ _('Todo OK — sin problemas activos') }}</div>
+{% else %}
+<div class="card">
+<table class="problems-table">
+  <thead>
+    <tr><th>Host</th><th>{{ _('Servicio') }}</th><th>{{ _('Estado') }}</th><th>{{ _('En este estado') }}</th><th>{{ _('Último reporte') }}</th><th>{{ _('Resumen') }}</th><th></th></tr>
+  </thead>
+  <tbody>
+  {% for issue in issues %}
+  <tr class="row-{{ issue.color }}">
+    <td style="font-weight:500;"><a href="{{ url_for('host_detail', hostname=issue.host) }}">{{ issue.host }}</a></td>
+    <td><a href="{{ url_for('service_detail', hostname=issue.host, service=issue.service) }}">{{ issue.service }}</a></td>
+    <td><span class="badge color-{{ issue.color }}">{{ issue.color }}</span></td>
+    <td style="font-size:11px; white-space:nowrap; color:#546e7a;" title="{{ _('desde') }} {{ issue.start_time | int | strftime('%Y-%m-%d %H:%M') }}">
+      {{ fmt_duration(issue.duration) }}
+    </td>
+    <td style="font-size:11px; white-space:nowrap;" title="{{ issue.report_time | int | strftime('%Y-%m-%d %H:%M:%S') }}">
+      {% set lag = issue.lag|int %}
+      <span{% if lag >= 3600 %} style="color:#e53935;"{% endif %}>{{ time_ago(lag) }}</span>
+    </td>
+    <td style="color:#37474f;">{{ issue.summary }}</td>
+    <td><a class="btn btn-sm" href="{{ url_for('ack', host=issue.host, service=issue.service) }}" style="white-space:nowrap;">ACK</a></td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+
+{% endblock %}

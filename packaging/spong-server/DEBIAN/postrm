@@ -1,0 +1,11 @@
+#!/bin/bash
+set -e
+
+if [ "$1" = "purge" ]; then
+    echo "Eliminando datos de SPONG..."
+    rm -rf /usr/local/spong/var
+    rm -rf /usr/local/spong/tmp
+    rm -f /etc/systemd/system/spong-*.service
+    systemctl daemon-reload 2>/dev/null || true
+    echo "  Nota: la configuración en /usr/local/spong/etc/ se conserva."
+fi

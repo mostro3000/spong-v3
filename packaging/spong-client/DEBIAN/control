@@ -1,0 +1,12 @@
+Package: spong-client
+Version: 3.1-1
+Architecture: all
+Maintainer: SPONG <spong@localhost>
+Depends: python3 (>= 3.9)
+Recommends: smartmontools, lm-sensors
+Description: SPONG v3 - Agente Cliente de Monitoreo
+ Agente cliente de SPONG v3. Ejecuta checks locales (disco, CPU, memoria,
+ procesos, temperatura, uptime) y envía los resultados al servidor SPONG.
+ .
+ Instalar en los hosts que se quieren monitorear localmente.
+ No incluye el servidor, el agente de red ni la interfaz web.

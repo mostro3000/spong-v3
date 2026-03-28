@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}SPONG - {{ _('Grupos') }}{% endblock %}
+{% block content %}
+
+<div class="page-title">
+  {{ _('Grupos de Hosts') }}
+  <span class="sub">{{ groups|length }} {{ _('grupos') }}</span>
+</div>
+
+{% for group in groups %}
+<div class="group-section" id="group-{{ group.key }}">
+  <div class="group-title has-{{ group.color }}">
+    <span style="display:inline-block; width:12px; height:12px; border-radius:50%; flex-shrink:0;
+                 box-shadow:0 1px 3px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.2);"
+          class="color-{{ group.color }}"></span>
+    {{ group.name }}
+    <span class="host-count">{{ group.hosts|length }} hosts</span>
+  </div>
+
+  {% if group.service_cols %}
+  <div class="matrix-wrap">
+  <table class="matrix-table">
+    <thead>
+      <tr>
+        <th style="min-width:100px;">Host</th>
+        {% for svc in group.service_cols %}
+        <th class="svc-hdr">{{ svc }}</th>
+        {% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+    {% for hostname, hdata in group.hosts.items() %}
+    <tr>
+      <td class="hostname"><a href="{{ url_for('host_detail', hostname=hostname) }}">{{ hostname }}</a></td>
+      {% for svc in group.service_cols %}
+        {% if svc in hdata.services %}
+          {% set s = hdata.services[svc] %}
+          <td>
+            <a href="{{ url_for('service_detail', hostname=hostname, service=svc) }}" title="{{ svc }}: {{ s.summary }}">
+              <span class="cell color-{{ s.color }}"></span>
+            </a>
+          </td>
+        {% else %}
+          <td><span class="cell cell-empty"></span></td>
+        {% endif %}
+      {% endfor %}
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <div style="padding:10px 14px; color:#90a4ae; background:#fff; border:1px solid #e0e4ea; border-top:none; border-radius:0 0 6px 6px;">{{ _('Sin datos.') }}</div>
+  {% endif %}
+</div>
+{% endfor %}
+
+{% endblock %}

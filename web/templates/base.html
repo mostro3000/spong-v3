@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="{{ current_lang }}" class="{{ current_theme }}">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta id="refresh-meta" http-equiv="refresh" content="120">
+  <title>{% block title %}SPONG{% endblock %}</title>
+  <style>
+    /* ---- Tema claro (default) ---- */
+    :root {
+      --bg:        #f0f2f5;
+      --surface:   #ffffff;
+      --surface2:  #f8f9fb;
+      --surface3:  #f4f6f9;
+      --border:    #e0e4ea;
+      --border2:   #f0f2f5;
+      --hover:     #f8fafc;
+      --hover2:    #f0f4f8;
+      --text:      #1a1a2e;
+      --text-h:    #1e2d40;
+      --text-m:    #546e7a;
+      --text-d:    #78909c;
+      --text-f:    #90a4ae;
+      --link:      #4a6fa5;
+      --link-h:    #2e4d7a;
+      --pre-bg:    #f8f9fb;
+      --pre-text:  #37474f;
+      --host-bg:   #fafbfd;
+      --host-hov:  #e8eef5;
+      --row-red:   #fff5f5;   --row-red-h:  #ffeaea;
+      --row-yel:   #fffde7;   --row-yel-h:  #fffac0;
+      --row-pur:   #fdf5ff;   --row-pur-h:  #f7e8ff;
+      --ok-bg:     #f1f8f1;   --ok-brd:     #43a047;  --ok-txt: #2e7d32;
+      --tip-bg:    #263545;   --tip-brd:    #3a4f63;
+      --scrl:      #b0bec5;   --scrl-h:     #78909c;
+      --inp-bg:    #ffffff;
+    }
+
+    /* ---- Tema oscuro ---- */
+    html.dark {
+      --bg:        #0d1b2a;
+      --surface:   #132232;
+      --surface2:  #192d3e;
+      --surface3:  #1e3448;
+      --border:    #2a4258;
+      --border2:   #1a2f42;
+      --hover:     #1e3248;
+      --hover2:    #1a3255;
+      --text:      #cdd8e3;
+      --text-h:    #e0eaf4;
+      --text-m:    #8bafc7;
+      --text-d:    #6b90aa;
+      --text-f:    #567d95;
+      --link:      #7aabdb;
+      --link-h:    #a8ccee;
+      --pre-bg:    #0d1b2a;
+      --pre-text:  #8bafc7;
+      --host-bg:   #162232;
+      --host-hov:  #1e3258;
+      --row-red:   #2a1515;   --row-red-h:  #331a1a;
+      --row-yel:   #252210;   --row-yel-h:  #2e2a12;
+      --row-pur:   #1f1530;   --row-pur-h:  #261a38;
+      --ok-bg:     #0f2215;   --ok-brd:     #2e7d32;  --ok-txt: #66bb6a;
+      --tip-bg:    #0a1929;   --tip-brd:    #2a4258;
+      --scrl:      #2a4258;   --scrl-h:     #3d5a72;
+      --inp-bg:    #192d3e;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+           font-size: 13px; background: var(--bg); color: var(--text); }
+    a { color: var(--link); text-decoration: none; }
+    a:hover { text-decoration: underline; color: var(--link-h); }
+
+    /* ---- Header ---- */
+    #header {
+      background: #1e2d40;
+      color: #e8eaf0;
+      padding: 0 16px;
+      height: 42px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.35);
+      position: sticky; top: 0; z-index: 100;
+    }
+    html.dark #header { background: #091522; }
+    #header h1 {
+      font-size: 15px; font-weight: 700; letter-spacing: 0.5px;
+      position: relative; cursor: default;
+      white-space: nowrap; color: #fff;
+    }
+    #header h1 .dot { color: #5b9bd5; margin-right: 5px; }
+    #header h1 .tip {
+      display: none; position: absolute; top: 100%; left: 0; margin-top: 6px;
+      background: var(--tip-bg); color: #cdd8e3; font-size: 11px; font-weight: 400;
+      white-space: nowrap; padding: 5px 10px; border-radius: 4px;
+      border: 1px solid var(--tip-brd); z-index: 100;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+    }
+    #header h1:hover .tip { display: block; }
+    #header nav { font-size: 12px; display: flex; gap: 4px; }
+    #header nav a {
+      color: #b0bec5; padding: 4px 10px; border-radius: 4px;
+      font-weight: 500; transition: background 0.15s, color 0.15s;
+    }
+    #header nav a:hover { background: rgba(255,255,255,0.1); color: #fff; text-decoration: none; }
+
+    /* ---- Theme toggle ---- */
+    .theme-btn {
+      background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15);
+      color: #b0bec5; font-size: 13px; padding: 3px 8px; border-radius: 4px;
+      cursor: pointer; transition: background 0.15s; text-decoration: none;
+      display: flex; align-items: center; line-height: 1;
+    }
+    .theme-btn:hover { background: rgba(255,255,255,0.15); color: #fff; text-decoration: none; }
+
+    /* ---- Language menu ---- */
+    .lang-menu { position: relative; }
+    .lang-btn {
+      background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15);
+      color: #b0bec5; font-size: 11px; padding: 3px 9px; border-radius: 4px;
+      cursor: pointer; font-family: inherit; white-space: nowrap;
+      transition: background 0.15s; display: flex; align-items: center; gap: 5px;
+    }
+    .lang-btn:hover { background: rgba(255,255,255,0.15); color: #fff; }
+    .lang-btn .arrow { font-size: 9px; opacity: 0.7; }
+    .lang-dropdown {
+      display: none; position: absolute; top: calc(100% + 5px); right: 0;
+      background: #1e2d40; border: 1px solid #3a4f63; border-radius: 5px;
+      box-shadow: 0 6px 18px rgba(0,0,0,0.5); z-index: 200;
+      min-width: 140px; padding: 4px 0; overflow: hidden;
+    }
+    html.dark .lang-dropdown { background: #091522; border-color: #2a4258; }
+    .lang-menu.open .lang-dropdown { display: block; }
+    .lang-dropdown a {
+      display: flex; align-items: center; gap: 8px;
+      padding: 6px 14px; color: #b0bec5; font-size: 12px;
+      transition: background 0.12s; text-decoration: none;
+    }
+    .lang-dropdown a:hover { background: rgba(255,255,255,0.08); color: #fff; }
+    .lang-dropdown a.lang-active { color: #fff; font-weight: 600; background: rgba(91,155,213,0.15); }
+    .lang-dropdown a.lang-active::after { content: "✓"; margin-left: auto; color: #5b9bd5; font-size: 11px; }
+
+    /* ---- Sidebar group menu ---- */
+    .sg-menu-item {
+      display: flex; align-items: center; gap: 7px;
+      padding: 5px 10px; margin: 1px 6px; border-radius: 4px;
+      text-decoration: none; color: var(--text-m); font-size: 12px; font-weight: 500;
+    }
+    .sg-menu-item:hover { background: var(--hover2); color: var(--text-h); text-decoration: none; }
+    .sg-dot {
+      width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+      border: 1px solid rgba(0,0,0,0.15); box-shadow: inset 0 1px 0 rgba(255,255,255,0.3);
+    }
+    .sg-dot-red    { background: #e53935; }
+    .sg-dot-yellow { background: #fdd835; }
+    .sg-dot-green  { background: #43a047; }
+    .sg-dot-purple { background: #8e24aa; }
+    .sg-dot-blue   { background: #1e88e5; }
+    .sg-dot-clear  { background: #cfd8dc; }
+    #header .spacer { flex: 1; }
+    #refresh-btn {
+      font-size: 11px; background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 4px; padding: 3px 9px; cursor: pointer;
+      color: #b0bec5; white-space: nowrap; transition: background 0.15s;
+    }
+    #refresh-btn:hover { background: rgba(255,255,255,0.15); color: #fff; }
+    #live-clock { font-size: 11px; color: #78909c; white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+    /* ---- Layout ---- */
+    #layout { display: flex; align-items: flex-start; min-height: calc(100vh - 42px); }
+
+    /* ---- Sidebar ---- */
+    #sidebar {
+      width: 188px; min-width: 188px;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      min-height: calc(100vh - 42px);
+      padding: 10px 0; font-size: 12px;
+    }
+    #sidebar .nav-section {
+      padding: 0 10px 8px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 8px;
+    }
+    #sidebar .nav-section a {
+      display: flex; align-items: center; gap: 6px;
+      color: var(--text-m); padding: 5px 6px; border-radius: 4px;
+      transition: background 0.12s, color 0.12s;
+    }
+    #sidebar .nav-section a:hover { background: var(--hover2); color: var(--text-h); text-decoration: none; }
+    #sidebar .nav-section a .icon { font-size: 13px; width: 16px; text-align: center; }
+    #sidebar h2 {
+      font-size: 10px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.8px; color: var(--text-f);
+      padding: 4px 16px 6px; margin-top: 4px;
+    }
+    .sidebar-group {
+      margin: 2px 8px 4px; border-radius: 5px; padding: 5px 8px;
+      background: var(--row-red); border-left: 3px solid #e53935;
+    }
+    .sidebar-group .sg-header {
+      display: flex; justify-content: space-between; align-items: center; margin-bottom: 3px;
+    }
+    .sidebar-group .sg-header a { color: #c62828; font-weight: 600; font-size: 11px; }
+    .sidebar-group .sg-count {
+      background: #e53935; color: #fff; border-radius: 9px;
+      font-size: 10px; padding: 0 5px; min-width: 18px; text-align: center;
+      font-weight: 700; line-height: 16px;
+    }
+    .sidebar-group .sg-item { font-size: 10px; padding: 1px 0; display: flex; align-items: center; gap: 4px; }
+    .sidebar-group .sg-item .dot { width: 6px; height: 6px; border-radius: 50%; background: #e53935; flex-shrink: 0; }
+    .sidebar-group .sg-item a { color: #b71c1c; }
+    .sidebar-group .sg-item a:hover { color: #e53935; }
+    .no-problems-box {
+      margin: 16px 12px; padding: 8px 10px;
+      background: var(--ok-bg); border-left: 3px solid var(--ok-brd);
+      border-radius: 4px; font-size: 11px; color: var(--ok-txt); font-weight: 600;
+    }
+
+    /* ---- Main content ---- */
+    #main { flex: 1; padding: 14px 16px; overflow-x: auto; min-width: 0; }
+
+    /* ---- Cards ---- */
+    .card {
+      background: var(--surface); border-radius: 6px;
+      border: 1px solid var(--border);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+      margin-bottom: 16px; overflow: hidden;
+    }
+    html.dark .card { box-shadow: 0 1px 4px rgba(0,0,0,0.3); }
+    .card-header {
+      padding: 7px 12px; background: var(--surface2);
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 8px;
+      font-size: 13px; font-weight: 600; color: var(--text-h);
+    }
+    .card-body { padding: 0; }
+
+    /* ---- Tables ---- */
+    table { border-collapse: collapse; width: 100%; }
+    th {
+      background: var(--surface3); color: var(--text-m);
+      padding: 6px 10px; text-align: left;
+      font-size: 11px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.4px;
+      border-bottom: 2px solid var(--border); white-space: nowrap;
+    }
+    td { padding: 5px 10px; border-bottom: 1px solid var(--border2); vertical-align: middle; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: var(--hover); }
+
+    /* ---- Color classes ---- */
+    .color-red    { background: #e53935; color: #fff; }
+    .color-yellow { background: #fdd835; color: #333; }
+    .color-green  { background: #43a047; color: #fff; }
+    .color-purple { background: #8e24aa; color: #fff; }
+    .color-blue   { background: #1e88e5; color: #fff; }
+    .color-clear  { background: #cfd8dc; color: #555; }
+
+    /* ---- Badges ---- */
+    .badge {
+      display: inline-block; padding: 2px 8px; border-radius: 10px;
+      font-weight: 700; font-size: 10px; min-width: 52px; text-align: center;
+      letter-spacing: 0.3px; text-transform: uppercase;
+    }
+
+    /* ---- Group section (index) ---- */
+    .group-section { margin-bottom: 18px; }
+    .group-title {
+      font-size: 13px; font-weight: 700;
+      background: var(--surface3); padding: 7px 12px;
+      border-left: 4px solid #4a6fa5; border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 8px;
+      color: var(--text-h); border-radius: 6px 6px 0 0;
+    }
+    .group-title.has-red   { border-left-color: #e53935; }
+    .group-title.has-yellow{ border-left-color: #fdd835; }
+    .group-title.has-purple{ border-left-color: #8e24aa; }
+    .group-title.has-green { border-left-color: #43a047; }
+    .group-title .badge { font-size: 10px; min-width: 38px; }
+    .group-title .host-count { font-size: 11px; font-weight: 400; color: var(--text-d); margin-left: auto; }
+
+    /* ---- Matrix ---- */
+    .matrix-wrap { background: var(--surface); border: 1px solid var(--border); border-top: none; border-radius: 0 0 6px 6px; overflow-x: auto; }
+    .matrix-table { width: auto; }
+    .matrix-table th {
+      background: var(--surface3); padding: 4px 3px;
+      border-bottom: 1px solid var(--border); border-right: 1px solid var(--border2);
+    }
+    .matrix-table th.svc-hdr {
+      writing-mode: vertical-rl; transform: rotate(180deg);
+      height: 62px; font-size: 10px; white-space: nowrap; text-align: left;
+      text-transform: none; letter-spacing: 0; font-weight: 600; color: var(--text-m);
+    }
+    .matrix-table td { padding: 2px 3px; text-align: center; border-right: 1px solid var(--border2); }
+    .matrix-table td.hostname {
+      padding: 3px 10px; text-align: left; white-space: nowrap;
+      font-size: 12px; font-weight: 500; color: var(--text-h);
+      border-right: 1px solid var(--border); background: var(--host-bg); min-width: 120px;
+    }
+    .matrix-table tr:hover td { background: var(--hover2); }
+    .matrix-table tr:hover td.hostname { background: var(--host-hov); }
+    .cell {
+      display: inline-block; width: 16px; height: 16px; border-radius: 50%; cursor: pointer;
+      border: 1px solid rgba(0,0,0,0.15);
+      box-shadow: 0 1px 2px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.25);
+      transition: transform 0.1s, box-shadow 0.1s;
+    }
+    .cell:hover { transform: scale(1.3); box-shadow: 0 2px 6px rgba(0,0,0,0.3); }
+    .cell-empty { background: transparent; border-color: transparent; box-shadow: none; }
+    .cell-empty:hover { transform: none; }
+
+    /* ---- Buttons ---- */
+    .btn {
+      display: inline-block; padding: 4px 12px;
+      background: #4a6fa5; color: #fff; border-radius: 4px; cursor: pointer;
+      border: none; font-size: 12px; font-weight: 500;
+      text-decoration: none; transition: background 0.15s; font-family: inherit;
+    }
+    .btn:hover { background: #2e4d7a; color: #fff; text-decoration: none; }
+    .btn-red { background: #e53935; }
+    .btn-red:hover { background: #c62828; }
+    .btn-sm { padding: 2px 8px; font-size: 11px; }
+
+    /* ---- Forms ---- */
+    input, select, textarea {
+      background: var(--inp-bg); color: var(--text);
+      border: 1px solid var(--border);
+      padding: 5px 8px; border-radius: 4px;
+      font-family: inherit; font-size: 12px; transition: border-color 0.15s;
+    }
+    input:focus, select:focus, textarea:focus {
+      outline: none; border-color: #4a6fa5;
+      box-shadow: 0 0 0 3px rgba(74,111,165,0.12);
+    }
+
+    /* ---- Pre / code ---- */
+    pre {
+      white-space: pre-wrap; font-size: 11px;
+      background: var(--pre-bg); padding: 10px 12px;
+      border-radius: 4px; border: 1px solid var(--border);
+      font-family: "SFMono-Regular", Consolas, monospace;
+      color: var(--pre-text); line-height: 1.5;
+    }
+
+    /* ---- History table ---- */
+    .history-table td { font-size: 11px; }
+
+    /* ---- Page headers ---- */
+    .page-title {
+      font-size: 16px; font-weight: 700; color: var(--text-h);
+      margin-bottom: 14px; display: flex; align-items: center; gap: 10px;
+    }
+    .page-title .sub { font-size: 12px; font-weight: 400; color: var(--text-d); }
+
+    h3 { font-size: 12px; font-weight: 700; text-transform: uppercase;
+         letter-spacing: 0.4px; color: var(--text-d); margin: 16px 0 6px; }
+
+    /* ---- Problems ---- */
+    .problems-table td { vertical-align: middle; font-size: 12px; }
+    tr.row-red    td { background: var(--row-red); }
+    tr.row-yellow td { background: var(--row-yel); }
+    tr.row-purple td { background: var(--row-pur); }
+    tr.row-red:hover    td { background: var(--row-red-h); }
+    tr.row-yellow:hover td { background: var(--row-yel-h); }
+    tr.row-purple:hover td { background: var(--row-pur-h); }
+
+    /* ---- Status indicators ---- */
+    .ok-msg { color: #43a047; font-size: 15px; padding: 24px 8px; }
+
+    /* ---- Scrollbar ---- */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--scrl); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--scrl-h); }
+  </style>
+</head>
+<body>
+
+<div id="header">
+  <h1><span class="dot">●</span>SPONG<span class="tip">{{ _('SPONG v3.1 — creado por mt') }}</span></h1>
+  <nav>
+    <a href="{{ url_for('index') }}">&#9689; {{ _('Grupos') }}</a>
+    <a href="{{ url_for('problems') }}">&#9888; {{ _('Problemas') }}</a>
+    <a href="{{ url_for('acks_page') }}">&#10003; {{ _('Reconocidos') }}</a>
+  </nav>
+  <a href="{{ url_for('set_theme', theme='light' if current_theme == 'dark' else 'dark') }}"
+     class="theme-btn" title="{{ 'Modo claro' if current_theme == 'dark' else 'Modo oscuro' }}">
+    {{ '☀' if current_theme == 'dark' else '🌙' }}
+  </a>
+  <div class="lang-menu" id="lang-menu">
+    <button class="lang-btn" onclick="document.getElementById('lang-menu').classList.toggle('open')">
+      {{ lang_meta[current_lang][0] }} {{ current_lang|upper }} <span class="arrow">▾</span>
+    </button>
+    <div class="lang-dropdown">
+      {% for code, (flag, name) in lang_meta.items() %}
+      <a href="{{ url_for('set_lang', lang=code) }}" class="{{ 'lang-active' if current_lang == code else '' }}">
+        {{ flag }} {{ name }}
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+  <div class="spacer"></div>
+  <button id="refresh-btn" onclick="location.reload()" title="{{ _('Actualizar ahora') }}">↻ <span id="countdown">120</span>s</button>
+  <span id="live-clock">{{ time.strftime('%Y-%m-%d %H:%M:%S') }}</span>
+</div>
+
+<div id="layout">
+  <div id="sidebar">
+    <div class="nav-section">
+      <a href="{{ url_for('index') }}"><span class="icon">&#9689;</span> {{ _('Grupos') }}</a>
+      <a href="{{ url_for('problems') }}"><span class="icon">&#9888;</span> {{ _('Problemas') }}</a>
+      <a href="{{ url_for('acks_page') }}"><span class="icon">&#10003;</span> {{ _('Reconocidos') }}</a>
+    </div>
+    {% if sidebar_groups %}
+    <h2>{{ _('Con problemas') }}</h2>
+    {% for sg in sidebar_groups %}
+    <div class="sidebar-group">
+      <div class="sg-header">
+        <a href="{{ url_for('index') }}#group-{{ sg.key }}">{{ sg.name }}</a>
+        <span class="sg-count">{{ sg.count }}</span>
+      </div>
+      {% for item in sg.problems %}
+      <div class="sg-item">
+        <span class="dot"></span>
+        <a href="{{ url_for('host_detail', hostname=item.host) }}">{{ item.host }}</a>/<a href="{{ url_for('service_detail', hostname=item.host, service=item.service) }}">{{ item.service }}</a>
+      </div>
+      {% endfor %}
+    </div>
+    {% endfor %}
+    {% else %}
+    <div class="no-problems-box">&#10003; {{ _('Sin problemas') }}</div>
+    {% endif %}
+  </div>
+
+  <div id="main">
+    {% block content %}{% endblock %}
+  </div>
+</div>
+
+<div id="lightbox" onclick="closeLightbox()"
+     style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.75); z-index:9999;
+            align-items:center; justify-content:center; flex-direction:column; gap:10px;">
+  <div id="lightbox-label"
+       style="font-size:12px; font-weight:700; color:#cdd5df; text-transform:uppercase; letter-spacing:0.5px;"></div>
+  <img id="lightbox-img" src=""
+       style="max-width:95vw; max-height:85vh; border-radius:6px; box-shadow:0 8px 32px rgba(0,0,0,0.6); display:block;">
+  <div style="font-size:11px; color:#90a4ae;">{{ _('clic para cerrar') }}</div>
+</div>
+
+<script>
+function openLightbox(baseSrc, label) {
+  var src = baseSrc.replace(/w=\d+/, 'w=1200').replace(/h=\d+/, 'h=300');
+  document.getElementById('lightbox-img').src = src;
+  document.getElementById('lightbox-label').textContent = label || '';
+  var lb = document.getElementById('lightbox');
+  lb.style.display = 'flex';
+}
+function closeLightbox() {
+  document.getElementById('lightbox').style.display = 'none';
+}
+document.addEventListener('keydown', function(e){ if(e.key==='Escape') closeLightbox(); });
+
+// Close lang menu when clicking outside
+document.addEventListener('click', function(e) {
+  var menu = document.getElementById('lang-menu');
+  if (menu && !menu.contains(e.target)) menu.classList.remove('open');
+});
+</script>
+
+<script>
+// Live clock
+(function() {
+  var el = document.getElementById('live-clock');
+  function pad(n) { return String(n).padStart(2,'0'); }
+  setInterval(function() {
+    var d = new Date();
+    el.textContent = d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+
+      ' '+pad(d.getHours())+':'+pad(d.getMinutes())+':'+pad(d.getSeconds());
+  }, 1000);
+})();
+
+// Countdown refresh
+(function() {
+  var n = 120, el = document.getElementById('countdown');
+  setInterval(function() {
+    n--;
+    if (n <= 0) { location.reload(); return; }
+    el.textContent = n;
+    el.style.color = n <= 15 ? '#ff7043' : '';
+  }, 1000);
+})();
+</script>
+</body>
+</html>

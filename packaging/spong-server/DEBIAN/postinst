@@ -1,0 +1,89 @@
+#!/bin/bash
+set -e
+
+SPONG_DIR="/usr/local/spong"
+
+echo ""
+echo "=== SPONG v3 Server — post-instalación ==="
+echo ""
+
+# 1. Crear directorios de datos
+echo "Creando directorios de datos..."
+mkdir -p "$SPONG_DIR/var/database"
+mkdir -p "$SPONG_DIR/var/rrd"
+mkdir -p "$SPONG_DIR/var/archives"
+mkdir -p "$SPONG_DIR/tmp"
+chmod -R 755 "$SPONG_DIR/var"
+chmod -R 755 "$SPONG_DIR/tmp"
+
+# 2. Permisos de ejecutables
+chmod +x "$SPONG_DIR/bin/spong-server"
+chmod +x "$SPONG_DIR/bin/spong-network"
+chmod +x "$SPONG_DIR/bin/spong-client"
+chmod +x "$SPONG_DIR/bin/spong-web" 2>/dev/null || true
+
+# 3. Dependencias Python
+echo "Instalando dependencias Python..."
+pip3 install --quiet flask werkzeug 2>/dev/null || \
+    echo "  Aviso: no se pudo instalar flask/werkzeug via pip. Instalar manualmente: pip3 install flask werkzeug"
+
+# 4. Configuración inicial si no existe
+if [ ! -f "$SPONG_DIR/etc/spong.yaml" ]; then
+    echo "Copiando configuración de ejemplo..."
+    cp "$SPONG_DIR/etc/spong.yaml.example" "$SPONG_DIR/etc/spong.yaml" 2>/dev/null || true
+fi
+if [ ! -f "$SPONG_DIR/etc/hosts.yaml" ]; then
+    cp "$SPONG_DIR/etc/hosts.yaml.example" "$SPONG_DIR/etc/hosts.yaml" 2>/dev/null || true
+fi
+if [ ! -f "$SPONG_DIR/etc/groups.yaml" ]; then
+    cp "$SPONG_DIR/etc/groups.yaml.example" "$SPONG_DIR/etc/groups.yaml" 2>/dev/null || true
+fi
+
+# 5. Systemd
+echo "Configurando servicios systemd..."
+systemctl daemon-reload
+for svc in spong-server spong-network spong-client spong-web; do
+    systemctl enable "$svc" 2>/dev/null || true
+done
+
+# 6. Apache (opcional)
+if command -v apache2ctl >/dev/null 2>&1; then
+    echo ""
+    read -p "¿Configurar proxy Apache en /spong? [S/n]: " CONF_APACHE
+    CONF_APACHE=${CONF_APACHE:-S}
+    if [[ "$CONF_APACHE" =~ ^[Ss]$ ]]; then
+        a2enmod proxy proxy_http headers >/dev/null 2>&1 || true
+
+        # Verificar si ya hay config de spong en default
+        if ! grep -q "ProxyPass.*spong" /etc/apache2/sites-available/000-default.conf 2>/dev/null; then
+            cat >> /etc/apache2/sites-available/000-default.conf << 'EOF'
+
+    # SPONG v3 — proxy
+    ProxyPass        /spong/ http://127.0.0.1:8090/
+    ProxyPassReverse /spong/ http://127.0.0.1:8090/
+    RequestHeader set X-Forwarded-Prefix /spong
+EOF
+            echo "  Agregado proxy en /etc/apache2/sites-available/000-default.conf"
+        fi
+        systemctl reload apache2 2>/dev/null || true
+    fi
+fi
+
+# 7. Arrancar servicios
+echo ""
+echo "Arrancando servicios SPONG..."
+systemctl start spong-server 2>/dev/null || true
+sleep 2
+systemctl start spong-network spong-client spong-web 2>/dev/null || true
+
+echo ""
+echo "✓ Instalación completa."
+echo ""
+echo "  Interfaz web:  http://$(hostname):8090"
+if command -v apache2ctl >/dev/null 2>&1; then
+    echo "  Vía Apache:    http://$(hostname)/spong"
+fi
+echo ""
+echo "  Configuración: $SPONG_DIR/etc/"
+echo "  Logs:          journalctl -u spong-server"
+echo ""

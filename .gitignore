@@ -1,0 +1,39 @@
+# Runtime data — no subir
+var/
+tmp/
+*.pyc
+__pycache__/
+
+# Configuración con credenciales/datos privados — no subir
+etc/spong.yaml
+etc/hosts.yaml
+etc/groups.yaml
+
+# Paquetes .deb compilados — se generan con build-deb.sh
+packaging/dist/
+
+# Claude Code settings
+.claude/
+
+# Archivos viejos del spong original (Perl)
+etc/k
+etc/s
+etc/sd
+etc/RCS/
+etc/*.conf
+etc/*.conf.dist
+etc/*.groups
+etc/*.hosts
+etc/*.message
+etc/*.rrd
+etc/spong.message
+etc/snapshot.json
+etc/message.yaml
+
+# Código Perl legacy y web original
+bin/perl-backup/
+bin/s
+bin/spong
+cgi-bin/
+lib/
+www/

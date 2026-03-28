@@ -1,0 +1,8 @@
+#!/bin/bash
+set -e
+
+echo "Deteniendo servicios SPONG..."
+for svc in spong-web spong-network spong-client spong-server; do
+    systemctl stop "$svc"  2>/dev/null || true
+    systemctl disable "$svc" 2>/dev/null || true
+done

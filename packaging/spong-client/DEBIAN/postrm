@@ -1,0 +1,9 @@
+#!/bin/bash
+set -e
+
+if [ "$1" = "purge" ]; then
+    rm -rf /usr/local/spong/var
+    rm -rf /usr/local/spong/tmp
+    rm -f /etc/systemd/system/spong-client.service
+    systemctl daemon-reload 2>/dev/null || true
+fi

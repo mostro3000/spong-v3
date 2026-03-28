@@ -1,0 +1,95 @@
+#!/usr/bin/env python3
+"""SPONG acknowledgment management tool."""
+
+import argparse
+import re
+import sys
+import time
+
+sys.path.insert(0, "/usr/local/spong")
+from spong import config
+from spong.status_sender import send_ack, send_ack_del, query_server
+
+
+def parse_time(s: str) -> float:
+    """Parse time expression to Unix timestamp.
+
+    Formats:
+      +1h, +30m, +3d, +2w  - relative from now
+      YYYY-MM-DD HH:MM      - absolute
+    """
+    now = time.time()
+    m = re.match(r"^\+(\d+)([hmsdw])$", s)
+    if m:
+        n = int(m.group(1))
+        unit = m.group(2)
+        mult = {"h": 3600, "m": 60, "s": 1, "d": 86400, "w": 604800}
+        return now + n * mult[unit]
+    # Try absolute datetime
+    for fmt in ("%Y-%m-%d %H:%M", "%Y-%m-%d", "%d/%m/%Y %H:%M"):
+        try:
+            return time.mktime(time.strptime(s, fmt))
+        except ValueError:
+            pass
+    raise ValueError(f"Cannot parse time: {s}")
+
+
+def main():
+    parser = argparse.ArgumentParser(description="SPONG acknowledgment tool")
+    parser.add_argument("--config", default=None)
+    parser.add_argument("--delete", metavar="ACK_ID",
+                        help="Delete an acknowledgment by ID")
+    parser.add_argument("--list", action="store_true",
+                        help="List active acknowledgments")
+    parser.add_argument("--hosts", default="all",
+                        help="Hosts to list acks for (default: all)")
+    parser.add_argument("host", nargs="?", help="Host to acknowledge")
+    parser.add_argument("services", nargs="?", default=".*",
+                        help="Services (comma-sep, default: all)")
+    parser.add_argument("until", nargs="?",
+                        help="Acknowledgment duration (e.g. +4h, +1d)")
+    parser.add_argument("--contact", default=None,
+                        help="Contact/user name (default: $USER)")
+    parser.add_argument("--message", default="acknowledged",
+                        help="Acknowledgment message")
+    args = parser.parse_args()
+
+    config.load_all(config_file=args.config)
+    import os
+    contact = args.contact or os.environ.get("USER", "unknown") + "@localhost"
+
+    if args.delete:
+        send_ack_del(args.delete)
+        print(f"Deleted acknowledgment: {args.delete}")
+        return
+
+    if args.list:
+        result = query_server("acks", args.hosts, "text", "standard")
+        print(result, end="")
+        return
+
+    if not args.host:
+        parser.error("host is required")
+    if not args.until:
+        parser.error("until time is required (e.g. +4h, +1d)")
+
+    try:
+        end_time = parse_time(args.until)
+    except ValueError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    send_ack(
+        host=args.host,
+        services=args.services,
+        end_time=end_time,
+        contact=contact,
+        message=args.message,
+    )
+
+    until_str = time.strftime("%Y-%m-%d %H:%M", time.localtime(end_time))
+    print(f"Acknowledged {args.host}/{args.services} until {until_str}")
+
+
+if __name__ == "__main__":
+    main()

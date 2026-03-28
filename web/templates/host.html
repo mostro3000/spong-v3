@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+{% block title %}SPONG - {{ hostname }}{% endblock %}
+{% block content %}
+
+<div class="page-title">
+  <a href="{{ url_for('index') }}">{{ _('Grupos') }}</a> <span style="color:#cdd5df; margin:0 4px;">/</span> {{ hostname }}
+  {% if host_cfg %}
+  <span class="sub">
+    {{ host_cfg.get('ip_addr', ['?'])[0] }}
+    &mdash; {{ host_cfg.get('contact','?') }}
+  </span>
+  {% endif %}
+</div>
+
+<div style="margin-bottom:14px; display:flex; gap:8px;">
+  <a class="btn" href="{{ url_for('ack', host=hostname) }}">&#10003; {{ _('Reconocer') }}</a>
+  <a class="btn" href="{{ url_for('index') }}" style="background:#78909c;">&#8592; {{ _('Grupos') }}</a>
+</div>
+
+{% if acks %}
+<h3>{{ _('Reconocimientos activos') }}</h3>
+<div class="card" style="margin-bottom:16px;">
+<table>
+  <thead><tr><th>{{ _('Servicios') }}</th><th>{{ _('Contacto') }}</th><th>{{ _('Hasta') }}</th><th>{{ _('Mensaje') }}</th><th></th></tr></thead>
+  <tbody>
+  {% for ack in acks %}
+  <tr>
+    <td><span class="badge color-blue">{{ ack.services }}</span></td>
+    <td>{{ ack.contact }}</td>
+    <td style="font-size:11px;">
+      {% if ack.end_time == 0 %}
+        <span style="color:#1e88e5; font-weight:600;">{{ _('Sin vencimiento') }}</span>
+      {% else %}
+        {{ ack.end_time | int | strftime('%d/%m %H:%M') }}
+      {% endif %}
+    </td>
+    <td style="color:#546e7a;">{{ ack.message }}</td>
+    <td><a class="btn btn-red btn-sm" href="{{ url_for('ack_del', ack_id=ack.host ~ '-' ~ ack.services ~ '-' ~ (ack.end_time|int)) }}">{{ _('Borrar') }}</a></td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+
+<h3>{{ _('Servicios') }}</h3>
+<div class="card">
+<table>
+  <thead><tr><th>{{ _('Servicio') }}</th><th>{{ _('Estado') }}</th><th>{{ _('En este estado') }}</th><th>{{ _('Último reporte') }}</th><th>{{ _('Resumen') }}</th><th style="text-align:center;">{{ _('Graf.') }}</th></tr></thead>
+  <tbody>
+  {% for svc_name, svc in services %}
+  <tr>
+    <td style="font-weight:500;"><a href="{{ url_for('service_detail', hostname=hostname, service=svc_name) }}">{{ svc_name }}</a></td>
+    <td><span class="badge color-{{ svc.color }}">{{ svc.color }}</span></td>
+    <td style="font-size:11px; color:#546e7a; white-space:nowrap;" title="{{ _('desde') }} {{ svc.start_time | int | strftime('%Y-%m-%d %H:%M') }}">
+      {{ fmt_duration(time.time() - svc.start_time) }}
+    </td>
+    <td style="font-size:11px; white-space:nowrap;" title="{{ svc.report_time | int | strftime('%Y-%m-%d %H:%M:%S') }}">
+      {% set lag = (time.time() - svc.report_time) | int %}
+      <span{% if lag < 60 %} style="color:#43a047;"{% elif lag >= 86400 %} style="color:#e53935; font-weight:600;"{% endif %}>{{ time_ago(lag) }}</span>
+    </td>
+    <td style="color:#37474f; max-width:300px;">{{ svc.summary }}</td>
+    <td style="text-align:center;">
+      <span class="graph-toggle btn btn-sm" data-host="{{ hostname }}" data-svc="{{ svc_name }}"
+            style="cursor:pointer; background:#eceff1; color:#546e7a; border:1px solid #cdd5df;"
+            title="{{ _('Graf.') }}">📊</span>
+    </td>
+  </tr>
+  <tr class="graph-row" id="graph-{{ svc_name }}" style="display:none;">
+    <td colspan="6" style="padding:8px 12px; background:#f8f9fb;">
+      <div style="display:flex; gap:10px; flex-wrap:wrap;">
+        {% for period, label in [("1h","1h"),("24h","24h"),("7d","7d"),("30d","30d"),("1y","1a")] %}
+        <div style="text-align:center;">
+          <div style="font-size:10px; color:#90a4ae; margin-bottom:3px; font-weight:600;">{{ label }}</div>
+          <img src="{{ url_for('rrd_graph', hostname=hostname, service=svc_name, period=period, w=220, h=80) }}"
+               onerror="this.parentElement.style.display='none'"
+               onclick="openLightbox(this.src, '{{ label }}')"
+               style="border:1px solid #e0e4ea; border-radius:3px; display:block; cursor:zoom-in;">
+        </div>
+        {% endfor %}
+      </div>
+    </td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+
+<script>
+document.querySelectorAll('.graph-toggle').forEach(function(el) {
+  el.addEventListener('click', function() {
+    var row = document.getElementById('graph-' + this.dataset.svc);
+    var visible = row.style.display !== 'none';
+    row.style.display = visible ? 'none' : '';
+    this.style.background = visible ? '' : '#4a6fa5';
+    this.style.color = visible ? '' : '#fff';
+  });
+});
+</script>
+
+{% if history %}
+<h3>{{ _('Historial (últimos 7 días)') }}</h3>
+<div class="card">
+<table class="history-table">
+  <thead><tr><th>{{ _('Fecha') }}</th><th>{{ _('Tipo') }}</th><th>{{ _('Servicio') }}</th><th>{{ _('Estado') }}</th><th>{{ _('Resumen') }}</th></tr></thead>
+  <tbody>
+  {% for entry in history %}
+  <tr>
+    <td style="white-space:nowrap;">{{ entry.timestamp | int | strftime('%m-%d %H:%M') }}</td>
+    <td><span style="color:#78909c;">{{ entry.event_type }}</span></td>
+    <td>{{ entry.service }}</td>
+    <td>{% if entry.color %}<span class="badge color-{{ entry.color }}">{{ entry.color }}</span>{% endif %}</td>
+    <td style="color:#546e7a;">{{ entry.summary }}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+
+{% endblock %}
