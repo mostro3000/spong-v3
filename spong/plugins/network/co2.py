@@ -3,7 +3,8 @@
 from ._ssh_json import ssh_read_json
 
 _SSH_MAP: dict[str, tuple[str, str]] = {
-    "riegopi": ("192.168.0.78", "/dev/shm/riepopi.json"),
+    "riegopi":    ("192.168.0.78", "/dev/shm/riepopi.json"),
+    "riego-patio": ("192.168.0.78", "/dev/shm/riepopi.json"),
 }
 
 # Umbrales eCO2 (ppm): normal indoor ~400-1000
