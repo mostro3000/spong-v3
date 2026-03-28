@@ -399,6 +399,27 @@ _SENSOR_META = {
 }
 
 
+def _update_co2(rrd_dir, summary, timestamp):
+    """Update co2.rrd with eCO2 (ppm), TVOC (ppb) and AQI from summary string."""
+    # summary: "eCO2: 450ppm TVOC: 120ppb AQI: 1 (Good)"
+    m_eco2 = re.search(r"eCO2:\s*([\d.]+)\s*ppm", summary)
+    m_tvoc = re.search(r"TVOC:\s*([\d.]+)\s*ppb", summary)
+    m_aqi  = re.search(r"AQI:\s*(\d+)", summary)
+    if not (m_eco2 and m_tvoc and m_aqi):
+        return
+    eco2 = float(m_eco2.group(1))
+    tvoc = float(m_tvoc.group(1))
+    aqi  = float(m_aqi.group(1))
+    path = os.path.join(rrd_dir, "co2.rrd")
+    if not _rrd_exists(path):
+        _create_rrd(path, 300, [
+            "DS:eco2:GAUGE:1200:0:10000",
+            "DS:tvoc:GAUGE:1200:0:60000",
+            "DS:aqi:GAUGE:1200:0:6",
+        ], _RRA_DEFS, timestamp)
+    _update_rrd(path, timestamp, [eco2, tvoc, aqi])
+
+
 def _update_sensor(rrd_dir, service, summary, timestamp):
     """Update a simple single-DS sensor RRD from a numeric summary."""
     meta = _SENSOR_META.get(service)
@@ -533,6 +554,8 @@ def update_from_status(host, service, summary, message, timestamp):
             _update_rtemp(rrd_dir, summary or "", timestamp)
         elif svc == "macs":
             _update_macs(rrd_dir, summary or "", timestamp)
+        elif svc == "co2":
+            _update_co2(rrd_dir, summary or "", timestamp)
         elif svc in _SENSOR_META:
             _update_sensor(rrd_dir, svc, summary or "", timestamp)
         elif svc == "uptime":
@@ -572,6 +595,9 @@ _LEGEND_FMT = {
     "d":     "%5.1lf d",    # uptime days
     "total": "%6.0lf",      # processes total
     "v":     "%6.2lf",      # generic sensor
+    "eco2":  "%6.0lf ppm",  # eCO2
+    "tvoc":  "%6.0lf ppb",  # TVOC
+    "aqi":   "%5.1lf",      # AQI index
 }
 # DS names whose values are temperatures (°C) — used for dynamic graphs
 _TEMP_DS = {"board", "cpu", "pkg_0", "core_0", "core_1", "core_2", "core_3",
@@ -970,6 +996,31 @@ def graph_png(host, service, period="24h", width=500, height=150):
                 "--title", "DNS {}".format(host),
                 "DEF:t={}:time:AVERAGE".format(rrd_path),
                 "LINE2:t#ff6600:resp time",
+            ]
+
+        elif svc == "co2":
+            rrd_path = os.path.join(rrd_dir, "co2.rrd")
+            if not _rrd_exists(rrd_path):
+                return None
+            # eCO2 and TVOC on left axis (ppm/ppb); AQI on right axis (0–5).
+            # Right axis: right_val = left_val * right_scale, so scale = 5/upper.
+            # We fix upper-limit at 3000 so AQI right axis: 5 = 3000 * (5/3000).
+            aqi_scale = 5.0 / 3000.0
+            cmd += [
+                "--vertical-label", "ppm / ppb",
+                "--title", f"Calidad del aire {host}",
+                "--upper-limit", "3000",
+                "--lower-limit", "0",
+                "--right-axis", f"{aqi_scale:.6f}:0",
+                "--right-axis-label", "AQI",
+                "--right-axis-format", "%3.1lf",
+                f"DEF:eco2={rrd_path}:eco2:AVERAGE",
+                f"DEF:tvoc={rrd_path}:tvoc:AVERAGE",
+                f"DEF:aqi={rrd_path}:aqi:AVERAGE",
+                "CDEF:aqiscaled=aqi,3000,5,/,*",
+                "AREA:eco2#aad4f5:eCO2 ppm",
+                "LINE2:tvoc#009900:TVOC ppb",
+                "LINE2:aqiscaled#ff6600:AQI",
             ]
 
         elif svc in _SENSOR_META:
