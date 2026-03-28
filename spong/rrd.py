@@ -438,6 +438,47 @@ def _update_sensor(rrd_dir, service, summary, timestamp):
     _update_rrd(path, timestamp, [value])
 
 
+def _update_termica(rrd_dir, summary, message, timestamp):
+    """Update termica.rrd with voltage, current, power, energy, leakage, temp.
+
+    summary: "220.5V  0.487A  6.4W" (+ optional temp/leakage fields)
+    message: multi-line with labeled values
+    """
+    import re as _re
+    def _extract(pattern, text, divisor=1.0):
+        m = _re.search(pattern, text)
+        return float(m.group(1)) / divisor if m else None
+
+    voltage = _extract(r"Tensión:\s*([\d.]+)", message)
+    current = _extract(r"Corriente:\s*([\d.]+)", message)
+    power   = _extract(r"Potencia:\s*([\d.]+)", message)
+    energy  = _extract(r"Energía:\s*([\d.]+)", message)
+    leakage = _extract(r"Corriente de fuga:\s*([\d.]+)", message)
+    temp    = _extract(r"Temp interna:\s*([\d.]+)", message)
+
+    if voltage is None or current is None or power is None:
+        return
+
+    path = os.path.join(rrd_dir, "termica.rrd")
+    if not _rrd_exists(path):
+        _create_rrd(path, 60, [
+            "DS:voltage:GAUGE:180:100:300",
+            "DS:current:GAUGE:180:0:100",
+            "DS:power:GAUGE:180:0:30000",
+            "DS:energy:GAUGE:180:0:U",
+            "DS:leakage:GAUGE:180:0:1000",
+            "DS:temp:GAUGE:180:-50:150",
+        ], _RRA_DEFS, timestamp)
+    _update_rrd(path, timestamp, [
+        voltage,
+        current,
+        power,
+        energy if energy is not None else "U",
+        leakage if leakage is not None else 0,
+        temp if temp is not None else "U",
+    ])
+
+
 def _update_tcp_time(rrd_dir, service, summary, timestamp):
     """Generic response-time updater: parses 'Xs' or 'Xms' from summary."""
     m = re.search(r"([\d.]+)\s*ms", summary)
@@ -556,6 +597,8 @@ def update_from_status(host, service, summary, message, timestamp):
             _update_macs(rrd_dir, summary or "", timestamp)
         elif svc == "co2":
             _update_co2(rrd_dir, summary or "", timestamp)
+        elif svc == "termica":
+            _update_termica(rrd_dir, summary or "", message or "", timestamp)
         elif svc in _SENSOR_META:
             _update_sensor(rrd_dir, svc, summary or "", timestamp)
         elif svc == "uptime":
@@ -677,6 +720,66 @@ def _graph_co2_stacked(rrd_path, host, start, width, height):
             f"VDEF:vmin=v,MINIMUM",
             f"VDEF:vavg=v,AVERAGE",
             f"VDEF:vlast=v,LAST",
+            f"GPRINT:vmax:  Max\\: {fmt}",
+            f"GPRINT:vmin:  Min\\: {fmt}",
+            f"GPRINT:vavg:  Avg\\: {fmt}",
+            f"GPRINT:vlast:  Last\\: {fmt}\\n",
+        ]
+        result = _run(cmd)
+        if result is None or result.returncode != 0:
+            return None
+        images.append(Image.open(io.BytesIO(result.stdout)))
+
+    total_h = sum(img.height for img in images)
+    combined = Image.new("RGB", (images[0].width, total_h), (255, 255, 255))
+    y = 0
+    for img in images:
+        combined.paste(img, (0, y))
+        y += img.height
+
+    buf = io.BytesIO()
+    combined.save(buf, format="PNG")
+    return buf.getvalue()
+
+
+def _graph_termica_stacked(rrd_path, host, start, width, height):
+    """3 stacked panels: Potencia (W), Corriente (A), Tensión (V)."""
+    from PIL import Image
+    import io
+
+    sub_h = max(50, height // 3)
+
+    panels = [
+        # (ds, label, unit, color, area, lo, hi)
+        ("power",   "Potencia",  "W",   "#cc0000", True,  0,   None),
+        ("current", "Corriente", "A",   "#0077cc", False, 0,   None),
+        ("voltage", "Tensión",   "V",   "#009900", False, 180, 250),
+    ]
+
+    images = []
+    for ds, label, unit, color, area, lo, hi in panels:
+        cmd = [
+            "rrdtool", "graph", "-",
+            "--start", start, "--end", "now",
+            "--width", str(width), "--height", str(sub_h),
+            "--vertical-label", unit,
+            "--title", f"{label}  {host}",
+            "--lower-limit", str(lo),
+        ]
+        if hi is not None:
+            cmd += ["--upper-limit", str(hi), "--rigid"]
+        cmd += GRAPH_COLORS
+        cmd += [f"DEF:v={rrd_path}:{ds}:AVERAGE"]
+        if area:
+            cmd += [f"AREA:v{color}:{label}"]
+        else:
+            cmd += [f"LINE2:v{color}:{label}"]
+        fmt = "%6.1lf" if ds in ("power", "voltage") else "%7.3lf"
+        cmd += [
+            "VDEF:vmax=v,MAXIMUM",
+            "VDEF:vmin=v,MINIMUM",
+            "VDEF:vavg=v,AVERAGE",
+            "VDEF:vlast=v,LAST",
             f"GPRINT:vmax:  Max\\: {fmt}",
             f"GPRINT:vmin:  Min\\: {fmt}",
             f"GPRINT:vavg:  Avg\\: {fmt}",
@@ -1068,6 +1171,12 @@ def graph_png(host, service, period="24h", width=500, height=150):
             if not _rrd_exists(rrd_path):
                 return None
             return _graph_co2_stacked(rrd_path, host, start, width, height)
+
+        elif svc == "termica":
+            rrd_path = os.path.join(rrd_dir, "termica.rrd")
+            if not _rrd_exists(rrd_path):
+                return None
+            return _graph_termica_stacked(rrd_path, host, start, width, height)
 
         elif svc in _SENSOR_META:
             ds_name, label, unit, mn, mx, color, area = _SENSOR_META[svc]
