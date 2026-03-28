@@ -7,16 +7,27 @@ _HOST_MAP: dict[str, tuple[str, str]] = {
     "pieza-ninias": ("/var/www/html/hpieza1piso.json", "value"),
 }
 
+_SSH_MAP: dict[str, tuple[str, str, list[str]]] = {
+    "riegopi": ("192.168.0.78", "/dev/shm/riepopi.json", ["air", "humidity_%"]),
+}
+
 
 def check_hum(hostname: str) -> tuple[str, str, str]:
-    if hostname not in _HOST_MAP:
+    if hostname in _SSH_MAP:
+        from ._ssh_json import ssh_read_json
+        ssh_host, path, keys = _SSH_MAP[hostname]
+        data = ssh_read_json(ssh_host, path)
+        try:
+            val = float(data[keys[0]][keys[1]])
+        except Exception:
+            return "red", "hum: sin datos (SSH)", f"No se pudo leer {path} en {ssh_host}"
+    elif hostname in _HOST_MAP:
+        path, key = _HOST_MAP[hostname]
+        val = _read_value(path, key)
+        if val is None:
+            return "red", "hum: sin datos", f"No se pudo leer {path}"
+    else:
         return "clear", "hum: host no configurado", ""
-
-    path, key = _HOST_MAP[hostname]
-    val = _read_value(path, key)
-
-    if val is None:
-        return "red", "hum: sin datos", f"No se pudo leer {path}"
 
     message = f"Humedad: {val}"
     summary = str(val)
