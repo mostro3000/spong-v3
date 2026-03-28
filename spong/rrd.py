@@ -635,6 +635,71 @@ def _append_legends(cmd):
 
 
 # ---------------------------------------------------------------------------
+# CO2 stacked composite graph
+# ---------------------------------------------------------------------------
+
+def _graph_co2_stacked(rrd_path, host, start, width, height):
+    """Generate 3 stacked sub-graphs for eCO2, TVOC and AQI using PIL."""
+    from PIL import Image
+    import io
+
+    sub_h = max(50, height // 3)
+
+    panels = [
+        # (ds, label, unit, color, area, lo, hi)
+        ("eco2", "eCO2",  "ppm",  "#0077cc", True,  300,  3000),
+        ("tvoc", "TVOC",  "ppb",  "#009900", False,    0,  1000),
+        ("aqi",  "AQI",   "",     "#ff6600", True,     0,     5),
+    ]
+
+    images = []
+    for ds, label, unit, color, area, lo, hi in panels:
+        vtitle = f"{unit}" if unit else label
+        cmd = [
+            "rrdtool", "graph", "-",
+            "--start", start, "--end", "now",
+            "--width", str(width), "--height", str(sub_h),
+            "--vertical-label", vtitle,
+            "--title", f"{label}  {host}",
+            "--lower-limit", str(lo),
+            "--upper-limit", str(hi),
+            "--rigid",
+            f"DEF:v={rrd_path}:{ds}:AVERAGE",
+        ]
+        cmd += GRAPH_COLORS
+        if area:
+            cmd += [f"AREA:v{color}:{label}"]
+        else:
+            cmd += [f"LINE2:v{color}:{label}"]
+        fmt = "%6.0lf" if ds in ("eco2", "tvoc") else "%5.1lf"
+        cmd += [
+            f"VDEF:vmax=v,MAXIMUM",
+            f"VDEF:vmin=v,MINIMUM",
+            f"VDEF:vavg=v,AVERAGE",
+            f"VDEF:vlast=v,LAST",
+            f"GPRINT:vmax:  Max\\: {fmt}",
+            f"GPRINT:vmin:  Min\\: {fmt}",
+            f"GPRINT:vavg:  Avg\\: {fmt}",
+            f"GPRINT:vlast:  Last\\: {fmt}\\n",
+        ]
+        result = _run(cmd)
+        if result is None or result.returncode != 0:
+            return None
+        images.append(Image.open(io.BytesIO(result.stdout)))
+
+    total_h = sum(img.height for img in images)
+    combined = Image.new("RGB", (images[0].width, total_h), (255, 255, 255))
+    y = 0
+    for img in images:
+        combined.paste(img, (0, y))
+        y += img.height
+
+    buf = io.BytesIO()
+    combined.save(buf, format="PNG")
+    return buf.getvalue()
+
+
+# ---------------------------------------------------------------------------
 # Public API: graph_png
 # ---------------------------------------------------------------------------
 
@@ -1002,26 +1067,7 @@ def graph_png(host, service, period="24h", width=500, height=150):
             rrd_path = os.path.join(rrd_dir, "co2.rrd")
             if not _rrd_exists(rrd_path):
                 return None
-            # eCO2 and TVOC on left axis (ppm/ppb); AQI on right axis (0–5).
-            # Right axis: right_val = left_val * right_scale, so scale = 5/upper.
-            # We fix upper-limit at 3000 so AQI right axis: 5 = 3000 * (5/3000).
-            aqi_scale = 5.0 / 3000.0
-            cmd += [
-                "--vertical-label", "ppm / ppb",
-                "--title", f"Calidad del aire {host}",
-                "--upper-limit", "3000",
-                "--lower-limit", "0",
-                "--right-axis", f"{aqi_scale:.6f}:0",
-                "--right-axis-label", "AQI",
-                "--right-axis-format", "%3.1lf",
-                f"DEF:eco2={rrd_path}:eco2:AVERAGE",
-                f"DEF:tvoc={rrd_path}:tvoc:AVERAGE",
-                f"DEF:aqi={rrd_path}:aqi:AVERAGE",
-                "CDEF:aqiscaled=aqi,3000,5,/,*",
-                "AREA:eco2#aad4f5:eCO2 ppm",
-                "LINE2:tvoc#009900:TVOC ppb",
-                "LINE2:aqiscaled#ff6600:AQI",
-            ]
+            return _graph_co2_stacked(rrd_path, host, start, width, height)
 
         elif svc in _SENSOR_META:
             ds_name, label, unit, mn, mx, color, area = _SENSOR_META[svc]
