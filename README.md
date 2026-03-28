@@ -18,9 +18,13 @@
 |---|---|
 | ![Grupos](docs/screenshots/01_grupos.png) | ![Dark mode](docs/screenshots/04_dark_mode.png) |
 
-| Vista de host con servicios | Página de problemas |
+| Vista de host (riego-patio: temp/hum/co2) | Página de problemas |
 |---|---|
 | ![Host](docs/screenshots/02_host.png) | ![Problemas](docs/screenshots/03_problemas.png) |
+
+| Grupo Clima (sensores IoT + SSH) |
+|---|
+| ![Clima](docs/screenshots/05_clima.png) |
 
 ---
 
@@ -352,7 +356,9 @@ El `spong-network` ejecuta estos plugins contra los hosts remotos configurados e
 | `smtp.py` | `smtp` | Conexión SMTP puerto 25 |
 | `imap.py` | `imap` | Conexión IMAP puerto 143 |
 | `ntp.py` | `ntp` | Servidor NTP |
-| `temp.py` | `temp` | Temperatura (sensores IoT — dato enviado externamente) |
+| `temp.py` | `temp` | Temperatura: lee JSON local en `/var/www/html/` o via SSH JSON (ej: `riego-patio`) |
+| `hum.py` | `hum` | Humedad: lee JSON local o via SSH JSON |
+| `co2.py` | `co2` | Calidad del aire via SSH JSON: eCO2 (ppm), TVOC (ppb), AQI (0–5) |
 | `rcpu.py` | `rcpu` | CPU de router MikroTik via SNMP (`hrProcessorLoad` + OID MikroTik) |
 | `rtemp.py` | `rtemp` | Temperatura de router MikroTik via SNMP (placa y CPU en °C) |
 | `scpu.py` | `scpu` | CPU de switch TP-Link JetStream via SNMP |
@@ -372,6 +378,21 @@ El `spong-network` ejecuta estos plugins contra los hosts remotos configurados e
 - **`scpu.py`** usa OID TP-Link JetStream (`1.3.6.1.4.1.11863.6.4.1.1.1.1.2.1`) con fallback a `hrProcessorLoad`.
 
 - **`https.py`** intenta TLS moderno → TLS legacy (SECLEVEL=0, TLSv1 para equipos con certs RSA-1024) → TCP puro. Reporta verde si el puerto responde aunque el handshake SSL falle por clave débil.
+
+**Sensores IoT via SSH JSON (`_ssh_json.py`):**
+
+`temp`, `hum` y `co2` pueden leer datos de un host remoto via SSH en lugar de un archivo JSON local. Se configura en el diccionario `_SSH_MAP` de cada plugin:
+
+```python
+# En temp.py / hum.py / co2.py
+_SSH_MAP = {
+    "riego-patio": ("192.168.0.78", "/dev/shm/riepopi.json", ["air", "temperature_C"]),
+}
+```
+
+El helper `_ssh_json.py` hace `ssh root@host cat /path/file.json` con un caché de 60s para evitar conexiones redundantes cuando múltiples plugins consultan el mismo host en el mismo ciclo.
+
+**Patrón host virtual:** Un mismo dispositivo físico puede aparecer en dos grupos con distintos roles. Por ejemplo, `riegopi` (IP 192.168.0.78) aparece en el grupo **Servers** con servicios `ping: ssh`, y `riego-patio` (misma IP) aparece en **Clima** con servicios `temp hum co2`. Esto permite separar los datos del sistema operativo del host de los datos de sensores ambientales.
 
 **Stop_after (`:`):** Si `ping` falla en un host con `ping: http ssh`, el agente omite http y ssh automáticamente para ese ciclo.
 
@@ -484,6 +505,7 @@ Los archivos RRD se guardan en `/usr/local/spong/var/rrd/<hostname>/`.
 | `viento` | `viento.rrd` | Velocidad del viento (km/h) |
 | `presion` | `presion.rrd` | Presión atmosférica (hPa) |
 | `rafaga` | `rafaga.rrd` | Ráfaga de viento (km/h) |
+| `co2` | `co2.rrd` | Calidad del aire: eCO2 (ppm), TVOC (ppb), AQI (3 DS) |
 
 Los RRDs se actualizan cada vez que el servidor recibe una actualización de estado. Si el archivo RRD no existe, se crea automáticamente al primer dato.
 
@@ -509,6 +531,18 @@ El gráfico de `ping` implementa el estilo visual de [SmokePing](https://oss.oet
 
 - **Leyenda:** mediana, min, max, pérdida promedio y pérdida del último ciclo, más clave de colores de pérdida
 - **Migración automática:** si el RRD tiene el schema antiguo (2 o 3 DS), se elimina y recrea automáticamente al primer update con el nuevo schema de 4 DS
+
+### Gráfico de calidad del aire (co2)
+
+El gráfico de `co2` genera **3 paneles apilados** en un único PNG usando Pillow, ya que eCO2, TVOC y AQI tienen escalas incompatibles:
+
+| Panel | DS | Escala | Color |
+|-------|----|--------|-------|
+| eCO2 | `eco2` | 300–3000 ppm | Azul (AREA) |
+| TVOC | `tvoc` | 0–1000 ppb | Verde (LINE) |
+| AQI | `aqi` | 0–5 | Naranja (AREA) |
+
+Cada panel tiene su propia escala, unidad y leyenda Max/Min/Avg/Last.
 
 ### Gráficos ampliados (lightbox)
 
@@ -739,6 +773,22 @@ En GitHub → pestaña **Actions** → seleccionar el workflow → sección **Ar
 ---
 
 ## 16. Historial de cambios
+
+### v3.1 — 2026-03 (parte 5)
+
+**Sensores IoT via SSH JSON y host virtual de clima**
+
+- `_ssh_json.py` — helper con caché de 60s: hace `ssh root@host cat /path/file.json` sin dependencias extra
+- `temp.py` y `hum.py` extendidos con `_SSH_MAP` para leer sensores de hosts remotos
+- `co2.py` — nuevo plugin para calidad del aire: parsea eCO2 (ppm), TVOC (ppb) y AQI desde JSON via SSH
+- Patrón host virtual: `riego-patio` (mismo IP que `riegopi`) aparece en grupo **Clima** con servicios `temp hum co2`; `riegopi` se mantiene en **Servers** con `ping: ssh`
+- Eliminados plugins redundantes `ptemp.py`, `phum.py`, `pco2.py` — consolidado en `temp`/`hum`/`co2`
+
+**Gráfico co2 con 3 paneles apilados**
+
+- `rrd.py` actualizado con `_update_co2()` (3 DS: eco2, tvoc, aqi) y `_graph_co2_stacked()`
+- `_graph_co2_stacked()` genera 3 sub-gráficos rrdtool independientes y los apila verticalmente con Pillow
+- Cada panel tiene su propia escala y unidad: evita la confusión de mezclar ppm/ppb/AQI en un solo eje
 
 ### v3.1 — 2026-03 (parte 4)
 
