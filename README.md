@@ -1,6 +1,14 @@
-# SPONG v3.1 — Sistema de Monitoreo de Red y Servicios
+# SPONG v3.1 — Network & Services Monitor
 
-SPONG (Simple Preventive Operations Network Guardian) es un sistema de monitoreo de red y servicios desarrollado originalmente en Perl. Esta versión (v3) es una reescritura completa en Python 3, que mantiene compatibilidad con la base de datos y archivos de configuración del sistema original.
+**SPONG** (Simple Preventive Operations Network Guardian) is a network and services monitoring system originally written in Perl. v3 is a complete rewrite in Python 3, keeping full compatibility with the original database and configuration files.
+
+> **Features:** multi-group host matrix · RRD graphs (SmokePing-style ping) · ACK/acknowledgements · 7-language UI · dark mode · on-demand service checks · .deb packages · migration script from Perl config
+
+[![Build .deb](https://github.com/mostro3000/spong-v3/actions/workflows/build-deb.yml/badge.svg)](https://github.com/mostro3000/spong-v3/actions/workflows/build-deb.yml)
+
+---
+
+> _Documentación completa en español a continuación._
 
 ---
 
@@ -13,6 +21,45 @@ SPONG (Simple Preventive Operations Network Guardian) es un sistema de monitoreo
 | Vista de host con servicios | Página de problemas |
 |---|---|
 | ![Host](docs/screenshots/02_host.png) | ![Problemas](docs/screenshots/03_problemas.png) |
+
+---
+
+## Instalación rápida
+
+### Servidor (Debian / Ubuntu)
+
+```bash
+# 1. Descargar el .deb desde Releases
+wget https://github.com/mostro3000/spong-v3/releases/latest/download/spong-server_3.1-1_all.deb
+
+# 2. Instalar (el postinst configura dependencias pip y activa los 4 servicios systemd)
+dpkg -i spong-server_3.1-1_all.deb
+
+# 3. Editar la configuración
+nano /usr/local/spong/etc/spong.yaml    # servidor, thresholds, checks
+nano /usr/local/spong/etc/hosts.yaml    # hosts a monitorear
+nano /usr/local/spong/etc/groups.yaml   # grupos de hosts
+
+# 4. Reiniciar para que tome la config
+systemctl restart spong-server spong-network spong-client spong-web
+
+# 5. Abrir la interfaz web
+xdg-open http://localhost:8090/
+```
+
+### Cliente remoto (en otro host)
+
+```bash
+wget https://github.com/mostro3000/spong-v3/releases/latest/download/spong-client_3.1-1_all.deb
+dpkg -i spong-client_3.1-1_all.deb   # instalación interactiva: pregunta servidor, hostname, checks
+```
+
+### Migración desde SPONG Perl (spong.conf / spong.hosts / spong.groups)
+
+```bash
+cd /etc/spong/   # o donde estén los archivos viejos
+python3 /usr/local/spong/bin/spong-migrate.py --all --outdir /usr/local/spong/etc/
+```
 
 ---
 
@@ -32,7 +79,8 @@ SPONG (Simple Preventive Operations Network Guardian) es un sistema de monitoreo
 12. [Logs](#12-logs)
 13. [Mantenimiento](#13-mantenimiento)
 14. [Empaquetado .deb](#14-empaquetado-deb)
-15. [Historial de cambios](#15-historial-de-cambios)
+15. [GitHub Actions (CI)](#15-github-actions-ci)
+16. [Historial de cambios](#16-historial-de-cambios)
 
 ---
 
@@ -664,7 +712,47 @@ packaging/
 
 ---
 
-## 15. Historial de cambios
+## 15. GitHub Actions (CI)
+
+El archivo `.github/workflows/build-deb.yml` automatiza la construcción de los paquetes `.deb` en cada push.
+
+### Cuándo se ejecuta
+
+| Evento | Qué hace |
+|--------|----------|
+| Push a `main` | Construye los `.deb` y los sube como artefacto del workflow (disponibles 30 días) |
+| Pull Request a `main` | Verifica que el build no se rompe |
+| Tag `v*` (ej: `v3.2`) | Build + crea un **GitHub Release** con los `.deb` adjuntos |
+
+### Crear una release oficial
+
+```bash
+git tag v3.1
+git push origin v3.1
+# GitHub Actions construye y publica la release automáticamente
+```
+
+### Descargar artefactos de un build
+
+En GitHub → pestaña **Actions** → seleccionar el workflow → sección **Artifacts** → `spong-deb-<sha>`.
+
+---
+
+## 16. Historial de cambios
+
+### v3.1 — 2026-03 (parte 4)
+
+**GitHub Actions (CI/CD)**
+- `.github/workflows/build-deb.yml` — build automático en cada push a `main`
+- En push: construye `.deb` y los sube como artefacto (30 días de retención)
+- En tag `v*`: construye y crea un **GitHub Release** con los `.deb` adjuntos
+- Badge de estado del build en el README
+
+**Documentación**
+- README: encabezado en inglés con feature list y badge de CI
+- Sección **Instalación rápida** (quickstart de 5 pasos) visible antes del índice
+- Sección **GitHub Actions** con instrucciones para crear releases oficiales
+- Sección de migración desde Perl incluida en el quickstart
 
 ### v3.1 — 2026-03 (parte 3)
 
