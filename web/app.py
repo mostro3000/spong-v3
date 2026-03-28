@@ -600,6 +600,77 @@ def api_status():
     return jsonify(result)
 
 
+@app.route("/api/service/<hostname>/<service>")
+def api_service(hostname, service):
+    svc = database.load_service(hostname, service)
+    if not svc:
+        return jsonify({"error": "not found"}), 404
+    acks = database.load_acks(hostname)
+    color = svc.color
+    if color not in ("green", "clear", "blue"):
+        if any(ack.covers(service) for ack in acks):
+            color = "blue"
+    return jsonify({
+        "color": color,
+        "summary": svc.summary,
+        "report_time": svc.report_time,
+        "duration": svc.duration,
+    })
+
+
+@app.route("/api/check/<hostname>/<service>", methods=["POST"])
+def api_check(hostname, service):
+    """Ejecuta el plugin de red on-demand y devuelve el nuevo estado."""
+    import importlib
+    from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
+    from spong.status_sender import send_status as _send_status
+
+    if hostname not in config.get_hosts():
+        return jsonify({"error": "unknown host"}), 404
+
+    # Cargar plugin de red
+    try:
+        mod = importlib.import_module(f"spong.plugins.network.{service}")
+        func = getattr(mod, f"check_{service}", None)
+    except ImportError:
+        func = None
+
+    if not func:
+        return jsonify({"error": "no_plugin"}), 400
+
+    # Ejecutar con timeout para evitar que la request cuelgue indefinidamente
+    try:
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            future = pool.submit(func, hostname)
+            color, summary, message = future.result(timeout=35)
+    except FuturesTimeout:
+        color, summary, message = "yellow", "check timeout", ""
+    except Exception as e:
+        color, summary, message = "red", f"check error: {e}", ""
+
+    _send_status(hostname, service, color, summary, message)
+
+    # Pequeña pausa para que spong-server persista el resultado
+    time.sleep(0.3)
+
+    svc = database.load_service(hostname, service)
+    acks = database.load_acks(hostname)
+    final_color = color
+    if svc:
+        final_color = svc.color
+        if final_color not in ("green", "clear", "blue"):
+            if any(ack.covers(service) for ack in acks):
+                final_color = "blue"
+
+    # Usamos time.time() directamente: acabamos de ejecutar el check ahora mismo
+    return jsonify({
+        "color": final_color,
+        "summary": summary,
+        "report_time": time.time(),
+        "checked": True,
+    })
+
+
 @app.route("/api/problems")
 def api_problems():
     hosts = config.get_hosts()

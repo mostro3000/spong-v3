@@ -4,6 +4,18 @@ SPONG (Simple Preventive Operations Network Guardian) es un sistema de monitoreo
 
 ---
 
+## Capturas de pantalla
+
+| Vista de grupos (modo claro) | Modo oscuro |
+|---|---|
+| ![Grupos](docs/screenshots/01_grupos.png) | ![Dark mode](docs/screenshots/04_dark_mode.png) |
+
+| Vista de host con servicios | Página de problemas |
+|---|---|
+| ![Host](docs/screenshots/02_host.png) | ![Problemas](docs/screenshots/03_problemas.png) |
+
+---
+
 ## Índice
 
 1. [Arquitectura general](#1-arquitectura-general)
@@ -19,7 +31,8 @@ SPONG (Simple Preventive Operations Network Guardian) es un sistema de monitoreo
 11. [Base de datos](#11-base-de-datos)
 12. [Logs](#12-logs)
 13. [Mantenimiento](#13-mantenimiento)
-14. [Historial de cambios](#14-historial-de-cambios)
+14. [Empaquetado .deb](#14-empaquetado-deb)
+15. [Historial de cambios](#15-historial-de-cambios)
 
 ---
 
@@ -652,6 +665,19 @@ packaging/
 ---
 
 ## 15. Historial de cambios
+
+### v3.1 — 2026-03 (parte 2)
+
+**Check on-demand al presionar el badge de estado**
+- Al hacer clic en el badge de color de un servicio en `/host/<name>`, se ejecuta el plugin de red correspondiente en tiempo real
+- El plugin corre en un `ThreadPoolExecutor` con timeout de 35s para no bloquear el servidor web
+- Si el servicio no tiene plugin de red (disk, cpu, etc.), hace un GET de solo lectura del estado actual
+- Después del check: actualiza badge, resumen y celda "Último reporte" en la tabla sin recargar la página
+- El sidebar izquierdo también se actualiza: si el servicio resuelve (pasa a green/clear/blue), se elimina del panel de problemas y actualiza el contador del grupo
+
+**Capturas de pantalla en el README**
+- Screenshots automáticos con Playwright (Chromium headless) en `docs/screenshots/`
+- Cuatro capturas: vista de grupos, host con servicios, página de problemas, modo oscuro
 
 ### v3.1 — 2026-03
 
