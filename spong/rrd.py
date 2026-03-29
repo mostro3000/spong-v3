@@ -438,29 +438,6 @@ def _update_sensor(rrd_dir, service, summary, timestamp):
     _update_rrd(path, timestamp, [value])
 
 
-def _update_pow(rrd_dir, summary, timestamp):
-    """Update pow.rrd from Tasmota summary: "95W  0.432A  220V  1.234kWh"."""
-    m_p = re.search(r"([\d.]+)\s*W\b",    summary)
-    m_a = re.search(r"([\d.]+)\s*A\b",    summary)
-    m_v = re.search(r"([\d.]+)\s*V\b",    summary)
-    m_e = re.search(r"([\d.]+)\s*kWh\b",  summary)
-    if not (m_p and m_a and m_v):
-        return
-    path = os.path.join(rrd_dir, "pow.rrd")
-    if not _rrd_exists(path):
-        _create_rrd(path, 300, [
-            "DS:power:GAUGE:600:0:30000",
-            "DS:current:GAUGE:600:0:100",
-            "DS:voltage:GAUGE:600:100:300",
-            "DS:today:GAUGE:600:0:U",
-        ], _RRA_DEFS, timestamp)
-    _update_rrd(path, timestamp, [
-        float(m_p.group(1)),
-        float(m_a.group(1)),
-        float(m_v.group(1)),
-        float(m_e.group(1)) if m_e else "U",
-    ])
-
 
 def _update_soil(rrd_dir, summary, timestamp):
     """Update soil.rrd with key moisture sensors.
@@ -650,8 +627,6 @@ def update_from_status(host, service, summary, message, timestamp):
             _update_macs(rrd_dir, summary or "", timestamp)
         elif svc == "co2":
             _update_co2(rrd_dir, summary or "", timestamp)
-        elif svc == "pow":
-            _update_pow(rrd_dir, summary or "", timestamp)
         elif svc == "soil":
             _update_soil(rrd_dir, summary or "", timestamp)
         elif svc == "ruptime":
@@ -800,54 +775,6 @@ def _graph_co2_stacked(rrd_path, host, start, width, height):
     combined.save(buf, format="PNG")
     return buf.getvalue()
 
-
-def _graph_pow_stacked(rrd_path, host, start, width, height):
-    """3 stacked panels: Potencia (W), Corriente (A), Tensión (V)."""
-    from PIL import Image
-    import io
-
-    sub_h = max(50, height // 3)
-    panels = [
-        ("power",   "Potencia",  "W",  "#cc0000", True,  0,    None),
-        ("current", "Corriente", "A",  "#0077cc", False, 0,    None),
-        ("voltage", "Tensión",   "V",  "#009900", False, 180,  250),
-    ]
-    images = []
-    for ds, label, unit, color, area, lo, hi in panels:
-        cmd = [
-            "rrdtool", "graph", "-",
-            "--start", start, "--end", "now",
-            "--width", str(width), "--height", str(sub_h),
-            "--vertical-label", unit,
-            "--title", f"{label}  {host}",
-            "--lower-limit", str(lo),
-        ]
-        if hi is not None:
-            cmd += ["--upper-limit", str(hi), "--rigid"]
-        cmd += GRAPH_COLORS
-        cmd += [f"DEF:v={rrd_path}:{ds}:AVERAGE"]
-        cmd += [f"AREA:v{color}:{label}"] if area else [f"LINE2:v{color}:{label}"]
-        fmt = "%6.1lf" if ds in ("power", "voltage") else "%7.3lf"
-        cmd += [
-            "VDEF:vmax=v,MAXIMUM", "VDEF:vmin=v,MINIMUM",
-            "VDEF:vavg=v,AVERAGE", "VDEF:vlast=v,LAST",
-            f"GPRINT:vmax:  Max\\: {fmt}", f"GPRINT:vmin:  Min\\: {fmt}",
-            f"GPRINT:vavg:  Avg\\: {fmt}", f"GPRINT:vlast:  Last\\: {fmt}\\n",
-        ]
-        result = _run(cmd)
-        if result is None or result.returncode != 0:
-            return None
-        images.append(Image.open(io.BytesIO(result.stdout)))
-
-    total_h = sum(img.height for img in images)
-    combined = Image.new("RGB", (images[0].width, total_h), (255, 255, 255))
-    y = 0
-    for img in images:
-        combined.paste(img, (0, y))
-        y += img.height
-    buf = io.BytesIO()
-    combined.save(buf, format="PNG")
-    return buf.getvalue()
 
 
 def _graph_soil(rrd_path, host, start, width, height):
@@ -1312,12 +1239,6 @@ def graph_png(host, service, period="24h", width=500, height=150):
             if not _rrd_exists(rrd_path):
                 return None
             return _graph_co2_stacked(rrd_path, host, start, width, height)
-
-        elif svc == "pow":
-            rrd_path = os.path.join(rrd_dir, "pow.rrd")
-            if not _rrd_exists(rrd_path):
-                return None
-            return _graph_pow_stacked(rrd_path, host, start, width, height)
 
         elif svc == "soil":
             rrd_path = os.path.join(rrd_dir, "soil.rrd")
