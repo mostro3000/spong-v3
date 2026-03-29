@@ -613,6 +613,7 @@ def api_service(hostname, service):
     return jsonify({
         "color": color,
         "summary": svc.summary,
+        "message": svc.message,
         "report_time": svc.report_time,
         "duration": svc.duration,
     })
@@ -666,6 +667,7 @@ def api_check(hostname, service):
     return jsonify({
         "color": final_color,
         "summary": summary,
+        "message": message,
         "report_time": time.time(),
         "checked": True,
     })

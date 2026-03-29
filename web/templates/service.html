@@ -16,9 +16,13 @@
 <div class="card-header">{{ _('Detalles del servicio') }}</div>
 <div class="card-body">
 <table>
-  <tr><th style="width:160px;">{{ _('Estado') }}</th><td><span class="badge color-{{ svc.color }}">{{ svc.color }}</span></td></tr>
-  <tr><th>{{ _('Resumen') }}</th><td>{{ svc.summary }}</td></tr>
-  <tr><th>{{ _('Última actualización') }}</th><td>{{ svc.report_time|int|strftime('%Y-%m-%d %H:%M:%S') }}</td></tr>
+  <tr><th style="width:160px;">{{ _('Estado') }}</th><td>
+    <span id="svc-badge" class="badge color-{{ svc.color }} svc-badge"
+          style="cursor:pointer;" title="{{ _('Clic para verificar ahora') }}"
+          data-host="{{ hostname }}" data-svc="{{ service }}">{{ svc.color }}</span>
+  </td></tr>
+  <tr><th>{{ _('Resumen') }}</th><td id="svc-summary">{{ svc.summary }}</td></tr>
+  <tr><th>{{ _('Última actualización') }}</th><td id="svc-report">{{ svc.report_time|int|strftime('%Y-%m-%d %H:%M:%S') }}</td></tr>
   <tr><th>{{ _('En este estado') }}</th><td>{{ fmt_duration(svc.duration) }}</td></tr>
   {% if is_acked %}
   <tr><th>{{ _('Reconocido') }}</th><td><span style="color:#1e88e5; font-weight:600;">&#10003; {{ _('Reconocido') }}</span></td></tr>
@@ -27,10 +31,64 @@
 </div>
 </div>
 
+<div id="svc-message-wrap">
 {% if svc.message %}
 <h3>{{ _('Detalle') }}</h3>
-<pre>{{ svc.message }}</pre>
+<pre id="svc-message">{{ svc.message }}</pre>
 {% endif %}
+</div>
+
+<script>
+(function() {
+  var _base = '{{ url_for("index") }}'.replace(/\/$/, '');
+  var badge = document.getElementById('svc-badge');
+  if (!badge) return;
+  badge.addEventListener('click', function() {
+    var host = badge.dataset.host;
+    var svc  = badge.dataset.svc;
+    var prev = badge.textContent;
+    badge.textContent = '…';
+    badge.style.opacity = '0.6';
+
+    function applyResult(d) {
+      badge.className = 'badge color-' + d.color + ' svc-badge';
+      badge.style.cursor = 'pointer';
+      badge.textContent = d.color;
+      badge.style.opacity = '1';
+      if (d.summary) document.getElementById('svc-summary').textContent = d.summary;
+      if (d.report_time) document.getElementById('svc-report').textContent =
+        new Date(d.report_time * 1000).toLocaleString('sv').replace('T', ' ');
+      if (d.message !== undefined) {
+        var wrap = document.getElementById('svc-message-wrap');
+        var pre  = document.getElementById('svc-message');
+        if (d.message) {
+          if (!pre) {
+            wrap.innerHTML = '<h3>{{ _("Detalle") }}</h3><pre id="svc-message"></pre>';
+            pre = document.getElementById('svc-message');
+          }
+          pre.textContent = d.message;
+        }
+      }
+    }
+
+    function fallback() {
+      fetch(_base + '/api/service/' + host + '/' + svc)
+        .then(function(r) { return r.json(); })
+        .then(applyResult)
+        .catch(function() { badge.textContent = prev; badge.style.opacity = '1'; });
+    }
+
+    fetch(_base + '/api/check/' + host + '/' + svc, {method: 'POST'})
+      .then(function(r) {
+        if (r.status === 400) { fallback(); return null; }
+        return r.json().then(applyResult);
+      })
+      .catch(function() { badge.textContent = prev; badge.style.opacity = '1'; });
+  });
+})();
+</script>
+
+{% if svc.message and false %}{# mensaje ya mostrado arriba #}{% endif %}
 
 <h3>{{ _('Gráficos') }}</h3>
 <div id="rrd-graphs">
