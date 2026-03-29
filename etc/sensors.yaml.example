@@ -1,0 +1,10 @@
+# Configuración de sensores Tuya locales
+# Copiar a sensors.yaml y completar con los datos reales del dispositivo
+# Los device_id y local_key se obtienen con: python3 -m tinytuya scan
+
+presence:
+  nombre-del-host:
+    id: "DEVICE_ID"
+    ip: "192.168.0.x"
+    local_key: "LOCAL_KEY_16_CHARS"
+    version: 3.5          # 3.3, 3.4 o 3.5 según firmware

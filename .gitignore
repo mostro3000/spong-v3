@@ -9,6 +9,7 @@ etc/spong.yaml
 etc/hosts.yaml
 etc/groups.yaml
 etc/termicas.yaml
+etc/sensors.yaml
 
 # Paquetes .deb compilados — se generan con build-deb.sh
 packaging/dist/
