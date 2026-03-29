@@ -496,6 +496,88 @@ def _update_presence(rrd_dir, summary, timestamp):
     _update_rrd(path, timestamp, [state_val, dist, lux])
 
 
+def _update_speedtest(rrd_dir, summary, timestamp):
+    """Update speedtest.rrd: down (Mbps), up (Mbps), ping (ms).
+
+    summary: "↓95.3Mbps  ↑48.1Mbps  ping:4.2ms"
+    """
+    m_down = re.search(r"↓([\d.]+)Mbps", summary)
+    m_up   = re.search(r"↑([\d.]+)Mbps", summary)
+    m_ping = re.search(r"ping:([\d.]+)ms", summary)
+
+    down = float(m_down.group(1)) if m_down else "U"
+    up   = float(m_up.group(1))   if m_up   else "U"
+    ping = float(m_ping.group(1)) if m_ping else "U"
+
+    if down == "U" and up == "U":
+        return
+
+    path = os.path.join(rrd_dir, "speedtest.rrd")
+    # Heartbeat grande: el test puede tardar 20-30min entre corridas
+    hb = 7200
+    if not _rrd_exists(path):
+        _create_rrd(path, 300, [
+            "DS:down:GAUGE:{}:0:10000".format(hb),
+            "DS:up:GAUGE:{}:0:10000".format(hb),
+            "DS:ping:GAUGE:{}:0:5000".format(hb),
+        ], _RRA_DEFS, timestamp)
+    _update_rrd(path, timestamp, [down, up, ping])
+
+
+def _graph_speedtest_stacked(rrd_path, host, start, width, height):
+    """Two stacked panels: Throughput (down/up Mbps) + Latency (ping ms)."""
+    import subprocess, io
+    from PIL import Image
+
+    panels = [
+        {
+            "title": f"Speedtest Velocidad — {host}",
+            "vlabel": "Mbps",
+            "defs": [
+                f"DEF:down={rrd_path}:down:AVERAGE",
+                f"DEF:up={rrd_path}:up:AVERAGE",
+            ],
+            "draw": [
+                "AREA:down#1565c0:Bajada",
+                "LINE2:up#2e7d32:Subida",
+            ],
+        },
+        {
+            "title": f"Speedtest Latencia — {host}",
+            "vlabel": "ms",
+            "defs": [f"DEF:ping={rrd_path}:ping:AVERAGE"],
+            "draw": ["LINE2:ping#e65100:Ping ms"],
+        },
+    ]
+
+    images = []
+    for p in panels:
+        cmd = [
+            "rrdtool", "graph", "-",
+            "--start", str(start), "--end", "now",
+            "--width", str(width), "--height", str(height // 2 - 10),
+            "--title", p["title"],
+            "--vertical-label", p["vlabel"],
+            "--color", "BACK#ffffff00",
+            "--slope-mode",
+        ] + p["defs"] + p["draw"]
+        r = subprocess.run(cmd, capture_output=True)
+        if r.returncode == 0:
+            images.append(Image.open(io.BytesIO(r.stdout)))
+
+    if not images:
+        return None
+    total_h = sum(im.height for im in images)
+    out = Image.new("RGBA", (images[0].width, total_h), (255, 255, 255, 0))
+    y = 0
+    for im in images:
+        out.paste(im, (0, y))
+        y += im.height
+    buf = io.BytesIO()
+    out.save(buf, format="PNG")
+    return buf.getvalue()
+
+
 def _update_ups(rrd_dir, summary, timestamp):
     """Update ups.rrd: Vin, Vout, Fin, Fout, Tbat (from ups plugin summary).
 
@@ -750,6 +832,8 @@ def update_from_status(host, service, summary, message, timestamp):
             _update_presence(rrd_dir, summary or "", timestamp)
         elif svc == "ups":
             _update_ups(rrd_dir, summary or "", timestamp)
+        elif svc == "speedtest":
+            _update_speedtest(rrd_dir, summary or "", timestamp)
         elif svc == "ruptime":
             _update_uptime(rrd_dir, summary or "", timestamp)
         elif svc == "termica":
@@ -1422,6 +1506,12 @@ def graph_png(host, service, period="24h", width=500, height=150):
             if not _rrd_exists(rrd_path):
                 return None
             return _graph_presence_stacked(rrd_path, host, start, width, height)
+
+        elif svc == "speedtest":
+            rrd_path = os.path.join(rrd_dir, "speedtest.rrd")
+            if not _rrd_exists(rrd_path):
+                return None
+            return _graph_speedtest_stacked(rrd_path, host, start, width, height)
 
         elif svc == "ups":
             rrd_path = os.path.join(rrd_dir, "ups.rrd")

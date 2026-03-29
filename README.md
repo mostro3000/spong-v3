@@ -850,6 +850,37 @@ En GitHub → pestaña **Actions** → seleccionar el workflow → sección **Ar
 
 ## 16. Historial de cambios
 
+### v3.1 — 2026-03 (parte 10)
+
+**Plugin speedtest (cliente)**
+
+- `speedtest.py` — mide bajada, subida y latencia via Ookla speedtest CLI. Plugin de cliente: corre en el host monitoreado, no requiere conectividad entrante
+- Umbrales configurables en `spong.yaml` bajo `thresholds.speedtest` (down_warn/crit, up_warn/crit, ping_warn/crit)
+- RRD con 2 paneles apilados: velocidad (down AREA azul + up LINE verde) y latencia (ping LINE naranja)
+- Heartbeat 2h para tolerar tests infrecuentes
+
+Uso en `hosts.yaml`:
+```yaml
+mi-host:
+  services: "disk cpu memory speedtest"
+```
+
+Umbrales opcionales en `spong.yaml`:
+```yaml
+thresholds:
+  speedtest:
+    down_warn: 10    # Mbps
+    down_crit:  5
+    up_warn:    5
+    up_crit:    2
+    ping_warn: 50    # ms
+    ping_crit: 100
+```
+
+**Fix ícono 📊**
+
+- El ícono de gráfico en la lista de servicios del host ahora solo se muestra si existe RRD para ese servicio (HEAD request al endpoint). Servicios sin gráfico (snmp, nfs, interfaces, etc.) ya no muestran el ícono
+
 ### v3.1 — 2026-03 (parte 9)
 
 **Nuevos plugins (port desde Perl)**
