@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}SPONG - {{ _('Disponibilidad') }}{% endblock %}
+{% block content %}
+
+<div class="page-title">&#8987; {{ _('Disponibilidad histórica') }}</div>
+
+<style>
+  .uptime-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .uptime-table th {
+    background: var(--surface2); color: var(--text-m);
+    font-size: 11px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .04em; padding: 6px 10px; border-bottom: 1px solid var(--border);
+    text-align: left;
+  }
+  .uptime-table th.pct { text-align: center; min-width: 70px; }
+  .uptime-table td { padding: 5px 10px; border-bottom: 1px solid var(--border2); }
+  .uptime-table tr:hover td { background: var(--hover); }
+  .uptime-table td.pct { text-align: center; font-variant-numeric: tabular-nums; font-weight: 600; }
+  .uptime-table .group-header td {
+    background: var(--surface3); color: var(--text-m);
+    font-size: 11px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .06em; padding: 4px 10px;
+  }
+  .pct-100  { color: #43a047; }
+  .pct-high { color: #7cb342; }
+  .pct-med  { color: #f9a825; }
+  .pct-low  { color: #e53935; }
+  .pct-none { color: var(--text-f); font-weight: 400; }
+  .svc-link { color: var(--link); text-decoration: none; }
+  .svc-link:hover { text-decoration: underline; }
+  .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%;
+         margin-right: 5px; vertical-align: middle; }
+  .dot-green  { background: #43a047; }
+  .dot-yellow { background: #f9a825; }
+  .dot-red    { background: #e53935; }
+  .dot-purple { background: #8e24aa; }
+  .dot-blue   { background: #1565c0; }
+  .dot-clear  { background: #bdbdbd; }
+</style>
+
+{% for group in group_rows %}
+<div class="card" style="margin-bottom:16px; padding:0; overflow:hidden;">
+  <table class="uptime-table">
+    <thead>
+      <tr>
+        <th colspan="2">{{ group.name }}</th>
+        <th>{{ _('Estado') }}</th>
+        {% for p in periods %}
+        <th class="pct">{{ p }}d</th>
+        {% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+    {% for row in group.rows %}
+      <tr>
+        <td><a class="svc-link" href="{{ url_for('host_detail', hostname=row.host) }}">{{ row.host }}</a></td>
+        <td><a class="svc-link" href="{{ url_for('service_detail', hostname=row.host, service=row.service) }}">{{ row.service }}</a></td>
+        <td>
+          <span class="dot dot-{{ row.color }}"></span>{{ row.color }}
+        </td>
+        {% for p in periods %}
+          {% set pct = row.stats[p] %}
+          <td class="pct
+            {%- if pct is none %} pct-none
+            {%- elif pct == 100 %} pct-100
+            {%- elif pct >= 99 %} pct-high
+            {%- elif pct >= 95 %} pct-med
+            {%- else %} pct-low{% endif %}">
+            {%- if pct is none %}—{%- else %}{{ pct }}%{%- endif %}
+          </td>
+        {% endfor %}
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="ok-msg">{{ _('Sin datos de disponibilidad') }}</div>
+{% endfor %}
+
+{% endblock %}

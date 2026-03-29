@@ -671,6 +671,112 @@ def api_check(hostname, service):
     })
 
 
+def _uptime_stats(host: str, service: str, periods_days: list[int]) -> dict:
+    """Calculate uptime % for a service over multiple periods.
+
+    Returns dict: { days: pct|None }
+    "Up" = green or yellow. "Down" = red. purple/clear = excluded from total.
+    """
+    import re as _re
+    from pathlib import Path as _Path
+
+    now = time.time()
+    max_days = max(periods_days)
+    cutoff = now - max_days * 86400
+
+    history_file = _Path(f"/usr/local/spong/var/database/{host}/history/current")
+    events = []  # list of (timestamp, color)
+
+    if history_file.exists():
+        try:
+            for line in history_file.read_text().splitlines():
+                parts = line.split(None, 4)
+                if len(parts) < 4 or parts[0] != "status":
+                    continue
+                ts, svc, color = int(parts[1]), parts[2], parts[3]
+                if svc == service and ts >= cutoff:
+                    events.append((ts, color))
+        except Exception:
+            pass
+
+    # Add current state as final sentinel
+    svc_dir = _Path(f"/usr/local/spong/var/database/{host}/services")
+    current_color = None
+    for f in svc_dir.glob(f"{service}-*"):
+        current_color = f.name.split("-", 1)[1]
+        try:
+            m = _re.search(r"^timestamp \d+ (\d+)", f.read_text())
+            ts = int(m.group(1)) if m else int(now)
+        except Exception:
+            ts = int(now)
+        events.append((ts, current_color))
+        break
+
+    if not events:
+        return {d: None for d in periods_days}
+
+    events.sort()
+    # Append "now" as a virtual event to close the last interval
+    events.append((int(now), events[-1][1]))
+
+    result = {}
+    for days in periods_days:
+        period_start = now - days * 86400
+        up = 0.0
+        total = 0.0
+        for i in range(len(events) - 1):
+            ts, color = events[i]
+            next_ts = events[i + 1][0]
+            seg_start = max(ts, period_start)
+            seg_end = min(next_ts, now)
+            if seg_end <= seg_start:
+                continue
+            duration = seg_end - seg_start
+            if color in ("green", "yellow", "blue"):
+                up += duration
+                total += duration
+            elif color == "red":
+                total += duration
+            # purple/clear: excluded (no data → don't penalize)
+        result[days] = round(up / total * 100, 1) if total > 0 else None
+    return result
+
+
+@app.route("/uptime")
+def uptime_page():
+    groups   = config.get_groups()
+    hosts_cfg = config.get_hosts()
+    periods  = [1, 7, 30]
+
+    group_rows = []
+    for gname, gdata in groups.items():
+        if not gdata.get("display", True):
+            continue
+        rows = []
+        for hostname in gdata.get("members", []):
+            if hostname not in hosts_cfg:
+                continue
+            services = [s for s, _ in config.host_services(hostname)]
+            for svc in services:
+                stats = _uptime_stats(hostname, svc, periods)
+                # current color
+                cur_color = "clear"
+                from pathlib import Path as _P
+                for f in _P(f"/usr/local/spong/var/database/{hostname}/services").glob(f"{svc}-*"):
+                    cur_color = f.name.split("-", 1)[1]
+                    break
+                rows.append({
+                    "host": hostname,
+                    "service": svc,
+                    "color": cur_color,
+                    "stats": stats,
+                })
+        if rows:
+            group_rows.append({"name": gdata.get("name", gname), "rows": rows})
+
+    return render_template("uptime.html", group_rows=group_rows, periods=periods)
+
+
 @app.route("/api/problems")
 def api_problems():
     hosts = config.get_hosts()

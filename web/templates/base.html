@@ -386,6 +386,7 @@
     <a href="{{ url_for('index') }}">&#9689; {{ _('Grupos') }}</a>
     <a href="{{ url_for('problems') }}">&#9888; {{ _('Problemas') }}</a>
     <a href="{{ url_for('acks_page') }}">&#10003; {{ _('Reconocidos') }}</a>
+    <a href="{{ url_for('uptime_page') }}">&#8987; {{ _('Disponibilidad') }}</a>
   </nav>
   <a href="{{ url_for('set_theme', theme='light' if current_theme == 'dark' else 'dark') }}"
      class="theme-btn" title="{{ 'Modo claro' if current_theme == 'dark' else 'Modo oscuro' }}">
@@ -414,6 +415,7 @@
       <a href="{{ url_for('index') }}"><span class="icon">&#9689;</span> {{ _('Grupos') }}</a>
       <a href="{{ url_for('problems') }}"><span class="icon">&#9888;</span> {{ _('Problemas') }}</a>
       <a href="{{ url_for('acks_page') }}"><span class="icon">&#10003;</span> {{ _('Reconocidos') }}</a>
+      <a href="{{ url_for('uptime_page') }}"><span class="icon">&#8987;</span> {{ _('Disponibilidad') }}</a>
     </div>
     {% if sidebar_groups %}
     <h2>{{ _('Con problemas') }}</h2>
