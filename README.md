@@ -5,6 +5,7 @@
 > **Features:** multi-group host matrix · RRD graphs (SmokePing-style ping) · ACK/acknowledgements · 7-language UI · dark mode · mobile-responsive UI · historical uptime % · on-demand service checks · .deb packages · migration script from Perl config
 
 [![Build .deb](https://github.com/mostro3000/spong-v3/actions/workflows/build-deb.yml/badge.svg)](https://github.com/mostro3000/spong-v3/actions/workflows/build-deb.yml)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
 ---
 
@@ -1097,3 +1098,15 @@ python3 /usr/local/spong/bin/spong-migrate.py \
     ├── rrd/
     └── archives/
 ```
+
+---
+
+## Licencia
+
+SPONG v3 — Copyright (C) 2026 mt
+
+Este programa es software libre: podés redistribuirlo y/o modificarlo bajo los términos de la
+[GNU General Public License v3](LICENSE) publicada por la Free Software Foundation.
+
+Este programa se distribuye con la esperanza de que sea útil, pero **sin ninguna garantía**.
+Ver el archivo [`LICENSE`](LICENSE) para más detalles.
