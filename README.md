@@ -2,7 +2,7 @@
 
 **SPONG** (Simple Preventive Operations Network Guardian) is a network and services monitoring system originally written in Perl. v3 is a complete rewrite in Python 3, keeping full compatibility with the original database and configuration files.
 
-> **Features:** multi-group host matrix · RRD graphs (SmokePing-style ping) · ACK/acknowledgements · 7-language UI · dark mode · on-demand service checks · .deb packages · migration script from Perl config
+> **Features:** multi-group host matrix · RRD graphs (SmokePing-style ping) · ACK/acknowledgements · 7-language UI · dark mode · mobile-responsive UI · historical uptime % · on-demand service checks · .deb packages · migration script from Perl config
 
 [![Build .deb](https://github.com/mostro3000/spong-v3/actions/workflows/build-deb.yml/badge.svg)](https://github.com/mostro3000/spong-v3/actions/workflows/build-deb.yml)
 
@@ -29,6 +29,16 @@
 | Gráfico ping estilo SmokePing (lightbox) | Gráfico HTTP tiempo de respuesta (lightbox) |
 |---|---|
 | ![Ping graph](docs/screenshots/06_ping_graph.png) | ![HTTP graph](docs/screenshots/07_http_graph.png) |
+
+### Vista mobile (responsive)
+
+| Grupos (modo claro) | Sidebar / menú | Detalle de host |
+|---|---|---|
+| ![Mobile grupos](docs/screenshots/mobile_01_grupos.png) | ![Mobile sidebar](docs/screenshots/mobile_02_sidebar.png) | ![Mobile host](docs/screenshots/mobile_05_host.png) |
+
+| Grupos (modo oscuro) | Sidebar (modo oscuro) |
+|---|---|
+| ![Mobile dark](docs/screenshots/mobile_03_dark_grupos.png) | ![Mobile dark sidebar](docs/screenshots/mobile_04_dark_sidebar.png) |
 
 ---
 
@@ -835,6 +845,27 @@ En GitHub → pestaña **Actions** → seleccionar el workflow → sección **Ar
 ---
 
 ## 16. Historial de cambios
+
+### v3.1 — 2026-03 (parte 8)
+
+**Interfaz mobile responsive**
+
+- Sidebar oculta por defecto en pantallas ≤700px; se abre con botón hamburger (☰) y overlay táctil para cerrar
+- Header compacto: nav colapsada (links en sidebar), reloj oculto en mobile
+- Matrix table y gráficos RRD con scroll horizontal táctil (`-webkit-overflow-scrolling: touch`)
+
+**Plugin presence: sensor de presencia humana Tuya (mmWave)**
+
+- `presence.py` — lee estado de presencia, distancia (cm) y luminosidad (lux) via tinytuya protocolo local
+- Configurable en `etc/sensors.yaml` (gitignoreado). Se incluye `etc/sensors.yaml.example`
+- Estados: `none` → clear, `peaceful` → green, `move/large_move/small_move` → yellow
+- RRD: 3 DS (state 0/1/2, dist cm, lux), paso 60s; gráfico de 2 paneles apilados (lux AREA naranja + distancia LINE azul)
+
+**Gráficos RRD para RTSP y mejoras**
+
+- `rtsp` añadido a los dispatchers de RRD: guarda tiempo de respuesta en `rtsp-time.rrd`, color cian en gráfico
+- Verificación on-demand de servicio (clic en badge de estado en página `/service/HOST/SVC`) actualiza badge, resumen, timestamp y mensaje sin recargar
+- `camara-tapo-garaje` añadida con servicio `rtsp`
 
 ### v3.1 — 2026-03 (parte 7)
 
