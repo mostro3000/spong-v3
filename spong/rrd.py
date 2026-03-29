@@ -438,6 +438,59 @@ def _update_sensor(rrd_dir, service, summary, timestamp):
     _update_rrd(path, timestamp, [value])
 
 
+def _update_pow(rrd_dir, summary, timestamp):
+    """Update pow.rrd from Tasmota summary: "95W  0.432A  220V  1.234kWh"."""
+    m_p = re.search(r"([\d.]+)\s*W\b",    summary)
+    m_a = re.search(r"([\d.]+)\s*A\b",    summary)
+    m_v = re.search(r"([\d.]+)\s*V\b",    summary)
+    m_e = re.search(r"([\d.]+)\s*kWh\b",  summary)
+    if not (m_p and m_a and m_v):
+        return
+    path = os.path.join(rrd_dir, "pow.rrd")
+    if not _rrd_exists(path):
+        _create_rrd(path, 300, [
+            "DS:power:GAUGE:600:0:30000",
+            "DS:current:GAUGE:600:0:100",
+            "DS:voltage:GAUGE:600:100:300",
+            "DS:today:GAUGE:600:0:U",
+        ], _RRA_DEFS, timestamp)
+    _update_rrd(path, timestamp, [
+        float(m_p.group(1)),
+        float(m_a.group(1)),
+        float(m_v.group(1)),
+        float(m_e.group(1)) if m_e else "U",
+    ])
+
+
+def _update_soil(rrd_dir, summary, timestamp):
+    """Update soil.rrd with key moisture sensors.
+
+    summary: "Lluvia:0%  Valv:16%  PastoSE:100%  PastoNE:100%  ..."
+    Stores: lluvia, valv, pasto_se, pasto_ne, pasto_no, cant_sur, cant_ne, cant_no
+    """
+    def _val(label):
+        m = re.search(rf"{re.escape(label)}:([\d.]+)%", summary)
+        return float(m.group(1)) if m else "U"
+
+    path = os.path.join(rrd_dir, "soil.rrd")
+    if not _rrd_exists(path):
+        _create_rrd(path, 300, [
+            "DS:lluvia:GAUGE:600:0:100",
+            "DS:valv:GAUGE:600:0:100",
+            "DS:pasto_se:GAUGE:600:0:100",
+            "DS:pasto_ne:GAUGE:600:0:100",
+            "DS:pasto_no:GAUGE:600:0:100",
+            "DS:cant_sur:GAUGE:600:0:100",
+            "DS:cant_ne:GAUGE:600:0:100",
+            "DS:cant_no:GAUGE:600:0:100",
+        ], _RRA_DEFS, timestamp)
+    _update_rrd(path, timestamp, [
+        _val("Lluvia"), _val("Valv"),
+        _val("PastoSE"), _val("PastoNE"), _val("PastoNO"),
+        _val("CantSur"), _val("CantNE"), _val("CantNO"),
+    ])
+
+
 def _update_termica(rrd_dir, summary, message, timestamp):
     """Update termica.rrd with voltage, current, power, energy, leakage, temp.
 
@@ -597,6 +650,12 @@ def update_from_status(host, service, summary, message, timestamp):
             _update_macs(rrd_dir, summary or "", timestamp)
         elif svc == "co2":
             _update_co2(rrd_dir, summary or "", timestamp)
+        elif svc == "pow":
+            _update_pow(rrd_dir, summary or "", timestamp)
+        elif svc == "soil":
+            _update_soil(rrd_dir, summary or "", timestamp)
+        elif svc == "ruptime":
+            _update_uptime(rrd_dir, summary or "", timestamp)
         elif svc == "termica":
             _update_termica(rrd_dir, summary or "", message or "", timestamp)
         elif svc in _SENSOR_META:
@@ -740,6 +799,88 @@ def _graph_co2_stacked(rrd_path, host, start, width, height):
     buf = io.BytesIO()
     combined.save(buf, format="PNG")
     return buf.getvalue()
+
+
+def _graph_pow_stacked(rrd_path, host, start, width, height):
+    """3 stacked panels: Potencia (W), Corriente (A), Tensión (V)."""
+    from PIL import Image
+    import io
+
+    sub_h = max(50, height // 3)
+    panels = [
+        ("power",   "Potencia",  "W",  "#cc0000", True,  0,    None),
+        ("current", "Corriente", "A",  "#0077cc", False, 0,    None),
+        ("voltage", "Tensión",   "V",  "#009900", False, 180,  250),
+    ]
+    images = []
+    for ds, label, unit, color, area, lo, hi in panels:
+        cmd = [
+            "rrdtool", "graph", "-",
+            "--start", start, "--end", "now",
+            "--width", str(width), "--height", str(sub_h),
+            "--vertical-label", unit,
+            "--title", f"{label}  {host}",
+            "--lower-limit", str(lo),
+        ]
+        if hi is not None:
+            cmd += ["--upper-limit", str(hi), "--rigid"]
+        cmd += GRAPH_COLORS
+        cmd += [f"DEF:v={rrd_path}:{ds}:AVERAGE"]
+        cmd += [f"AREA:v{color}:{label}"] if area else [f"LINE2:v{color}:{label}"]
+        fmt = "%6.1lf" if ds in ("power", "voltage") else "%7.3lf"
+        cmd += [
+            "VDEF:vmax=v,MAXIMUM", "VDEF:vmin=v,MINIMUM",
+            "VDEF:vavg=v,AVERAGE", "VDEF:vlast=v,LAST",
+            f"GPRINT:vmax:  Max\\: {fmt}", f"GPRINT:vmin:  Min\\: {fmt}",
+            f"GPRINT:vavg:  Avg\\: {fmt}", f"GPRINT:vlast:  Last\\: {fmt}\\n",
+        ]
+        result = _run(cmd)
+        if result is None or result.returncode != 0:
+            return None
+        images.append(Image.open(io.BytesIO(result.stdout)))
+
+    total_h = sum(img.height for img in images)
+    combined = Image.new("RGB", (images[0].width, total_h), (255, 255, 255))
+    y = 0
+    for img in images:
+        combined.paste(img, (0, y))
+        y += img.height
+    buf = io.BytesIO()
+    combined.save(buf, format="PNG")
+    return buf.getvalue()
+
+
+def _graph_soil(rrd_path, host, start, width, height):
+    """Single panel with all soil moisture sensors as lines."""
+    colors = ["#0077cc", "#009900", "#cc0000", "#ff8800",
+              "#8e24aa", "#00aaaa", "#aa7700", "#555555"]
+    ds_labels = [
+        ("pasto_se", "PastoSE"), ("pasto_ne", "PastoNE"), ("pasto_no", "PastoNO"),
+        ("cant_sur", "CantSur"), ("cant_ne",  "CantNE"),  ("cant_no",  "CantNO"),
+        ("valv",     "Válvulas"),("lluvia",    "Lluvia"),
+    ]
+    cmd = [
+        "rrdtool", "graph", "-",
+        "--start", start, "--end", "now",
+        "--width", str(width), "--height", str(height),
+        "--vertical-label", "%",
+        "--title", f"Suelo  {host}",
+        "--lower-limit", "0", "--upper-limit", "100",
+    ]
+    cmd += GRAPH_COLORS
+    defs, lines = [], []
+    for i, (ds, label) in enumerate(ds_labels):
+        color = colors[i % len(colors)]
+        cmd += [f"DEF:{ds}={rrd_path}:{ds}:AVERAGE"]
+        cmd += [f"LINE1:{ds}{color}:{label:<10}"]
+        cmd += [
+            f"VDEF:{ds}last={ds},LAST",
+            f"GPRINT:{ds}last: %5.1lf%%\\n",
+        ]
+    result = _run(cmd)
+    if result is None or result.returncode != 0:
+        return None
+    return result.stdout
 
 
 def _graph_termica_stacked(rrd_path, host, start, width, height):
@@ -1171,6 +1312,24 @@ def graph_png(host, service, period="24h", width=500, height=150):
             if not _rrd_exists(rrd_path):
                 return None
             return _graph_co2_stacked(rrd_path, host, start, width, height)
+
+        elif svc == "pow":
+            rrd_path = os.path.join(rrd_dir, "pow.rrd")
+            if not _rrd_exists(rrd_path):
+                return None
+            return _graph_pow_stacked(rrd_path, host, start, width, height)
+
+        elif svc == "soil":
+            rrd_path = os.path.join(rrd_dir, "soil.rrd")
+            if not _rrd_exists(rrd_path):
+                return None
+            return _graph_soil(rrd_path, host, start, width, height)
+
+        elif svc == "ruptime":
+            rrd_path = os.path.join(rrd_dir, "uptime.rrd")
+            if not _rrd_exists(rrd_path):
+                return None
+            svc = "uptime"  # reusar el gráfico de uptime existente
 
         elif svc == "termica":
             rrd_path = os.path.join(rrd_dir, "termica.rrd")
