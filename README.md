@@ -367,6 +367,7 @@ El `spong-network` ejecuta estos plugins contra los hosts remotos configurados e
 | `rtemp.py` | `rtemp` | Temperatura de router MikroTik via SNMP (placa y CPU en °C) |
 | `scpu.py` | `scpu` | CPU de switch TP-Link JetStream via SNMP |
 | `macs.py` | `macs` | Cantidad de MACs aprendidas via SNMP walk (`dot1dTpFdbTable`) |
+| `termica.py` | `termica` | Llaves térmicas Tuya: tensión, corriente, potencia, energía, corriente de fuga |
 
 **Detalles de plugins SNMP:**
 
@@ -395,6 +396,32 @@ _SSH_MAP = {
 ```
 
 El helper `_ssh_json.py` hace `ssh root@host cat /path/file.json` con un caché de 60s para evitar conexiones redundantes cuando múltiples plugins consultan el mismo host en el mismo ciclo.
+
+**Llaves térmicas Tuya (`termica.py`):**
+
+Lee directamente los dispositivos Tuya via `tinytuya` (protocolo local, sin cloud). Requiere configurar `/usr/local/spong/etc/termicas.yaml` (no incluido en el paquete por seguridad — se incluye `termicas.yaml.example` como plantilla):
+
+```yaml
+# /usr/local/spong/etc/termicas.yaml
+devices:
+  termica1:
+    id: "DEVICE_ID"
+    ip: "192.168.0.x"
+    local_key: "LOCAL_KEY_16_CHARS"
+    version: 3.5          # 3.3, 3.4 o 3.5 según firmware
+    warn_A: 16.0
+    crit_A: 20.0
+    leak_warn_mA: 5.0
+    leak_crit_mA: 30.0
+```
+
+Los `device_id` y `local_key` se obtienen con:
+```bash
+pip3 install tinytuya
+python3 -m tinytuya scan
+```
+
+El plugin incluye un caché interno de 55 s para evitar saturar los dispositivos cuando SPONG consulta múltiples hosts en el mismo ciclo. La configuración se recarga automáticamente si el archivo cambia (comparación de mtime).
 
 **Patrón host virtual:** Un mismo dispositivo físico puede aparecer en dos grupos con distintos roles. Por ejemplo, `riegopi` (IP 192.168.0.78) aparece en el grupo **Servers** con servicios `ping: ssh`, y `riego-patio` (misma IP) aparece en **Clima** con servicios `temp hum co2`. Esto permite separar los datos del sistema operativo del host de los datos de sensores ambientales.
 
@@ -510,6 +537,7 @@ Los archivos RRD se guardan en `/usr/local/spong/var/rrd/<hostname>/`.
 | `presion` | `presion.rrd` | Presión atmosférica (hPa) |
 | `rafaga` | `rafaga.rrd` | Ráfaga de viento (km/h) |
 | `co2` | `co2.rrd` | Calidad del aire: eCO2 (ppm), TVOC (ppb), AQI (3 DS) |
+| `termica` | `termica.rrd` | Tensión (V), corriente (A), potencia (W), energía (kWh), fuga (mA), temp interna (°C) |
 
 Los RRDs se actualizan cada vez que el servidor recibe una actualización de estado. Si el archivo RRD no existe, se crea automáticamente al primer dato.
 
@@ -547,6 +575,18 @@ El gráfico de `co2` genera **3 paneles apilados** en un único PNG usando Pillo
 | AQI | `aqi` | 0–5 | Naranja (AREA) |
 
 Cada panel tiene su propia escala, unidad y leyenda Max/Min/Avg/Last.
+
+### Gráfico de llaves térmicas (termica)
+
+El gráfico de `termica` genera **3 paneles apilados** en un único PNG (Pillow), ya que potencia, corriente y tensión tienen distintas escalas:
+
+| Panel | DS | Unidad | Color |
+|-------|----|--------|-------|
+| Potencia | `power` | W | Rojo (AREA) |
+| Corriente | `current` | A | Azul (LINE2) |
+| Tensión | `voltage` | V (eje 180–250) | Verde (LINE2) |
+
+Cada panel tiene su propia escala, leyenda y unidades. El panel de tensión usa un eje Y fijo (180–250 V) para detectar visualmente variaciones en la red eléctrica.
 
 ### Gráficos ampliados (lightbox)
 
@@ -777,6 +817,38 @@ En GitHub → pestaña **Actions** → seleccionar el workflow → sección **Ar
 ---
 
 ## 16. Historial de cambios
+
+### v3.1 — 2026-03 (parte 6)
+
+**Plugin termica: llaves térmicas Tuya**
+
+- `termica.py` — plugin de red que lee tensión, corriente, potencia, energía, corriente de fuga y temperatura interna directamente via `tinytuya` (protocolo local, sin cloud)
+- Configuración en `etc/termicas.yaml` (gitignoreado — contiene claves locales Tuya). Se incluye `etc/termicas.yaml.example` como plantilla
+- Caché interno de 55 s por dispositivo para no saturar los dispositivos Tuya en cada ciclo de checks
+- Recarga automática de config al detectar cambio de mtime en `termicas.yaml`
+- Soporte para firmware 3.3, 3.4 y 3.5 con decodificación de payload binario DPS17
+
+**Gráfico termica con 3 paneles apilados**
+
+- `rrd.py` actualizado con `_update_termica()` (6 DS: voltage/current/power/energy/leakage/temp) y `_graph_termica_stacked()`
+- `_graph_termica_stacked()` genera 3 paneles independientes apilados con Pillow: Potencia (rojo AREA), Corriente (azul LINE), Tensión (verde LINE, eje fijo 180–250 V)
+- Migración de datos históricos desde proyecto externo via `rrdtool dump | rrdtool restore`
+
+**Fix ACK "Sin vencimiento"**
+
+- Al marcar el checkbox "Sin vencimiento" en el formulario ACK, el campo de duración quedaba `disabled` y no se enviaba en el POST — el servidor interpretaba duración vacía como 4 horas
+- Fix: el submit handler re-habilita el input antes de enviar el formulario
+
+**Fix botón ACK en página de reconocidos**
+
+- El botón de reconocer en `/acks` mostraba "ACK" en vez del texto traducido
+- Fix: cambiado texto hardcodeado por `{{ _('Reconocer') }}`
+
+**Seguridad**
+
+- `etc/termicas.yaml` agregado a `.gitignore` para no subir claves Tuya al repo
+- El paquete `.deb` incluye `termicas.yaml.example` pero nunca `termicas.yaml`
+- `postinst` actualizado: instala `tinytuya` junto con `flask` y `werkzeug`
 
 ### v3.1 — 2026-03 (parte 5)
 

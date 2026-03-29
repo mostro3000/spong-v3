@@ -3,56 +3,53 @@
 Lee tensión, corriente, potencia, energía y corriente de fuga de cada
 llave térmica. Incluye caché interno de 55s para no saturar los dispositivos
 cuando SPONG consulta múltiples hosts en el mismo ciclo.
+
+Configuración: /usr/local/spong/etc/termicas.yaml  (ver termicas.yaml.example)
 """
 
 import base64
+import os
 import struct
 import threading
 import time
 
-# ---------------------------------------------------------------------------
-# Configuración de dispositivos: hostname SPONG → parámetros Tuya
-# ---------------------------------------------------------------------------
-_DEVICES: dict[str, dict] = {
-    "termica1": {
-        "id":        "eb7b8fc3c8c382de81yrng",
-        "ip":        "192.168.0.90",
-        "local_key": ":fs8K{-4'&-8(K4T",
-        "version":   3.5,
-    },
-    "termica2": {
-        "id":        "eb70617be0205230b4mdzp",
-        "ip":        "192.168.0.91",
-        "local_key": "62D}ONw|79:KAA6J",
-        "version":   3.5,
-    },
-    "termica3": {
-        "id":        "eb675e5534729258ccozov",
-        "ip":        "192.168.0.92",
-        "local_key": "*qdYMm6rHaA0~SM]",
-        "version":   3.5,
-    },
-    "termica-central": {
-        "id":        "eb17413663ef0c07d0mtns",
-        "ip":        "192.168.0.194",
-        "local_key": "vNr#my-z6P9|avhJ",
-        "version":   3.4,
-    },
-}
-
-# Umbrales por host: (warn_A, crit_A, leak_warn_mA, leak_crit_mA)
-_THRESHOLDS: dict[str, tuple[float, float, float, float]] = {
-    "termica1":        (16.0, 20.0,  5.0, 30.0),
-    "termica2":        (16.0, 20.0,  5.0, 30.0),
-    "termica3":        (16.0, 20.0,  5.0, 30.0),
-    "termica-central": (25.0, 32.0,  5.0, 30.0),
-}
+_CONFIG_PATH = os.path.join(os.path.dirname(__file__), "../../../etc/termicas.yaml")
+_CONFIG_PATH = os.path.normpath(_CONFIG_PATH)
 
 # ---------------------------------------------------------------------------
-# Caché por dispositivo (evita reconectar si hay varios hosts en el mismo ciclo)
+# Carga de configuración desde YAML
 # ---------------------------------------------------------------------------
-_CACHE: dict[str, dict] = {}   # hostname → {timestamp, data}
-_CACHE_TTL = 55                # segundos
+_config_lock = threading.Lock()
+_config_cache: dict | None = None
+_config_mtime: float = 0.0
+
+
+def _load_config() -> dict:
+    """Lee termicas.yaml y devuelve el dict de devices. Recarga si el archivo cambia."""
+    global _config_cache, _config_mtime
+    try:
+        mtime = os.path.getmtime(_CONFIG_PATH)
+    except OSError:
+        return {}
+    with _config_lock:
+        if _config_cache is not None and mtime == _config_mtime:
+            return _config_cache
+        try:
+            import yaml
+            with open(_CONFIG_PATH) as f:
+                data = yaml.safe_load(f)
+            _config_cache = data.get("devices", {}) if data else {}
+            _config_mtime = mtime
+            return _config_cache
+        except Exception:
+            return _config_cache or {}
+
+
+# ---------------------------------------------------------------------------
+# Caché de lecturas por dispositivo
+# ---------------------------------------------------------------------------
+_CACHE: dict[str, dict] = {}
+_CACHE_TTL = 55
 _cache_lock = threading.Lock()
 
 
@@ -109,7 +106,7 @@ def _read_device(cfg: dict) -> dict | None:
             dev_id=cfg["id"],
             address=cfg["ip"],
             local_key=cfg["local_key"],
-            version=cfg["version"],
+            version=float(cfg.get("version", 3.3)),
         )
         dev.set_socketTimeout(3.0)
         dev.set_socketPersistent(True)
@@ -117,6 +114,7 @@ def _read_device(cfg: dict) -> dict | None:
         raw = dev.status()
         dps = dict(raw.get("dps", {}))
         decoded = None
+        version = float(cfg.get("version", 3.3))
 
         try:
             resp = dev.updatedps(index=[1, 6, 15, 16, 17, 18, 19, 20, 103])
@@ -143,7 +141,7 @@ def _read_device(cfg: dict) -> dict | None:
                                 decoded = d
                         except Exception:
                             pass
-                    if not decoded and cfg["version"] == 3.4:
+                    if not decoded and version == 3.4:
                         tmp = {}
                         try:
                             if "20" in dps:
@@ -179,7 +177,7 @@ def _read_device(cfg: dict) -> dict | None:
                     decoded = d
             except Exception:
                 pass
-        if not decoded and cfg["version"] == 3.4:
+        if not decoded and version == 3.4:
             tmp = {}
             try:
                 if "20" in dps: tmp["voltage_V"] = float(dps["20"]) / 10.0
@@ -203,9 +201,13 @@ def _read_device(cfg: dict) -> dict | None:
 # ---------------------------------------------------------------------------
 
 def check_termica(hostname: str) -> tuple[str, str, str]:
-    cfg = _DEVICES.get(hostname)
+    devices = _load_config()
+    if not devices:
+        return "red", "termica: sin config", f"Falta {_CONFIG_PATH} — copiar desde termicas.yaml.example"
+
+    cfg = devices.get(hostname)
     if not cfg:
-        return "clear", "termica: host no configurado", ""
+        return "clear", "termica: host no configurado", f"{hostname} no está en termicas.yaml"
 
     # Intentar caché primero
     now = time.time()
@@ -238,7 +240,10 @@ def check_termica(hostname: str) -> tuple[str, str, str]:
     if voltage is None or current is None or power is None:
         return "red", "termica: datos incompletos", str(d)
 
-    warn_A, crit_A, leak_warn, leak_crit = _THRESHOLDS[hostname]
+    warn_A    = float(cfg.get("warn_A",      16.0))
+    crit_A    = float(cfg.get("crit_A",      20.0))
+    leak_warn = float(cfg.get("leak_warn_mA", 5.0))
+    leak_crit = float(cfg.get("leak_crit_mA", 30.0))
 
     parts = [f"{voltage:.1f}V", f"{current:.3f}A", f"{power:.1f}W"]
     if temp is not None:

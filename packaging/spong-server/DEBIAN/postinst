@@ -24,8 +24,8 @@ chmod +x "$SPONG_DIR/bin/spong-web" 2>/dev/null || true
 
 # 3. Dependencias Python
 echo "Instalando dependencias Python..."
-pip3 install --quiet flask werkzeug 2>/dev/null || \
-    echo "  Aviso: no se pudo instalar flask/werkzeug via pip. Instalar manualmente: pip3 install flask werkzeug"
+pip3 install --quiet flask werkzeug tinytuya 2>/dev/null || \
+    echo "  Aviso: no se pudo instalar dependencias via pip. Instalar manualmente: pip3 install flask werkzeug tinytuya"
 
 # 4. Configuración inicial si no existe
 if [ ! -f "$SPONG_DIR/etc/spong.yaml" ]; then

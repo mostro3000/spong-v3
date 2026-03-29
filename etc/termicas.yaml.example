@@ -1,0 +1,33 @@
+# Configuración de llaves térmicas Tuya
+# Copiar a termicas.yaml y completar con los valores reales.
+#
+# Los device_id y local_key se obtienen con:
+#   pip install tinytuya
+#   python3 -m tinytuya scan
+# O desde la app Tuya / Smart Life → Device info → Developer mode
+#
+# version: usar 3.3, 3.4 o 3.5 según el firmware del dispositivo
+# warn_A / crit_A: umbrales de corriente en Amperes
+# leak_warn_mA / leak_crit_mA: umbrales de corriente de fuga en mA
+
+devices:
+  termica1:
+    id: "DEVICE_ID"
+    ip: "192.168.0.x"
+    local_key: "LOCAL_KEY_16_CHARS"
+    version: 3.5
+    warn_A: 16.0
+    crit_A: 20.0
+    leak_warn_mA: 5.0
+    leak_crit_mA: 30.0
+
+  # Agregar más dispositivos con el mismo formato:
+  # termica2:
+  #   id: "DEVICE_ID"
+  #   ip: "192.168.0.x"
+  #   local_key: "LOCAL_KEY_16_CHARS"
+  #   version: 3.5
+  #   warn_A: 16.0
+  #   crit_A: 20.0
+  #   leak_warn_mA: 5.0
+  #   leak_crit_mA: 30.0

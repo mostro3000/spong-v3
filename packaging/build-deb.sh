@@ -65,6 +65,9 @@ for f in spong.yaml hosts.yaml groups.yaml; do
     [ -f "$SPONG_SRC/etc/$f" ] && \
         cp "$SPONG_SRC/etc/$f" "$PKG/usr/local/spong/etc/${f}.example"
 done
+# termicas.yaml.example — sin claves reales (termicas.yaml está en .gitignore)
+[ -f "$SPONG_SRC/etc/termicas.yaml.example" ] && \
+    cp "$SPONG_SRC/etc/termicas.yaml.example" "$PKG/usr/local/spong/etc/"
 
 # Systemd units
 mkdir -p "$PKG/etc/systemd/system"

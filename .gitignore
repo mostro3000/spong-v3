@@ -8,6 +8,7 @@ __pycache__/
 etc/spong.yaml
 etc/hosts.yaml
 etc/groups.yaml
+etc/termicas.yaml
 
 # Paquetes .deb compilados — se generan con build-deb.sh
 packaging/dist/
