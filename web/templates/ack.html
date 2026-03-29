@@ -78,8 +78,10 @@
   contactEl.value = savedContact;
   messageEl.value = savedMessage;
 
-  // Save on submit
+  // Save on submit — re-enable dur-input so the value is included in POST
+  // (disabled fields are not submitted by browsers)
   document.querySelector('form').addEventListener('submit', function() {
+    durInput.disabled = false;
     localStorage.setItem('ack_hours',   durInput.value);
     localStorage.setItem('ack_contact', contactEl.value);
     localStorage.setItem('ack_message', messageEl.value);
