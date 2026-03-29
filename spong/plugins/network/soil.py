@@ -3,10 +3,10 @@
 Lee los sensores de humedad de suelo, lluvia y válvulas desde
 /dev/shm/riepopi.json via SSH.
 
-Sensores de suelo (pasto/cantero): 0 = mojado, 100 = seco (resistivo).
+Sensores de suelo (pasto/cantero): % de humedad. 100% = muy húmedo, 0% = seco.
 SensorLluvia: 0 = sin lluvia, >0 = lluvia detectada.
 SensorHumedadValvulas: detecta agua en un lugar donde NO debería haber.
-  Lógica invertida: valor bajo = agua presente = ALARMA.
+  Valor alto = agua presente = ALARMA. <30% verde, 30-50% amarillo, >50% rojo.
 """
 
 from ._ssh_json import ssh_read_json
@@ -27,13 +27,13 @@ _LABELS = {
     "SensorHumedadCanteroNorteOeste": "CantNO",
 }
 
-# Umbrales sensores de suelo (valor alto = seco)
-_DRY_WARN = 80   # % → yellow: suelo seco
-_DRY_CRIT = 95   # % → red: muy seco
+# Umbrales sensores de suelo (% humedad: valor bajo = seco = alarma)
+_DRY_WARN = 20   # % → yellow: suelo seco
+_DRY_CRIT = 10   # % → red: suelo muy seco
 
-# Umbrales válvulas — lógica INVERTIDA (valor bajo = agua presente = alarma)
-_VALV_CRIT = 30  # % → red: agua detectada donde no debe haber
-_VALV_WARN = 50  # % → yellow: posible humedad en zona de válvulas
+# Umbrales válvulas — valor alto = agua presente = alarma
+_VALV_WARN = 30  # % → yellow: posible humedad en zona de válvulas
+_VALV_CRIT = 50  # % → red: agua detectada donde no debe haber
 
 
 def check_soil(hostname: str) -> tuple[str, str, str]:
@@ -50,9 +50,9 @@ def check_soil(hostname: str) -> tuple[str, str, str]:
 
     parts = []
     message_lines = []
-    max_dry = 0.0
+    min_hum = 100.0
     lluvia = float(soil.get("SensorLluvia", 0))
-    valv = float(soil.get("SensorHumedadValvulas", 100))
+    valv = float(soil.get("SensorHumedadValvulas", 0))
 
     for key, label in _LABELS.items():
         val = soil.get(key)
@@ -62,8 +62,8 @@ def check_soil(hostname: str) -> tuple[str, str, str]:
         parts.append(f"{label}:{val:.0f}%")
         message_lines.append(f"{label}: {val:.1f}%")
         if key not in ("SensorLluvia", "SensorHumedadValvulas"):
-            if val > max_dry:
-                max_dry = val
+            if val < min_hum:
+                min_hum = val
 
     if not parts:
         return "red", "soil: sin sensores", str(soil)
@@ -71,16 +71,17 @@ def check_soil(hostname: str) -> tuple[str, str, str]:
     summary = "  ".join(parts)
     message = "\n".join(message_lines)
 
-    # Válvulas: lógica invertida — valor bajo = agua donde no debe haber
-    if valv <= _VALV_CRIT:
+    # Válvulas: valor alto = agua donde no debe haber
+    if valv >= _VALV_CRIT:
         color = "red"
-    elif valv <= _VALV_WARN:
+    elif valv >= _VALV_WARN:
+        color = "yellow"
+    # Suelo: valor bajo = seco = alarma
+    elif min_hum <= _DRY_CRIT:
+        color = "red"
+    elif min_hum <= _DRY_WARN:
         color = "yellow"
     elif lluvia > 0:
-        color = "yellow"
-    elif max_dry >= _DRY_CRIT:
-        color = "red"
-    elif max_dry >= _DRY_WARN:
         color = "yellow"
     else:
         color = "green"

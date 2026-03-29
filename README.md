@@ -368,6 +368,9 @@ El `spong-network` ejecuta estos plugins contra los hosts remotos configurados e
 | `scpu.py` | `scpu` | CPU de switch TP-Link JetStream via SNMP |
 | `macs.py` | `macs` | Cantidad de MACs aprendidas via SNMP walk (`dot1dTpFdbTable`) |
 | `termica.py` | `termica` | Llaves térmicas Tuya: tensión, corriente, potencia, energía, corriente de fuga |
+| `rtsp.py` | `rtsp` | Disponibilidad de cámara: prueba RTSP/554 con OPTIONS estándar, fallback Tapo/2020 |
+| `soil.py` | `soil` | Sensores de suelo via SSH JSON: humedad de pasto/canteros, lluvia, válvulas |
+| `ruptime.py` | `ruptime` | Uptime via SSH para hosts sin spong-client (caché 55s) |
 
 **Detalles de plugins SNMP:**
 
@@ -538,6 +541,8 @@ Los archivos RRD se guardan en `/usr/local/spong/var/rrd/<hostname>/`.
 | `rafaga` | `rafaga.rrd` | Ráfaga de viento (km/h) |
 | `co2` | `co2.rrd` | Calidad del aire: eCO2 (ppm), TVOC (ppb), AQI (3 DS) |
 | `termica` | `termica.rrd` | Tensión (V), corriente (A), potencia (W), energía (kWh), fuga (mA), temp interna (°C) |
+| `soil` | `soil.rrd` | Humedad de suelo: 8 DS (lluvia, válvulas, 3 pasto, 3 cantero) |
+| `ruptime` | `uptime.rrd` | Días de uptime (reutiliza el RRD y gráfico de `uptime`) |
 
 Los RRDs se actualizan cada vez que el servidor recibe una actualización de estado. Si el archivo RRD no existe, se crea automáticamente al primer dato.
 
@@ -587,6 +592,19 @@ El gráfico de `termica` genera **3 paneles apilados** en un único PNG (Pillow)
 | Tensión | `voltage` | V (eje 180–250) | Verde (LINE2) |
 
 Cada panel tiene su propia escala, leyenda y unidades. El panel de tensión usa un eje Y fijo (180–250 V) para detectar visualmente variaciones en la red eléctrica.
+
+### Gráfico de sensores de suelo (soil)
+
+El gráfico de `soil` muestra todas las sondas en un único panel con líneas independientes:
+
+| Sensor | DS | Descripción |
+|--------|----|-------------|
+| PastoSE/NE/NO | `pasto_se/ne/no` | Humedad pasto sur-este, norte-este, norte-oeste |
+| CantSur/NE/NO | `cant_sur/ne/no` | Humedad canteros |
+| Válvulas | `valv` | Zona de válvulas (valor alto = agua donde no debe haber) |
+| Lluvia | `lluvia` | Sensor de lluvia |
+
+Umbrales: válvulas >50% → rojo, 30–50% → amarillo. Suelo <10% → rojo, <20% → amarillo.
 
 ### Gráficos ampliados (lightbox)
 
@@ -817,6 +835,21 @@ En GitHub → pestaña **Actions** → seleccionar el workflow → sección **Ar
 ---
 
 ## 16. Historial de cambios
+
+### v3.1 — 2026-03 (parte 7)
+
+**Nuevos plugins de red**
+
+- `rtsp.py` — disponibilidad de cámaras: prueba RTSP/554 con OPTIONS estándar; si falla, fallback a Tapo/2020 (protocolo propietario C-series). Cámaras Tapo responden en ambos puertos
+- `soil.py` — sensores de humedad de suelo via SSH JSON (riegopi): pasto (3 zonas), canteros (3 zonas), sensor de lluvia y válvulas. Lógica de válvulas invertida: valor alto = agua presente = alarma (zona donde no debería haber agua)
+- `ruptime.py` — uptime via SSH sin necesitar spong-client instalado, con caché de 55s. Reutiliza RRD y gráfico de `uptime`. Timeout de 30s para hosts lentos
+- RRD: `_update_soil()` con 8 DS + `_graph_soil()` (panel único multi-línea)
+
+**Fixes**
+
+- `soil.py`: umbrales corregidos — sensores de suelo reportan % de humedad (100% = muy húmedo = bien); válvulas: <30% verde, 30–50% amarillo, >50% rojo
+- `rtsp`: cámaras sin soporte RTSP removidas de `hosts.yaml` (camara-oficina, camara-living)
+- `ruptime`: ConnectTimeout aumentado a 30s para hosts SSH lentos
 
 ### v3.1 — 2026-03 (parte 6)
 
