@@ -31,7 +31,7 @@
       <span{% if lag >= 3600 %} style="color:#e53935;"{% endif %}>{{ time_ago(lag) }}</span>
     </td>
     <td style="color:#37474f;">{{ issue.summary }}</td>
-    <td><a class="btn btn-sm" href="{{ url_for('ack', host=issue.host, service=issue.service) }}" style="white-space:nowrap;">ACK</a></td>
+    <td><a class="btn btn-sm" href="{{ url_for('ack', host=issue.host, service=issue.service) }}" style="white-space:nowrap;">{{ _('Reconocer') }}</a></td>
   </tr>
   {% endfor %}
   </tbody>
