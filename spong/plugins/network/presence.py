@@ -6,6 +6,7 @@ Configuración en /usr/local/spong/etc/sensors.yaml (gitignoreado).
 DPS relevantes del RTCZ-05 y compatibles:
   DPS 1:   estado — 'none' | 'peaceful' (estático) | 'move' (movimiento)
   DPS 101: distancia al objetivo en cm
+  DPS 102: iluminación en lux
 """
 
 import os
@@ -53,23 +54,28 @@ def _read_device(cfg: dict) -> tuple[str, str, str]:
         err = status.get("Error", "sin respuesta") if status else "sin respuesta"
         return "red", "presence: sin datos", f"tinytuya: {err}"
 
-    dps = status["dps"]
+    dps   = status["dps"]
     state = str(dps.get("1", "")).lower()
     dist_cm = dps.get("101")
+    lux     = dps.get("102")
 
     dist_str = f"  {dist_cm}cm" if dist_cm else ""
+    lux_str  = f"  {lux}lux"   if lux is not None else ""
 
     _STATE = {
-        "none":       ("clear",  "sin presencia",          "No se detecta presencia"),
-        "peaceful":   ("green",  "presente (estático)",    "Presencia estática"),
-        "move":       ("yellow", "movimiento",             "Movimiento detectado"),
-        "large_move": ("yellow", "movimiento grande",      "Movimiento grande detectado"),
-        "small_move": ("yellow", "movimiento pequeño",     "Movimiento pequeño detectado"),
+        "none":       ("clear",  "sin presencia",       "No se detecta presencia"),
+        "peaceful":   ("green",  "presente (estático)", "Presencia estática"),
+        "move":       ("yellow", "movimiento",          "Movimiento detectado"),
+        "large_move": ("yellow", "movimiento grande",   "Movimiento grande detectado"),
+        "small_move": ("yellow", "movimiento pequeño",  "Movimiento pequeño detectado"),
     }
     color, label, msg = _STATE.get(state, ("green", f"presente ({state})", f"Estado: {state}"))
     if state != "none" and dist_str:
         label += dist_str
         msg   += dist_str
+    if lux_str:
+        label += lux_str
+        msg   += lux_str
     return color, label, msg
 
 

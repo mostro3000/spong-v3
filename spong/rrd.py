@@ -468,6 +468,34 @@ def _update_soil(rrd_dir, summary, timestamp):
     ])
 
 
+def _update_presence(rrd_dir, summary, timestamp):
+    """Update presence.rrd: state (0=none,1=peaceful,2=move), distance (cm), lux.
+
+    summary: "sin presencia  686lux" | "presente  140cm (estático)  686lux" | ...
+    """
+    # state: encode as numeric
+    if "movimiento" in summary:
+        state_val = 2.0
+    elif "presente" in summary:
+        state_val = 1.0
+    else:
+        state_val = 0.0
+
+    m_dist = re.search(r"(\d+)\s*cm", summary)
+    m_lux  = re.search(r"(\d+)\s*lux", summary)
+    dist = float(m_dist.group(1)) if m_dist else "U"
+    lux  = float(m_lux.group(1))  if m_lux  else "U"
+
+    path = os.path.join(rrd_dir, "presence.rrd")
+    if not _rrd_exists(path):
+        _create_rrd(path, 60, [
+            "DS:state:GAUGE:180:0:2",
+            "DS:dist:GAUGE:180:0:1000",
+            "DS:lux:GAUGE:180:0:100000",
+        ], _RRA_DEFS, timestamp)
+    _update_rrd(path, timestamp, [state_val, dist, lux])
+
+
 def _update_termica(rrd_dir, summary, message, timestamp):
     """Update termica.rrd with voltage, current, power, energy, leakage, temp.
 
@@ -629,6 +657,8 @@ def update_from_status(host, service, summary, message, timestamp):
             _update_co2(rrd_dir, summary or "", timestamp)
         elif svc == "soil":
             _update_soil(rrd_dir, summary or "", timestamp)
+        elif svc == "presence":
+            _update_presence(rrd_dir, summary or "", timestamp)
         elif svc == "ruptime":
             _update_uptime(rrd_dir, summary or "", timestamp)
         elif svc == "termica":
@@ -775,6 +805,55 @@ def _graph_co2_stacked(rrd_path, host, start, width, height):
     combined.save(buf, format="PNG")
     return buf.getvalue()
 
+
+
+def _graph_presence_stacked(rrd_path, host, start, width, height):
+    """2 stacked panels: Iluminación (lux) y Distancia/Presencia (cm)."""
+    from PIL import Image
+    import io
+
+    sub_h = max(60, height // 2)
+
+    panels = [
+        # (ds, label, unit, color, area, lo, hi)
+        ("lux",  "Iluminación", "lux", "#f9a825", True,  0, None),
+        ("dist", "Distancia",   "cm",  "#0077cc", False, 0, None),
+    ]
+    images = []
+    for ds, label, unit, color, area, lo, hi in panels:
+        cmd = [
+            "rrdtool", "graph", "-",
+            "--start", start, "--end", "now",
+            "--width", str(width), "--height", str(sub_h),
+            "--vertical-label", unit,
+            "--title", f"{label}  {host}",
+            "--lower-limit", str(lo),
+        ]
+        if hi is not None:
+            cmd += ["--upper-limit", str(hi), "--rigid"]
+        cmd += GRAPH_COLORS
+        cmd += [f"DEF:v={rrd_path}:{ds}:AVERAGE"]
+        cmd += [f"AREA:v{color}:{label}"] if area else [f"LINE2:v{color}:{label}"]
+        cmd += [
+            "VDEF:vmax=v,MAXIMUM", "VDEF:vmin=v,MINIMUM",
+            "VDEF:vavg=v,AVERAGE", "VDEF:vlast=v,LAST",
+            "GPRINT:vmax:  Max\\: %6.0lf", "GPRINT:vmin:  Min\\: %6.0lf",
+            "GPRINT:vavg:  Avg\\: %6.0lf", "GPRINT:vlast:  Last\\: %6.0lf\\n",
+        ]
+        result = _run(cmd)
+        if result is None or result.returncode != 0:
+            return None
+        images.append(Image.open(io.BytesIO(result.stdout)))
+
+    total_h = sum(img.height for img in images)
+    combined = Image.new("RGB", (images[0].width, total_h), (255, 255, 255))
+    y = 0
+    for img in images:
+        combined.paste(img, (0, y))
+        y += img.height
+    buf = io.BytesIO()
+    combined.save(buf, format="PNG")
+    return buf.getvalue()
 
 
 def _graph_soil(rrd_path, host, start, width, height):
@@ -1245,6 +1324,12 @@ def graph_png(host, service, period="24h", width=500, height=150):
             if not _rrd_exists(rrd_path):
                 return None
             return _graph_soil(rrd_path, host, start, width, height)
+
+        elif svc == "presence":
+            rrd_path = os.path.join(rrd_dir, "presence.rrd")
+            if not _rrd_exists(rrd_path):
+                return None
+            return _graph_presence_stacked(rrd_path, host, start, width, height)
 
         elif svc == "ruptime":
             rrd_path = os.path.join(rrd_dir, "uptime.rrd")
