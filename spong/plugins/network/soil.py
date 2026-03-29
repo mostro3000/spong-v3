@@ -3,8 +3,10 @@
 Lee los sensores de humedad de suelo, lluvia y válvulas desde
 /dev/shm/riepopi.json via SSH.
 
-Valores: 0 = mojado (sensor en cortocircuito), 100 = seco (circuito abierto).
+Sensores de suelo (pasto/cantero): 0 = mojado, 100 = seco (resistivo).
 SensorLluvia: 0 = sin lluvia, >0 = lluvia detectada.
+SensorHumedadValvulas: detecta agua en un lugar donde NO debería haber.
+  Lógica invertida: valor bajo = agua presente = ALARMA.
 """
 
 from ._ssh_json import ssh_read_json
@@ -25,9 +27,13 @@ _LABELS = {
     "SensorHumedadCanteroNorteOeste": "CantNO",
 }
 
-# Umbrales de "seco" (el sensor devuelve valores altos cuando está seco)
+# Umbrales sensores de suelo (valor alto = seco)
 _DRY_WARN = 80   # % → yellow: suelo seco
 _DRY_CRIT = 95   # % → red: muy seco
+
+# Umbrales válvulas — lógica INVERTIDA (valor bajo = agua presente = alarma)
+_VALV_CRIT = 30  # % → red: agua detectada donde no debe haber
+_VALV_WARN = 50  # % → yellow: posible humedad en zona de válvulas
 
 
 def check_soil(hostname: str) -> tuple[str, str, str]:
@@ -46,6 +52,7 @@ def check_soil(hostname: str) -> tuple[str, str, str]:
     message_lines = []
     max_dry = 0.0
     lluvia = float(soil.get("SensorLluvia", 0))
+    valv = float(soil.get("SensorHumedadValvulas", 100))
 
     for key, label in _LABELS.items():
         val = soil.get(key)
@@ -54,7 +61,7 @@ def check_soil(hostname: str) -> tuple[str, str, str]:
         val = float(val)
         parts.append(f"{label}:{val:.0f}%")
         message_lines.append(f"{label}: {val:.1f}%")
-        if key != "SensorLluvia" and key != "SensorHumedadValvulas":
+        if key not in ("SensorLluvia", "SensorHumedadValvulas"):
             if val > max_dry:
                 max_dry = val
 
@@ -64,8 +71,13 @@ def check_soil(hostname: str) -> tuple[str, str, str]:
     summary = "  ".join(parts)
     message = "\n".join(message_lines)
 
-    if lluvia > 0:
-        color = "yellow"   # lluvia activa
+    # Válvulas: lógica invertida — valor bajo = agua donde no debe haber
+    if valv <= _VALV_CRIT:
+        color = "red"
+    elif valv <= _VALV_WARN:
+        color = "yellow"
+    elif lluvia > 0:
+        color = "yellow"
     elif max_dry >= _DRY_CRIT:
         color = "red"
     elif max_dry >= _DRY_WARN:

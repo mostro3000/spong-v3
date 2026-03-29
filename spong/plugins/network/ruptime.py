@@ -18,12 +18,12 @@ _cache_lock = threading.Lock()
 _CACHE_TTL = 55
 
 
-def _ssh_uptime(ip: str, timeout: int = 15) -> str | None:
+def _ssh_uptime(ip: str, timeout: int = 40) -> str | None:
     try:
         result = subprocess.run(
             ["ssh",
              "-o", "BatchMode=yes",
-             "-o", "ConnectTimeout=10",
+             "-o", "ConnectTimeout=30",
              "-o", "StrictHostKeyChecking=no",
              f"root@{ip}", "/usr/bin/uptime"],
             capture_output=True, text=True, timeout=timeout,
