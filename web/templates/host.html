@@ -56,7 +56,7 @@
               title="Clic para actualizar">{{ svc.color }}</span></td>
     <td style="text-align:center;">
       <span class="graph-toggle btn btn-sm" data-host="{{ hostname }}" data-svc="{{ svc_name }}"
-            style="cursor:pointer; background:#eceff1; color:#546e7a; border:1px solid #cdd5df;"
+            style="cursor:pointer; background:#eceff1; color:#546e7a; border:1px solid #cdd5df; visibility:hidden;"
             title="{{ _('Graf.') }}">📊</span>
     </td>
     <td style="font-size:11px; color:#546e7a; white-space:nowrap;" title="{{ _('desde') }} {{ svc.start_time | int | strftime('%Y-%m-%d %H:%M') }}">
@@ -97,6 +97,13 @@ document.querySelectorAll('.graph-toggle').forEach(function(el) {
     this.style.background = visible ? '' : '#4a6fa5';
     this.style.color = visible ? '' : '#fff';
   });
+  // Verificar si hay gráfico disponible (HEAD request al gráfico 24h)
+  var host = el.dataset.host, svc = el.dataset.svc;
+  var url = '{{ url_for("rrd_graph", hostname="__H__", service="__S__", period="24h", w=10, h=10) }}'
+              .replace('__H__', host).replace('__S__', svc);
+  fetch(url, {method:'HEAD'}).then(function(r){
+    if (r.ok) el.style.visibility = 'visible';
+  }).catch(function(){});
 });
 
 // Refresh individual service status on badge click

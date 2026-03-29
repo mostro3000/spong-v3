@@ -607,12 +607,12 @@ def _update_termica(rrd_dir, summary, message, timestamp):
     path = os.path.join(rrd_dir, "termica.rrd")
     if not _rrd_exists(path):
         _create_rrd(path, 60, [
-            "DS:voltage:GAUGE:180:100:300",
-            "DS:current:GAUGE:180:0:100",
-            "DS:power:GAUGE:180:0:30000",
-            "DS:energy:GAUGE:180:0:U",
-            "DS:leakage:GAUGE:180:0:1000",
-            "DS:temp:GAUGE:180:-50:150",
+            "DS:voltage:GAUGE:700:100:300",
+            "DS:current:GAUGE:700:0:100",
+            "DS:power:GAUGE:700:0:30000",
+            "DS:energy:GAUGE:700:0:U",
+            "DS:leakage:GAUGE:700:0:1000",
+            "DS:temp:GAUGE:700:-50:150",
         ], _RRA_DEFS, timestamp)
     _update_rrd(path, timestamp, [
         voltage,
