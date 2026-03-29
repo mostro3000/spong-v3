@@ -857,6 +857,7 @@ En GitHub → pestaña **Actions** → seleccionar el workflow → sección **Ar
 - `ups.py` — UPS APC via SNMP (PowerNet MIB): tensión entrada/salida, frecuencia entrada/salida, temperatura batería y exterior (sonda opcional). RRD con 2 paneles apilados (tensión + frecuencia). Umbrales para red Argentina 220V/50Hz
 - `interfaces.py` — interfaces de red caídas via SNMP IF-MIB: detecta interfaces admin up / oper down. Lista configurable de interfaces a ignorar (`ignore_interfaces` en hosts.yaml)
 - `nfs.py` — disponibilidad NFS via `rpcinfo -p`: verifica nfsd (100003) y mountd (100005)
+- `memolt.py` — uso de memoria % en switches/routers TP-Link via TPLINK-SYSMONITOR-MIB (OID verificado en T2600G). RRD gráfico AREA violeta. Uso: `services: "snmp scpu memolt"`
 
 **Fix presence plugin**
 

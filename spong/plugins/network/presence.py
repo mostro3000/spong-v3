@@ -22,6 +22,7 @@ _config_mtime: float | None = None
 _config_lock = threading.Lock()
 
 _device_cache: dict = {}   # hostname → (timestamp, result)
+_last_lux: dict = {}       # hostname → last known lux value
 _device_lock = threading.Lock()
 _CACHE_TTL = 55
 
@@ -43,7 +44,7 @@ def _load_config() -> dict:
         return _config_cache
 
 
-def _read_device(cfg: dict) -> tuple[str, str, str]:
+def _read_device(cfg: dict, hostname: str = "") -> tuple[str, str, str]:
     import tinytuya
     d = tinytuya.Device(cfg["id"], cfg["ip"], cfg["local_key"])
     d.set_version(float(cfg.get("version", 3.5)))
@@ -58,6 +59,12 @@ def _read_device(cfg: dict) -> tuple[str, str, str]:
     state = str(dps.get("1", "")).lower()
     dist_cm = dps.get("101")
     lux     = dps.get("102")
+
+    # Si el sensor no devuelve lux en este ciclo, usar el último valor conocido
+    if lux is not None:
+        _last_lux[hostname] = lux
+    elif hostname in _last_lux:
+        lux = _last_lux[hostname]
 
     dist_str = f"  {dist_cm}cm" if dist_cm else ""
     lux_str  = f"  {lux}lux"   if lux is not None else ""
@@ -95,7 +102,7 @@ def check_presence(hostname: str) -> tuple[str, str, str]:
             if now - ts < _CACHE_TTL:
                 return cached
 
-    result = _read_device(cfg)
+    result = _read_device(cfg, hostname)
 
     with _device_lock:
         _device_cache[hostname] = (now, result)
