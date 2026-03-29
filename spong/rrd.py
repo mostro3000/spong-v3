@@ -736,6 +736,8 @@ def update_from_status(host, service, summary, message, timestamp):
             _update_rcpu(rrd_dir, summary or "", timestamp, "rcpu.rrd")
         elif svc == "scpu":
             _update_rcpu(rrd_dir, summary or "", timestamp, "scpu.rrd")
+        elif svc == "memolt":
+            _update_rcpu(rrd_dir, summary or "", timestamp, "memolt.rrd")
         elif svc == "rtemp":
             _update_rtemp(rrd_dir, summary or "", timestamp)
         elif svc == "macs":
@@ -1340,17 +1342,18 @@ def graph_png(host, service, period="24h", width=500, height=150):
                 cmd += ["DEF:{0}={1}:{0}:AVERAGE".format(ds, rrd_path),
                         "LINE2:{0}{1}:{0}".format(ds, color)]
 
-        elif svc in ("rcpu", "scpu"):
+        elif svc in ("rcpu", "scpu", "memolt"):
             rrd_path = os.path.join(rrd_dir, "{}.rrd".format(svc))
             if not _rrd_exists(rrd_path):
                 return None
-            label = "CPU router" if svc == "rcpu" else "CPU switch"
+            label = {"rcpu": "CPU router", "scpu": "CPU switch", "memolt": "Memoria TP-Link"}.get(svc, svc)
+            color = {"rcpu": "#0077cc", "scpu": "#0077cc", "memolt": "#6a1b9a"}.get(svc, "#0077cc")
             cmd += [
                 "--vertical-label", "%",
                 "--upper-limit", "100",
                 "--title", "{} {}".format(label, host),
                 "DEF:cpu={}:cpu:AVERAGE".format(rrd_path),
-                "AREA:cpu#0077cc:cpu %",
+                "AREA:cpu{}:% ".format(color),
             ]
 
         elif svc == "rtemp":
