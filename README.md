@@ -382,6 +382,9 @@ El `spong-network` ejecuta estos plugins contra los hosts remotos configurados e
 | `rtsp.py` | `rtsp` | Disponibilidad de cámara: prueba RTSP/554 con OPTIONS estándar, fallback Tapo/2020 |
 | `soil.py` | `soil` | Sensores de suelo via SSH JSON: humedad de pasto/canteros, lluvia, válvulas |
 | `ruptime.py` | `ruptime` | Uptime via SSH para hosts sin spong-client (caché 55s) |
+| `ups.py` | `ups` | UPS APC via SNMP: tensión entrada/salida, frecuencia, temperatura batería/exterior |
+| `interfaces.py` | `interfaces` | Interfaces de red caídas via SNMP (admin up / oper down) |
+| `nfs.py` | `nfs` | Disponibilidad NFS via `rpcinfo -p` (nfsd + mountd) |
 
 **Detalles de plugins SNMP:**
 
@@ -846,6 +849,18 @@ En GitHub → pestaña **Actions** → seleccionar el workflow → sección **Ar
 ---
 
 ## 16. Historial de cambios
+
+### v3.1 — 2026-03 (parte 9)
+
+**Nuevos plugins (port desde Perl)**
+
+- `ups.py` — UPS APC via SNMP (PowerNet MIB): tensión entrada/salida, frecuencia entrada/salida, temperatura batería y exterior (sonda opcional). RRD con 2 paneles apilados (tensión + frecuencia). Umbrales para red Argentina 220V/50Hz
+- `interfaces.py` — interfaces de red caídas via SNMP IF-MIB: detecta interfaces admin up / oper down. Lista configurable de interfaces a ignorar (`ignore_interfaces` en hosts.yaml)
+- `nfs.py` — disponibilidad NFS via `rpcinfo -p`: verifica nfsd (100003) y mountd (100005)
+
+**Fix presence plugin**
+
+- Sensor Tuya a veces no incluye DPS 102 (lux) cuando no hay presencia → cortes en gráfico. Ahora se reutiliza el último valor de lux conocido por hostname
 
 ### v3.1 — 2026-03 (parte 8)
 

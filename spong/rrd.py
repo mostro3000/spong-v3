@@ -496,6 +496,93 @@ def _update_presence(rrd_dir, summary, timestamp):
     _update_rrd(path, timestamp, [state_val, dist, lux])
 
 
+def _update_ups(rrd_dir, summary, timestamp):
+    """Update ups.rrd: Vin, Vout, Fin, Fout, Tbat (from ups plugin summary).
+
+    summary: "Vin:220V  Vout:220V  Fin:50.0Hz  Fout:50.0Hz  Tbat:25°C"
+    """
+    import re as _re
+    def _val(label, divisor=1.0):
+        m = _re.search(rf"{label}:([\d.]+)", summary)
+        return float(m.group(1)) / divisor if m else "U"
+
+    path = os.path.join(rrd_dir, "ups.rrd")
+    if not _rrd_exists(path):
+        _create_rrd(path, 300, [
+            "DS:vin:GAUGE:600:0:300",
+            "DS:vout:GAUGE:600:0:300",
+            "DS:fin:GAUGE:600:0:100",
+            "DS:fout:GAUGE:600:0:100",
+            "DS:tbat:GAUGE:600:0:100",
+        ], _RRA_DEFS, timestamp)
+    _update_rrd(path, timestamp, [
+        _val("Vin"), _val("Vout"),
+        _val("Fin"), _val("Fout"),
+        _val("Tbat"),
+    ])
+
+
+def _graph_ups_stacked(rrd_path, host, start, width, height):
+    """Two stacked panels: Voltage (Vin/Vout) + Frequency (Fin/Fout)."""
+    import subprocess, tempfile
+    from PIL import Image
+    import io
+
+    panels = [
+        {
+            "title": f"UPS Tensión — {host}",
+            "vlabel": "Voltios",
+            "defs": [
+                f"DEF:vin={rrd_path}:vin:AVERAGE",
+                f"DEF:vout={rrd_path}:vout:AVERAGE",
+            ],
+            "draw": [
+                "LINE2:vin#1565c0:Vin",
+                "LINE2:vout#2e7d32:Vout",
+            ],
+        },
+        {
+            "title": f"UPS Frecuencia — {host}",
+            "vlabel": "Hz",
+            "defs": [
+                f"DEF:fin={rrd_path}:fin:AVERAGE",
+                f"DEF:fout={rrd_path}:fout:AVERAGE",
+            ],
+            "draw": [
+                "LINE2:fin#e65100:Fin",
+                "LINE2:fout#6a1b9a:Fout",
+            ],
+        },
+    ]
+
+    images = []
+    for p in panels:
+        cmd = [
+            "rrdtool", "graph", "-",
+            "--start", str(start), "--end", "now",
+            "--width", str(width), "--height", str(height // 2 - 10),
+            "--title", p["title"],
+            "--vertical-label", p["vlabel"],
+            "--color", "BACK#ffffff00",
+            "--slope-mode",
+        ] + p["defs"] + p["draw"]
+        r = subprocess.run(cmd, capture_output=True)
+        if r.returncode == 0:
+            images.append(Image.open(io.BytesIO(r.stdout)))
+
+    if not images:
+        return None
+    total_h = sum(im.height for im in images)
+    out = Image.new("RGBA", (images[0].width, total_h), (255, 255, 255, 0))
+    y = 0
+    for im in images:
+        out.paste(im, (0, y))
+        y += im.height
+    buf = io.BytesIO()
+    out.save(buf, format="PNG")
+    return buf.getvalue()
+
+
 def _update_termica(rrd_dir, summary, message, timestamp):
     """Update termica.rrd with voltage, current, power, energy, leakage, temp.
 
@@ -659,6 +746,8 @@ def update_from_status(host, service, summary, message, timestamp):
             _update_soil(rrd_dir, summary or "", timestamp)
         elif svc == "presence":
             _update_presence(rrd_dir, summary or "", timestamp)
+        elif svc == "ups":
+            _update_ups(rrd_dir, summary or "", timestamp)
         elif svc == "ruptime":
             _update_uptime(rrd_dir, summary or "", timestamp)
         elif svc == "termica":
@@ -1330,6 +1419,12 @@ def graph_png(host, service, period="24h", width=500, height=150):
             if not _rrd_exists(rrd_path):
                 return None
             return _graph_presence_stacked(rrd_path, host, start, width, height)
+
+        elif svc == "ups":
+            rrd_path = os.path.join(rrd_dir, "ups.rrd")
+            if not _rrd_exists(rrd_path):
+                return None
+            return _graph_ups_stacked(rrd_path, host, start, width, height)
 
         elif svc == "ruptime":
             rrd_path = os.path.join(rrd_dir, "uptime.rrd")
