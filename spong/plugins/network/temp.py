@@ -1,6 +1,19 @@
-"""Network check: Temperature sensor — lee JSON locales o via SSH."""
+"""Network check: Temperature sensor — lee JSON locales, via SSH o via HTTP."""
 
 import json
+import urllib.request
+
+
+def _http_read(url: str, *keys: str) -> float | None:
+    """Fetch JSON from HTTP URL and navigate key path."""
+    try:
+        with urllib.request.urlopen(url, timeout=10) as r:
+            data = json.load(r)
+        for k in keys:
+            data = data[k]
+        return float(str(data).replace(',', '.'))
+    except Exception:
+        return None
 
 
 def _read_value(path: str, key: str) -> float | None:
@@ -13,6 +26,11 @@ def _read_value(path: str, key: str) -> float | None:
     except Exception:
         return None
 
+
+# Hosts via HTTP: host → (url, clave1, [clave2, ...])
+_HTTP_MAP: dict[str, tuple] = {
+    "living": ("http://esp1s-sensor-temperatura/json", "temperature_c"),
+}
 
 # Mapa host → (archivo JSON local, clave dentro del JSON)
 _HOST_MAP: dict[str, tuple[str, str]] = {
@@ -30,6 +48,7 @@ _SSH_MAP: dict[str, tuple[str, str, list[str]]] = {
 
 # Umbrales por host: (warn_lo, warn_hi, crit_lo, crit_hi)
 _THRESHOLDS: dict[str, tuple[float, float, float, float]] = {
+    "living":       (15, 27, 10, 32),
     "exterior":     (10, 27, 5,  35),
     "comedor":      (15, 27, 10, 39),
     "garaje":       (10, 32, 5,  38),
@@ -40,7 +59,12 @@ _THRESHOLDS: dict[str, tuple[float, float, float, float]] = {
 
 
 def check_temp(hostname: str) -> tuple[str, str, str]:
-    if hostname in _SSH_MAP:
+    if hostname in _HTTP_MAP:
+        url, *keys = _HTTP_MAP[hostname]
+        val = _http_read(url, *keys)
+        if val is None:
+            return "red", "temp: sin datos (HTTP)", f"No se pudo leer {url}"
+    elif hostname in _SSH_MAP:
         from ._ssh_json import ssh_read_json
         ssh_host, path, keys = _SSH_MAP[hostname]
         data = ssh_read_json(ssh_host, path)

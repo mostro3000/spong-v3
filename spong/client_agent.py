@@ -23,9 +23,7 @@ BINDIR = Path("/usr/local/spong/bin")
 
 class ClientAgent:
     def __init__(self, hostname: str | None = None):
-        self.hostname = hostname or socket.getfqdn()
-        # Override with hardcoded value matching original
-        self.hostname = "s2"
+        self.hostname = hostname or config.get("hostname") or socket.gethostname()
         self._running = True
         self._check_funcs: dict[str, callable] = {}
 

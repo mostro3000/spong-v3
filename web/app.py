@@ -459,6 +459,7 @@ def service_detail(hostname, service):
     svc = database.load_service(hostname, service)
     acks = database.load_acks(hostname)
     is_acked = database.is_acknowledged(hostname, service)
+    service_ack = next((a for a in acks if a.covers(service)), None)
     return render_template(
         "service.html",
         hostname=hostname,
@@ -466,6 +467,7 @@ def service_detail(hostname, service):
         svc=svc,
         acks=acks,
         is_acked=is_acked,
+        service_ack=service_ack,
     )
 
 

@@ -1,6 +1,10 @@
-"""Network check: Humidity sensor — lee JSON locales o via SSH."""
+"""Network check: Humidity sensor — lee JSON locales, via SSH o via HTTP."""
 
-from .temp import _read_value
+from .temp import _read_value, _http_read
+
+_HTTP_MAP: dict[str, tuple] = {
+    "living": ("http://esp1s-sensor-temperatura/json", "humidity_pct"),
+}
 
 _HOST_MAP: dict[str, tuple[str, str]] = {
     "exterior":     ("/var/www/html/tiempo.json",      "humedad"),
@@ -14,7 +18,12 @@ _SSH_MAP: dict[str, tuple[str, str, list[str]]] = {
 
 
 def check_hum(hostname: str) -> tuple[str, str, str]:
-    if hostname in _SSH_MAP:
+    if hostname in _HTTP_MAP:
+        url, *keys = _HTTP_MAP[hostname]
+        val = _http_read(url, *keys)
+        if val is None:
+            return "red", "hum: sin datos (HTTP)", f"No se pudo leer {url}"
+    elif hostname in _SSH_MAP:
         from ._ssh_json import ssh_read_json
         ssh_host, path, keys = _SSH_MAP[hostname]
         data = ssh_read_json(ssh_host, path)

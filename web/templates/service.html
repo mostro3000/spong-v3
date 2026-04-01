@@ -107,9 +107,13 @@
 <p style="color:#90a4ae; margin-top:12px;">{{ _('No hay datos para este servicio.') }}</p>
 {% endif %}
 
-<div style="margin-top:16px; display:flex; gap:8px;">
+<div style="margin-top:16px; display:flex; gap:8px; flex-wrap:wrap;">
   {% if not is_acked %}
   <a class="btn" href="{{ url_for('ack', host=hostname, service=service) }}">&#10003; {{ _('Reconocer') }}</a>
+  {% elif service_ack %}
+  <a class="btn" href="{{ url_for('ack_del', ack_id=service_ack.host ~ '-' ~ service_ack.services ~ '-' ~ (service_ack.end_time|int)) }}"
+     style="background:#c62828;"
+     onclick="return confirm('{{ _('¿Borrar el reconocimiento de') }} {{ service }}?');">&#10007; {{ _('Borrar reconocimiento') }}</a>
   {% endif %}
   <a class="btn" href="{{ url_for('host_detail', hostname=hostname) }}" style="background:#78909c;">&#8592; {{ hostname }}</a>
 </div>

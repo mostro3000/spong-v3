@@ -850,6 +850,36 @@ En GitHub → pestaña **Actions** → seleccionar el workflow → sección **Ar
 
 ## 16. Historial de cambios
 
+### v3.2 — 2026-04
+
+**Plugin speedtest (cliente)**
+- Nuevo plugin cliente `speedtest.py`: mide bajada, subida y latencia con el CLI de Ookla
+- Umbrales: <5 Mbps rojo, <10 Mbps amarillo (configurable en `thresholds.speedtest` de `spong.yaml`)
+- Opción `server_id` en `thresholds.speedtest` para fijar el servidor Ookla a usar
+- Flags `--accept-license --accept-gdpr` para correr sin TTY desde systemd
+- Fix: `HOME=/root` en el entorno del subprocess (el servicio no hereda HOME)
+- Gráficos RRD con dos paneles: bajada/subida (Mbps) y ping/jitter (ms)
+- Los plugins cliente se registran en `checks:` de `spong.yaml`, no en `hosts.yaml`
+
+**Sensor HTTP (temp/hum)**
+- Plugins `temp.py` y `hum.py` ahora soportan sensores HTTP con `_HTTP_MAP` y `_http_read()`
+- Nuevo host `living` en grupo `clima` leyendo `temperature_c` y `humidity_pct` de `http://esp1s-sensor-temperatura/json`
+
+**Mejoras de UI**
+- Página de servicio: botón **Borrar reconocimiento** cuando el servicio está reconocido
+- Fix: el botón usaba el filename del ack en vez del formato `host-services-endtime` que espera el protocolo
+
+**`client_agent.py`**
+- Eliminado hostname `s2` hardcodeado; ahora usa `hostname:` de `spong.yaml` o `socket.gethostname()` como fallback
+
+**Empaquetado .deb**
+- `postinst` instala dependencias del sistema (`rrdtool`, `fping`, `snmp`) via `apt-get install -y` para que funcione con `dpkg -i` directo
+- Agregado `pyyaml` al `pip3 install` del postinst
+
+**Versión bumpeada a 3.2**
+- `spong/__init__.py`: `3.2.0`
+- Paquetes: `spong-server_3.2-1_all.deb`, `spong-client_3.2-1_all.deb`
+
 ### v3.1 — 2026-03 (parte 10)
 
 **Plugin speedtest (cliente)**

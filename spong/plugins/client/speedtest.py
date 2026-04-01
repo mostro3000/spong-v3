@@ -1,44 +1,58 @@
 """Client check: velocidad de internet via speedtest (Ookla CLI).
 
-Mide bajada, subida y latencia. Corre el test completo y guarda los resultados.
-El test tarda ~20-30s, por eso el TTL del estado es largo (el check_interval
-del cliente debería configurarse con un intervalo mayor para este servicio,
-o se puede usar el TTL para que no alarme si no se actualiza frecuentemente).
-
 Umbrales (configurables en spong.yaml bajo thresholds.speedtest):
-  down_warn: 10   (Mbps)
-  down_crit:  5
-  up_warn:    5
-  up_crit:    2
+  down_warn: 10   (Mbps)  — amarillo si bajada < este valor
+  down_crit:  5           — rojo si bajada < este valor
+  up_warn:   10   (Mbps)
+  up_crit:    5
   ping_warn: 50   (ms)
   ping_crit: 100
+  server_id: 27292        — ID de servidor Ookla (opcional; omitir para automático)
 """
 
 import json
+import os
 import subprocess
-import time
 from ... import config
 from ...status_sender import send_status
 
 _SPEEDTEST_CMD = "speedtest"
-_TIMEOUT = 90   # segundos máximos para el test
+_TIMEOUT = 120  # segundos máximos para el test
 
 
 def check_speedtest(hostname: str) -> None:
     thresholds = config.get("thresholds", {}).get("speedtest", {})
     down_warn  = thresholds.get("down_warn",  10)
     down_crit  = thresholds.get("down_crit",   5)
-    up_warn    = thresholds.get("up_warn",     5)
-    up_crit    = thresholds.get("up_crit",     2)
+    up_warn    = thresholds.get("up_warn",    10)
+    up_crit    = thresholds.get("up_crit",     5)
     ping_warn  = thresholds.get("ping_warn",  50)
     ping_crit  = thresholds.get("ping_crit", 100)
+    server_id  = thresholds.get("server_id",  None)
+
+    cmd = [_SPEEDTEST_CMD, "--format=json", "--progress=no",
+           "--accept-license", "--accept-gdpr"]
+    if server_id:
+        cmd += ["--server-id", str(server_id)]
 
     try:
+        env = os.environ.copy()
+        env.setdefault("HOME", "/root")
         result = subprocess.run(
-            [_SPEEDTEST_CMD, "--format=json", "--progress=no"],
-            capture_output=True, text=True, timeout=_TIMEOUT,
+            cmd, capture_output=True, text=True, timeout=_TIMEOUT, env=env,
         )
-        data = json.loads(result.stdout)
+        # El CLI puede emitir varias líneas JSON (logs + result); buscar la de resultado
+        data = None
+        for line in result.stdout.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            parsed = json.loads(line)
+            if parsed.get("type") == "result":
+                data = parsed
+                break
+        if data is None:
+            raise json.JSONDecodeError("no result line found", result.stdout, 0)
     except subprocess.TimeoutExpired:
         send_status(hostname, "speedtest", "red",
                     f"speedtest: timeout ({_TIMEOUT}s)", "El test no completó a tiempo")
@@ -50,11 +64,6 @@ def check_speedtest(hostname: str) -> None:
     except Exception as e:
         send_status(hostname, "speedtest", "red",
                     f"speedtest: error: {e}", "")
-        return
-
-    if data.get("type") != "result":
-        send_status(hostname, "speedtest", "red",
-                    "speedtest: sin resultado", result.stdout[:200])
         return
 
     # Convertir bytes/s → Mbps
