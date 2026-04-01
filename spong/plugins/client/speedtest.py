@@ -13,11 +13,14 @@ Umbrales (configurables en spong.yaml bajo thresholds.speedtest):
 import json
 import os
 import subprocess
+import time
 from ... import config
+from ...database import load_service
 from ...status_sender import send_status
 
 _SPEEDTEST_CMD = "speedtest"
 _TIMEOUT = 120  # segundos máximos para el test
+_DEFAULT_INTERVAL = 3600  # 1 hora entre mediciones
 
 
 def check_speedtest(hostname: str) -> None:
@@ -29,6 +32,12 @@ def check_speedtest(hostname: str) -> None:
     ping_warn  = thresholds.get("ping_warn",  50)
     ping_crit  = thresholds.get("ping_crit", 100)
     server_id  = thresholds.get("server_id",  None)
+    interval   = thresholds.get("interval",   _DEFAULT_INTERVAL)
+
+    # Saltear si la última medición fue hace menos de `interval` segundos
+    svc = load_service(hostname, "speedtest")
+    if svc and svc.report_time and (time.time() - svc.report_time) < interval:
+        return
 
     cmd = [_SPEEDTEST_CMD, "--format=json", "--progress=no",
            "--accept-license", "--accept-gdpr"]

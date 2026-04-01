@@ -513,8 +513,8 @@ def _update_speedtest(rrd_dir, summary, timestamp):
         return
 
     path = os.path.join(rrd_dir, "speedtest.rrd")
-    # Heartbeat grande: el test puede tardar 20-30min entre corridas
-    hb = 7200
+    # Heartbeat = 2.5x intervalo (3600s) para tolerar retrasos
+    hb = 9000
     if not _rrd_exists(path):
         _create_rrd(path, 300, [
             "DS:down:GAUGE:{}:0:10000".format(hb),

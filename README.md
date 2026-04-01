@@ -876,6 +876,12 @@ En GitHub → pestaña **Actions** → seleccionar el workflow → sección **Ar
 - `postinst` instala dependencias del sistema (`rrdtool`, `fping`, `snmp`) via `apt-get install -y` para que funcione con `dpkg -i` directo
 - Agregado `pyyaml` al `pip3 install` del postinst
 
+**Fix speedtest — intervalo mínimo entre mediciones**
+- El plugin ahora verifica el timestamp del último resultado antes de correr
+- Si la última medición fue hace menos de `interval` segundos (default: 3600), se saltea
+- Configurable con `thresholds.speedtest.interval` en `spong.yaml`
+- Heartbeat del RRD aumentado de 7200 → 9000s (2.5× intervalo) para evitar cortes en gráficos
+
 **Versión bumpeada a 3.2**
 - `spong/__init__.py`: `3.2.0`
 - Paquetes: `spong-server_3.2-1_all.deb`, `spong-client_3.2-1_all.deb`
