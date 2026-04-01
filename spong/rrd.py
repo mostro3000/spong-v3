@@ -497,31 +497,34 @@ def _update_presence(rrd_dir, summary, timestamp):
 
 
 def _update_speedtest(rrd_dir, summary, timestamp):
-    """Update speedtest.rrd: down (Mbps), up (Mbps), ping (ms).
+    """Update speedtest.rrd: down (Mbps), up (Mbps), ping (ms), jitter (ms).
 
-    summary: "↓95.3Mbps  ↑48.1Mbps  ping:4.2ms"
+    summary: "↓95.3Mbps  ↑48.1Mbps  ping:4.2ms  jitter:1.3ms"
     """
-    m_down = re.search(r"↓([\d.]+)Mbps", summary)
-    m_up   = re.search(r"↑([\d.]+)Mbps", summary)
-    m_ping = re.search(r"ping:([\d.]+)ms", summary)
+    m_down   = re.search(r"↓([\d.]+)Mbps", summary)
+    m_up     = re.search(r"↑([\d.]+)Mbps", summary)
+    m_ping   = re.search(r"ping:([\d.]+)ms", summary)
+    m_jitter = re.search(r"jitter:([\d.]+)ms", summary)
 
-    down = float(m_down.group(1)) if m_down else "U"
-    up   = float(m_up.group(1))   if m_up   else "U"
-    ping = float(m_ping.group(1)) if m_ping else "U"
+    down   = float(m_down.group(1))   if m_down   else "U"
+    up     = float(m_up.group(1))     if m_up     else "U"
+    ping   = float(m_ping.group(1))   if m_ping   else "U"
+    jitter = float(m_jitter.group(1)) if m_jitter else "U"
 
     if down == "U" and up == "U":
         return
 
     path = os.path.join(rrd_dir, "speedtest.rrd")
-    # Heartbeat = 2.5x intervalo (3600s) para tolerar retrasos
-    hb = 9000
+    # Heartbeat = 2.5x intervalo (300s) para tolerar retrasos
+    hb = 750
     if not _rrd_exists(path):
         _create_rrd(path, 300, [
             "DS:down:GAUGE:{}:0:10000".format(hb),
             "DS:up:GAUGE:{}:0:10000".format(hb),
             "DS:ping:GAUGE:{}:0:5000".format(hb),
+            "DS:jitter:GAUGE:{}:0:5000".format(hb),
         ], _RRA_DEFS, timestamp)
-    _update_rrd(path, timestamp, [down, up, ping])
+    _update_rrd(path, timestamp, [down, up, ping, jitter])
 
 
 def _graph_speedtest_stacked(rrd_path, host, start, width, height):
@@ -538,15 +541,50 @@ def _graph_speedtest_stacked(rrd_path, host, start, width, height):
                 f"DEF:up={rrd_path}:up:AVERAGE",
             ],
             "draw": [
-                "AREA:down#1565c0:Bajada",
-                "LINE2:up#2e7d32:Subida",
+                "AREA:down#1565c0:Bajada ",
+                r"GPRINT:down:MAX:Máx\:%6.1lf Mbps",
+                r"GPRINT:down:MIN:  Mín\:%6.1lf Mbps",
+                r"GPRINT:down:AVERAGE:  Prom\:%6.1lf Mbps",
+                r"GPRINT:down:LAST:  Últ\:%6.1lf Mbps\l",
+                "LINE2:up#2e7d32:Subida ",
+                r"GPRINT:up:MAX:Máx\:%6.1lf Mbps",
+                r"GPRINT:up:MIN:  Mín\:%6.1lf Mbps",
+                r"GPRINT:up:AVERAGE:  Prom\:%6.1lf Mbps",
+                r"GPRINT:up:LAST:  Últ\:%6.1lf Mbps\l",
             ],
         },
         {
             "title": f"Speedtest Latencia — {host}",
             "vlabel": "ms",
-            "defs": [f"DEF:ping={rrd_path}:ping:AVERAGE"],
-            "draw": ["LINE2:ping#e65100:Ping ms"],
+            "defs": [
+                f"DEF:ping={rrd_path}:ping:AVERAGE",
+                f"DEF:jitter={rrd_path}:jitter:AVERAGE",
+                # banda: ping ± jitter
+                "CDEF:smoke_hi=ping,jitter,+",
+                "CDEF:smoke_lo=ping,jitter,-",
+                # area superior (ping+jitter), luego area inferior sobre blanco para recortar
+                "CDEF:band=smoke_hi,smoke_lo,-",
+            ],
+            "draw": [
+                # base invisible hasta smoke_lo (piso de la banda)
+                "AREA:smoke_lo#ffffff00",
+                # banda de jitter encima
+                "AREA:band#e6510040",
+                # bordes de la banda
+                "LINE1:smoke_hi#e6510080",
+                "LINE1:smoke_lo#e6510080",
+                # línea de ping encima
+                "LINE1.5:ping#e65100:Ping    ",
+                r"GPRINT:ping:MAX:Máx\:%5.1lf ms",
+                r"GPRINT:ping:MIN:  Mín\:%5.1lf ms",
+                r"GPRINT:ping:AVERAGE:  Prom\:%5.1lf ms",
+                r"GPRINT:ping:LAST:  Últ\:%5.1lf ms\l",
+                "LINE1:jitter#0000ff00:Jitter  ",
+                r"GPRINT:jitter:MAX:Máx\:%5.1lf ms",
+                r"GPRINT:jitter:MIN:  Mín\:%5.1lf ms",
+                r"GPRINT:jitter:AVERAGE:  Prom\:%5.1lf ms",
+                r"GPRINT:jitter:LAST:  Últ\:%5.1lf ms\l",
+            ],
         },
     ]
 
@@ -555,20 +593,21 @@ def _graph_speedtest_stacked(rrd_path, host, start, width, height):
         cmd = [
             "rrdtool", "graph", "-",
             "--start", str(start), "--end", "now",
-            "--width", str(width), "--height", str(height // 2 - 10),
+            "--width", str(width), "--height", str(max(height // 2 - 10, 120)),
             "--title", p["title"],
             "--vertical-label", p["vlabel"],
-            "--color", "BACK#ffffff00",
+            "--color", "BACK#ffffff",
+            "--color", "CANVAS#f5f5ff",
             "--slope-mode",
         ] + p["defs"] + p["draw"]
         r = subprocess.run(cmd, capture_output=True)
         if r.returncode == 0:
-            images.append(Image.open(io.BytesIO(r.stdout)))
+            images.append(Image.open(io.BytesIO(r.stdout)).convert("RGB"))
 
     if not images:
         return None
     total_h = sum(im.height for im in images)
-    out = Image.new("RGBA", (images[0].width, total_h), (255, 255, 255, 0))
+    out = Image.new("RGB", (images[0].width, total_h), (255, 255, 255))
     y = 0
     for im in images:
         out.paste(im, (0, y))
@@ -645,17 +684,18 @@ def _graph_ups_stacked(rrd_path, host, start, width, height):
             "--width", str(width), "--height", str(height // 2 - 10),
             "--title", p["title"],
             "--vertical-label", p["vlabel"],
-            "--color", "BACK#ffffff00",
+            "--color", "BACK#ffffff",
+            "--color", "CANVAS#f5f5ff",
             "--slope-mode",
         ] + p["defs"] + p["draw"]
         r = subprocess.run(cmd, capture_output=True)
         if r.returncode == 0:
-            images.append(Image.open(io.BytesIO(r.stdout)))
+            images.append(Image.open(io.BytesIO(r.stdout)).convert("RGB"))
 
     if not images:
         return None
     total_h = sum(im.height for im in images)
-    out = Image.new("RGBA", (images[0].width, total_h), (255, 255, 255, 0))
+    out = Image.new("RGB", (images[0].width, total_h), (255, 255, 255))
     y = 0
     for im in images:
         out.paste(im, (0, y))

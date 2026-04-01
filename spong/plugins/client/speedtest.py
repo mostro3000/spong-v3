@@ -107,7 +107,7 @@ def check_speedtest(hostname: str) -> None:
         if color != "red": color = "yellow"
         problems.append(f"ping {ping_ms}ms")
 
-    summary = f"↓{down_mbps}Mbps  ↑{up_mbps}Mbps  ping:{ping_ms}ms"
+    summary = f"↓{down_mbps}Mbps  ↑{up_mbps}Mbps  ping:{ping_ms}ms  jitter:{jitter_ms}ms"
     if problems:
         summary += "  ⚠ " + ", ".join(problems)
 

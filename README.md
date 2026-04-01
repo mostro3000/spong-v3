@@ -1,4 +1,4 @@
-# SPONG v3.1 — Network & Services Monitor
+# SPONG v3.3 — Network & Services Monitor
 
 **SPONG** (Simple Preventive Operations Network Guardian) is a network and services monitoring system originally written in Perl. v3 is a complete rewrite in Python 3, keeping full compatibility with the original database and configuration files.
 
@@ -49,10 +49,10 @@
 
 ```bash
 # 1. Descargar el .deb desde Releases
-wget https://github.com/mostro3000/spong-v3/releases/latest/download/spong-server_3.1-1_all.deb
+wget https://github.com/mostro3000/spong-v3/releases/latest/download/spong-server_3.3-1_all.deb
 
 # 2. Instalar (el postinst configura dependencias pip y activa los 4 servicios systemd)
-dpkg -i spong-server_3.1-1_all.deb
+dpkg -i spong-server_3.3-1_all.deb
 
 # 3. Editar la configuración
 nano /usr/local/spong/etc/spong.yaml    # servidor, thresholds, checks
@@ -69,8 +69,8 @@ xdg-open http://localhost:8090/
 ### Cliente remoto (en otro host)
 
 ```bash
-wget https://github.com/mostro3000/spong-v3/releases/latest/download/spong-client_3.1-1_all.deb
-dpkg -i spong-client_3.1-1_all.deb   # instalación interactiva: pregunta servidor, hostname, checks
+wget https://github.com/mostro3000/spong-v3/releases/latest/download/spong-client_3.3-1_all.deb
+dpkg -i spong-client_3.3-1_all.deb   # instalación interactiva: pregunta servidor, hostname, checks
 ```
 
 ### Migración desde SPONG Perl (spong.conf / spong.hosts / spong.groups)
@@ -760,14 +760,14 @@ Los paquetes `.deb` permiten instalar SPONG en cualquier sistema Debian/Ubuntu s
 cd /usr/local/spong/packaging
 bash build-deb.sh
 # Genera:
-#   dist/spong-server_3.1-1_all.deb  (~53 KB)
-#   dist/spong-client_3.1-1_all.deb  (~17 KB)
+#   dist/spong-server_3.3-1_all.deb  (~53 KB)
+#   dist/spong-client_3.3-1_all.deb  (~17 KB)
 ```
 
 ### Instalar el servidor
 
 ```bash
-dpkg -i spong-server_3.1-1_all.deb
+dpkg -i spong-server_3.3-1_all.deb
 # Dependencias: python3, python3-pip, rrdtool, fping, iputils-ping
 # El postinst:
 #   - Crea directorios var/database, var/rrd, var/archives, tmp/
@@ -780,7 +780,7 @@ dpkg -i spong-server_3.1-1_all.deb
 ### Instalar solo el agente cliente
 
 ```bash
-dpkg -i spong-client_3.1-1_all.deb
+dpkg -i spong-client_3.3-1_all.deb
 # Dependencias: python3
 # El postinst es interactivo — pregunta:
 #   - Hostname/IP del servidor SPONG
@@ -850,6 +850,30 @@ En GitHub → pestaña **Actions** → seleccionar el workflow → sección **Ar
 
 ## 16. Historial de cambios
 
+### v3.3 — 2026-04
+
+**Gráficos RRD — leyenda con estadísticas**
+- Todos los gráficos de speedtest muestran Máx/Mín/Prom/Últ en la leyenda (via `GPRINT`)
+- Fix: fondo transparente en gráficos apilados (speedtest, UPS) → ahora fondo blanco sólido
+- Fix: sintaxis `AREA:band#color::` inválida en rrdtool → corregida
+- Altura mínima por sub-panel: `max(height//2-10, 120)` para evitar gráficos aplastados
+
+**Speedtest — gráfico estilo SmokePing**
+- Panel de latencia rediseñado: banda semitransparente `ping ± jitter` (smoke)
+- DS `jitter` agregado al RRD `speedtest.rrd` (4 DS: down, up, ping, jitter)
+- El summary del plugin ahora incluye `jitter:X.Xms` para persistir en RRD
+- Bordes de la banda con líneas semi-opacas (estilo SmokePing)
+- Leyenda separada para ping y jitter con sus propias estadísticas
+
+**Speedtest — intervalo ajustado**
+- `interval: 280s` (< sleep del cliente 300s) → corre en cada ciclo del cliente
+- `sleep spong-client: 300s` (antes 500s) → ciclo cada ~5 minutos
+- Heartbeat RRD: 750s (2.5 × 300s)
+
+**Versión bumpeada a 3.3**
+- `spong/__init__.py`: `3.3.0`
+- Paquetes: `spong-server_3.3-1_all.deb`, `spong-client_3.3-1_all.deb`
+
 ### v3.2 — 2026-04
 
 **Plugin speedtest (cliente)**
@@ -884,7 +908,7 @@ En GitHub → pestaña **Actions** → seleccionar el workflow → sección **Ar
 
 **Versión bumpeada a 3.2**
 - `spong/__init__.py`: `3.2.0`
-- Paquetes: `spong-server_3.2-1_all.deb`, `spong-client_3.2-1_all.deb`
+- Paquetes: `spong-server_3.3-1_all.deb`, `spong-client_3.3-1_all.deb`
 
 ### v3.1 — 2026-03 (parte 10)
 
@@ -1081,7 +1105,7 @@ python3 /usr/local/spong/bin/spong-migrate.py \
 
 **Versión bumpeada a 3.1**
 - Tooltip del logo actualizado a v3.1 en todos los idiomas
-- Paquetes .deb: `spong-server_3.1-1_all.deb` (53 KB), `spong-client_3.1-1_all.deb` (17 KB)
+- Paquetes .deb: `spong-server_3.3-1_all.deb` (53 KB), `spong-client_3.3-1_all.deb` (17 KB)
 
 ### v3.0 — 2026-03 (parte 3)
 
@@ -1089,7 +1113,7 @@ python3 /usr/local/spong/bin/spong-migrate.py \
 - Creados `packaging/build-deb.sh`, `spong-server/DEBIAN/` y `spong-client/DEBIAN/`
 - `spong-server`: incluye todo (server + network + client + web), postinst instala dependencias pip y habilita 4 servicios systemd
 - `spong-client`: solo el agente, postinst interactivo pregunta servidor/hostname/checks
-- Paquetes generados: `spong-server_3.1-1_all.deb` (49 KB) y `spong-client_3.1-1_all.deb` (17 KB)
+- Paquetes generados: `spong-server_3.3-1_all.deb` (49 KB) y `spong-client_3.3-1_all.deb` (17 KB)
 
 ### v3.0 — 2026-03 (parte 2)
 
