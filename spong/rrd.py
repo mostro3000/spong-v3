@@ -1165,6 +1165,119 @@ def _graph_termica_stacked(rrd_path, host, start, width, height):
 
 
 # ---------------------------------------------------------------------------
+# Helper: response-time graph args with P50/P90/P95 percentiles via VDEF
+# ---------------------------------------------------------------------------
+
+def _tcp_time_graph_args(rrd_path, title, color):
+    """Return rrdtool graph args for a TCP response-time RRD with percentile HRULEs."""
+    return [
+        "--vertical-label", "segundos",
+        "--title", title,
+        "DEF:t={}:time:AVERAGE".format(rrd_path),
+        "VDEF:p50=t,50,PERCENTNAN",
+        "VDEF:p90=t,90,PERCENTNAN",
+        "VDEF:p95=t,95,PERCENTNAN",
+        "LINE2:t{}:Resp    ".format(color),
+        r"GPRINT:t:MAX:Máx\:%7.4lf s",
+        r"GPRINT:t:MIN:  Mín\:%7.4lf s",
+        r"GPRINT:t:AVERAGE:  Prom\:%7.4lf s",
+        r"GPRINT:t:LAST:  Últ\:%7.4lf s\l",
+        "HRULE:p50#00aa44:P50   ",
+        r"GPRINT:p50:%7.4lf s\l",
+        "HRULE:p90#ff9900:P90   ",
+        r"GPRINT:p90:%7.4lf s\l",
+        "HRULE:p95#cc0000:P95   ",
+        r"GPRINT:p95:%7.4lf s\l",
+    ]
+
+
+# ---------------------------------------------------------------------------
+# Speedtest: comparison graph (current week vs previous week vs prev month)
+# ---------------------------------------------------------------------------
+
+def _graph_speedtest_compare(rrd_path, host, width, height):
+    """Three stacked panels (down/up/ping) overlaying current week,
+    previous week (shifted +7d) and previous month (shifted +28d)."""
+    import subprocess, io
+    from PIL import Image
+
+    W7  = 7  * 24 * 3600   # 7 days in seconds
+    W28 = 28 * 24 * 3600
+
+    panels = [
+        {
+            "title": f"Speedtest Bajada — {host}  (semana actual vs anterior vs hace 1 mes)",
+            "vlabel": "Mbps",
+            "ds": "down",
+            "color_now":  "#1565c0",
+            "color_prev": "#90caf9",
+            "color_old":  "#cce0ff",
+        },
+        {
+            "title": f"Speedtest Subida — {host}",
+            "vlabel": "Mbps",
+            "ds": "up",
+            "color_now":  "#2e7d32",
+            "color_prev": "#a5d6a7",
+            "color_old":  "#cceecc",
+        },
+        {
+            "title": f"Speedtest Ping — {host}",
+            "vlabel": "ms",
+            "ds": "ping",
+            "color_now":  "#e65100",
+            "color_prev": "#ffcc80",
+            "color_old":  "#ffe0cc",
+        },
+    ]
+
+    images = []
+    panel_h = max(height // 3 - 10, 100)
+    for p in panels:
+        ds = p["ds"]
+        cmd = [
+            "rrdtool", "graph", "-",
+            "--start", "now-7d", "--end", "now",
+            "--width", str(width), "--height", str(panel_h),
+            "--title", p["title"],
+            "--vertical-label", p["vlabel"],
+            "--color", "BACK#ffffff",
+            "--color", "CANVAS#f5f5ff",
+            "--slope-mode",
+            # hace 1 mes (shifted +28d para alinear con eje)
+            f"DEF:old={rrd_path}:{ds}:AVERAGE:start=now-35d:end=now-28d",
+            "SHIFT:old:{}".format(W28),
+            # semana anterior (shifted +7d)
+            f"DEF:prev={rrd_path}:{ds}:AVERAGE:start=now-14d:end=now-7d",
+            "SHIFT:prev:{}".format(W7),
+            # semana actual
+            f"DEF:now={rrd_path}:{ds}:AVERAGE",
+            # dibujar de fondo a frente
+            "LINE1:old{}80:Hace 1 mes  ".format(p["color_old"]),
+            r"GPRINT:old:AVERAGE:Prom\:%6.1lf\l",
+            "LINE1:prev{}:Sem. anterior  ".format(p["color_prev"]),
+            r"GPRINT:prev:AVERAGE:Prom\:%6.1lf\l",
+            "LINE2:now{}:Esta semana  ".format(p["color_now"]),
+            r"GPRINT:now:AVERAGE:Prom\:%6.1lf\l",
+        ]
+        r = subprocess.run(cmd, capture_output=True)
+        if r.returncode == 0:
+            images.append(Image.open(io.BytesIO(r.stdout)).convert("RGB"))
+
+    if not images:
+        return None
+    total_h = sum(im.height for im in images)
+    out = Image.new("RGB", (images[0].width, total_h), (255, 255, 255))
+    y = 0
+    for im in images:
+        out.paste(im, (0, y))
+        y += im.height
+    buf = io.BytesIO()
+    out.save(buf, format="PNG")
+    return buf.getvalue()
+
+
+# ---------------------------------------------------------------------------
 # Public API: graph_png
 # ---------------------------------------------------------------------------
 
@@ -1396,12 +1509,7 @@ def graph_png(host, service, period="24h", width=500, height=150):
             rrd_path = os.path.join(rrd_dir, "ssh-time.rrd")
             if not _rrd_exists(rrd_path):
                 return None
-            cmd += [
-                "--vertical-label", "segundos",
-                "--title", "SSH {}".format(host),
-                "DEF:t={}:time:AVERAGE".format(rrd_path),
-                "LINE2:t#8e24aa:resp time",
-            ]
+            cmd += _tcp_time_graph_args(rrd_path, "SSH {}".format(host), "#8e24aa")
 
         elif svc in ("telnet", "ftp", "smtp", "imap", "ntp", "rtsp"):
             rrd_path = os.path.join(rrd_dir, "{}-time.rrd".format(svc))
@@ -1410,45 +1518,25 @@ def graph_png(host, service, period="24h", width=500, height=150):
             _SVC_COLORS = {"telnet": "#e65100", "ftp": "#0277bd", "smtp": "#2e7d32",
                            "imap": "#6a1b9a", "ntp": "#00695c", "rtsp": "#00838f"}
             color = _SVC_COLORS.get(svc, "#555555")
-            cmd += [
-                "--vertical-label", "segundos",
-                "--title", "{} {}".format(svc.upper(), host),
-                "DEF:t={}:time:AVERAGE".format(rrd_path),
-                "LINE2:t{}:resp time".format(color),
-            ]
+            cmd += _tcp_time_graph_args(rrd_path, "{} {}".format(svc.upper(), host), color)
 
         elif svc == "http":
             rrd_path = os.path.join(rrd_dir, "http-time.rrd")
             if not _rrd_exists(rrd_path):
                 return None
-            cmd += [
-                "--vertical-label", "segundos",
-                "--title", "HTTP {}".format(host),
-                "DEF:t={}:time:AVERAGE".format(rrd_path),
-                "LINE2:t#0077cc:resp time",
-            ]
+            cmd += _tcp_time_graph_args(rrd_path, "HTTP {}".format(host), "#0077cc")
 
         elif svc == "https":
             rrd_path = os.path.join(rrd_dir, "https-time.rrd")
             if not _rrd_exists(rrd_path):
                 return None
-            cmd += [
-                "--vertical-label", "segundos",
-                "--title", "HTTPS {}".format(host),
-                "DEF:t={}:time:AVERAGE".format(rrd_path),
-                "LINE2:t#00aa44:resp time",
-            ]
+            cmd += _tcp_time_graph_args(rrd_path, "HTTPS {}".format(host), "#00aa44")
 
         elif svc == "mysql":
             rrd_path = os.path.join(rrd_dir, "mysql-time.rrd")
             if not _rrd_exists(rrd_path):
                 return None
-            cmd += [
-                "--vertical-label", "segundos",
-                "--title", "MySQL {}".format(host),
-                "DEF:t={}:time:AVERAGE".format(rrd_path),
-                "LINE2:t#0077cc:resp time",
-            ]
+            cmd += _tcp_time_graph_args(rrd_path, "MySQL {}".format(host), "#0077cc")
 
         elif svc == "hddtemp":
             rrd_path = os.path.join(rrd_dir, "hddtemp.rrd")
@@ -1522,12 +1610,7 @@ def graph_png(host, service, period="24h", width=500, height=150):
             rrd_path = os.path.join(rrd_dir, "dns-time.rrd")
             if not _rrd_exists(rrd_path):
                 return None
-            cmd += [
-                "--vertical-label", "segundos",
-                "--title", "DNS {}".format(host),
-                "DEF:t={}:time:AVERAGE".format(rrd_path),
-                "LINE2:t#ff6600:resp time",
-            ]
+            cmd += _tcp_time_graph_args(rrd_path, "DNS {}".format(host), "#ff6600")
 
         elif svc == "co2":
             rrd_path = os.path.join(rrd_dir, "co2.rrd")
@@ -1551,6 +1634,8 @@ def graph_png(host, service, period="24h", width=500, height=150):
             rrd_path = os.path.join(rrd_dir, "speedtest.rrd")
             if not _rrd_exists(rrd_path):
                 return None
+            if period == "compare":
+                return _graph_speedtest_compare(rrd_path, host, width, height)
             return _graph_speedtest_stacked(rrd_path, host, start, width, height)
 
         elif svc == "ups":

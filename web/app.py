@@ -19,7 +19,7 @@ except ImportError:
     print("Flask not installed. Run: pip3 install flask", file=sys.stderr)
     sys.exit(1)
 
-from spong import config, database
+from spong import config, database, __version__
 from spong.models import worst_color
 
 _COLOR_ORDER = {"red": 0, "yellow": 1, "purple": 2, "blue": 3, "clear": 4, "green": 5}
@@ -74,6 +74,7 @@ def color_style(color: str) -> str:
 app.jinja_env.globals["color_style"] = color_style
 app.jinja_env.globals["worst_color"] = worst_color
 app.jinja_env.globals["time"] = time
+app.jinja_env.globals["spong_version"] = __version__
 
 # ---------------------------------------------------------------------------
 # i18n — simple dict-based translation, no external deps
@@ -95,7 +96,7 @@ _TRANSLATIONS: dict = {
         "Grupos": "Groups", "Problemas": "Problems", "Reconocidos": "Acknowledged",
         "Con problemas": "With problems", "Sin problemas": "No problems", "grupos": "groups",
         "Actualizar ahora": "Refresh now", "clic para cerrar": "click to close",
-        "SPONG v3.1 — creado por mt": "SPONG v3.1 — created by mt",
+        "creado por mt": "created by mt",
         "Grupos de Hosts": "Host Groups", "Sin datos.": "No data.",
         "Servicio": "Service", "Servicios": "Services", "Estado": "Status",
         "Resumen": "Summary", "Contacto": "Contact", "Hasta": "Until",
@@ -121,7 +122,7 @@ _TRANSLATIONS: dict = {
         "Grupos": "Groupes", "Problemas": "Problèmes", "Reconocidos": "Acquittements",
         "Con problemas": "Avec problèmes", "Sin problemas": "Sans problèmes", "grupos": "groupes",
         "Actualizar ahora": "Actualiser", "clic para cerrar": "cliquer pour fermer",
-        "SPONG v3.1 — creado por mt": "SPONG v3.1 — créé par mt",
+        "creado por mt": "créé par mt",
         "Grupos de Hosts": "Groupes d'hôtes", "Sin datos.": "Pas de données.",
         "Servicio": "Service", "Servicios": "Services", "Estado": "État",
         "Resumen": "Résumé", "Contacto": "Contact", "Hasta": "Jusqu'à",
@@ -147,7 +148,7 @@ _TRANSLATIONS: dict = {
         "Grupos": "Gruppen", "Problemas": "Probleme", "Reconocidos": "Bestätigt",
         "Con problemas": "Mit Problemen", "Sin problemas": "Keine Probleme", "grupos": "Gruppen",
         "Actualizar ahora": "Jetzt aktualisieren", "clic para cerrar": "klicken zum Schließen",
-        "SPONG v3.1 — creado por mt": "SPONG v3.1 — erstellt von mt",
+        "creado por mt": "erstellt von mt",
         "Grupos de Hosts": "Host-Gruppen", "Sin datos.": "Keine Daten.",
         "Servicio": "Dienst", "Servicios": "Dienste", "Estado": "Status",
         "Resumen": "Zusammenfassung", "Contacto": "Kontakt", "Hasta": "Bis",
@@ -173,7 +174,7 @@ _TRANSLATIONS: dict = {
         "Grupos": "Grupos", "Problemas": "Problemas", "Reconocidos": "Reconhecidos",
         "Con problemas": "Com problemas", "Sin problemas": "Sem problemas", "grupos": "grupos",
         "Actualizar ahora": "Atualizar agora", "clic para cerrar": "clique para fechar",
-        "SPONG v3.1 — creado por mt": "SPONG v3.1 — criado por mt",
+        "creado por mt": "criado por mt",
         "Grupos de Hosts": "Grupos de Hosts", "Sin datos.": "Sem dados.",
         "Servicio": "Serviço", "Servicios": "Serviços", "Estado": "Estado",
         "Resumen": "Resumo", "Contacto": "Contato", "Hasta": "Até",
@@ -199,7 +200,7 @@ _TRANSLATIONS: dict = {
         "Grupos": "组", "Problemas": "问题", "Reconocidos": "已确认",
         "Con problemas": "有问题", "Sin problemas": "无问题", "grupos": "组",
         "Actualizar ahora": "立即刷新", "clic para cerrar": "点击关闭",
-        "SPONG v3.1 — creado por mt": "SPONG v3.1 — 由 mt 创建",
+        "creado por mt": "由 mt 创建",
         "Grupos de Hosts": "主机组", "Sin datos.": "无数据。",
         "Servicio": "服务", "Servicios": "服务", "Estado": "状态",
         "Resumen": "摘要", "Contacto": "联系人", "Hasta": "截止",
@@ -225,7 +226,7 @@ _TRANSLATIONS: dict = {
         "Grupos": "Группы", "Problemas": "Проблемы", "Reconocidos": "Подтверждено",
         "Con problemas": "С проблемами", "Sin problemas": "Нет проблем", "grupos": "групп",
         "Actualizar ahora": "Обновить", "clic para cerrar": "нажмите для закрытия",
-        "SPONG v3.1 — creado por mt": "SPONG v3.1 — создано mt",
+        "creado por mt": "создано mt",
         "Grupos de Hosts": "Группы хостов", "Sin datos.": "Нет данных.",
         "Servicio": "Сервис", "Servicios": "Сервисы", "Estado": "Статус",
         "Resumen": "Сводка", "Contacto": "Контакт", "Hasta": "До",

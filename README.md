@@ -870,6 +870,17 @@ En GitHub → pestaña **Actions** → seleccionar el workflow → sección **Ar
 - `sleep spong-client: 300s` (antes 500s) → ciclo cada ~5 minutos
 - Heartbeat RRD: 750s (2.5 × 300s)
 
+**Gráficos TCP — percentiles P50/P90/P95**
+- Nuevo helper `_tcp_time_graph_args()`: todos los gráficos de tiempo de respuesta (SSH, HTTP, HTTPS, MySQL, DNS, Telnet, FTP, SMTP, IMAP, NTP, RTSP) muestran líneas horizontales P50/P90/P95 con sus valores en la leyenda
+
+**Speedtest — gráfico comparativo de períodos**
+- Nueva función `_graph_speedtest_compare()`: 3 paneles (bajada/subida/ping) superponiendo semana actual, semana anterior y hace 1 mes
+- Nuevo panel "Comparar períodos" en la página de servicio speedtest
+
+**UI — versión dinámica**
+- El tooltip del logo ya no tiene la versión hardcodeada; se lee de `spong/__init__.py` en tiempo de ejecución
+- Keys de traducción de i18n separadas de la versión (antes `"SPONG v3.1 — creado por mt"`, ahora `"creado por mt"`)
+
 **Versión bumpeada a 3.3**
 - `spong/__init__.py`: `3.3.0`
 - Paquetes: `spong-server_3.3-1_all.deb`, `spong-client_3.3-1_all.deb`
