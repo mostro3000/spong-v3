@@ -191,18 +191,39 @@ def snmp_walk_count(host: str, community: str, base_oid: list[int],
         return None
 
 
-def snmp_get_int(host: str, community: str, oid: list[int], timeout: int = 5) -> int | None:
-    """Send SNMPv1 GET for the given OID and return the integer value, or None."""
+def _snmp_get_raw(host: str, community: str, oid: list[int], timeout: int = 5) -> tuple[int, bytes] | None:
+    """Send SNMPv1 GET and return (tag, raw_value) or None on any failure."""
     try:
         packet = _build_snmp_get_request(community, oid)
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sock.settimeout(timeout)
-        sock.sendto(packet, (host, 161))
-        response, _ = sock.recvfrom(4096)
-        sock.close()
-        return _parse_snmp_int(response)
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+            sock.settimeout(timeout)
+            sock.sendto(packet, (host, 161))
+            response, _ = sock.recvfrom(4096)
+        return _parse_snmp_value(response)
     except Exception:
         return None
+
+
+def snmp_get_str(host: str, community: str, oid: list[int], timeout: int = 5) -> str | None:
+    """Send SNMPv1 GET for the given OID and return the string value, or None."""
+    result = _snmp_get_raw(host, community, oid, timeout)
+    if result is None:
+        return None
+    tag, val = result
+    if tag == 0x04:  # OCTET STRING
+        return val.decode(errors="replace").strip()
+    return None
+
+
+def snmp_get_int(host: str, community: str, oid: list[int], timeout: int = 5) -> int | None:
+    """Send SNMPv1 GET for the given OID and return the integer value, or None."""
+    result = _snmp_get_raw(host, community, oid, timeout)
+    if result is None:
+        return None
+    tag, val = result
+    if tag in (0x02, 0x41, 0x42, 0x43):  # INTEGER, Counter32, Gauge32, Counter64
+        return int.from_bytes(val, 'big')
+    return None
 
 
 def check_snmp(hostname: str) -> tuple[str, str, str]:

@@ -24,8 +24,8 @@ chmod +x "$SPONG_DIR/bin/spong-web" 2>/dev/null || true
 
 # 3. Dependencias del sistema
 echo "Instalando dependencias del sistema..."
-apt-get install -y -q rrdtool fping snmp 2>/dev/null || \
-    echo "  Aviso: no se pudo instalar dependencias via apt. Instalar manualmente: apt install rrdtool fping snmp"
+apt-get install -y -q rrdtool fping snmp rpcbind 2>/dev/null || \
+    echo "  Aviso: no se pudo instalar dependencias via apt. Instalar manualmente: apt install rrdtool fping snmp rpcbind"
 
 # 4. Dependencias Python
 echo "Instalando dependencias Python..."

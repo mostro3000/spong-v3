@@ -351,15 +351,23 @@ def _update_rtemp(rrd_dir, summary, timestamp):
     _update_rrd(path, timestamp, values)
 
 
-def _update_macs(rrd_dir, summary, timestamp):
-    m = re.search(r"(\d+)\s+MACs", summary)
+def _update_count_rrd(rrd_dir, summary, timestamp, pattern, filename, ds_name):
+    m = re.search(pattern, summary)
     if not m:
         return
     count = int(m.group(1))
-    path = os.path.join(rrd_dir, "macs.rrd")
+    path = os.path.join(rrd_dir, filename)
     if not _rrd_exists(path):
-        _create_rrd(path, 300, ["DS:macs:GAUGE:600:0:U"], _RRA_DEFS, timestamp)
+        _create_rrd(path, 300, [f"DS:{ds_name}:GAUGE:600:0:U"], _RRA_DEFS, timestamp)
     _update_rrd(path, timestamp, [count])
+
+
+def _update_macs(rrd_dir, summary, timestamp):
+    _update_count_rrd(rrd_dir, summary, timestamp, r"(\d+)\s+MACs", "macs.rrd", "macs")
+
+
+def _update_wassoc(rrd_dir, summary, timestamp):
+    _update_count_rrd(rrd_dir, summary, timestamp, r"wassoc:\s*(\d+)", "wassoc.rrd", "assoc")
 
 
 def _update_uptime(rrd_dir, summary, timestamp):
@@ -858,12 +866,18 @@ def update_from_status(host, service, summary, message, timestamp):
             _update_rcpu(rrd_dir, summary or "", timestamp, "rcpu.rrd")
         elif svc == "scpu":
             _update_rcpu(rrd_dir, summary or "", timestamp, "scpu.rrd")
+        elif svc == "scpu1m":
+            _update_rcpu(rrd_dir, summary or "", timestamp, "scpu1m.rrd")
+        elif svc == "scpu5s":
+            _update_rcpu(rrd_dir, summary or "", timestamp, "scpu5s.rrd")
         elif svc == "memolt":
             _update_rcpu(rrd_dir, summary or "", timestamp, "memolt.rrd")
         elif svc == "rtemp":
             _update_rtemp(rrd_dir, summary or "", timestamp)
         elif svc == "macs":
             _update_macs(rrd_dir, summary or "", timestamp)
+        elif svc == "wassoc":
+            _update_wassoc(rrd_dir, summary or "", timestamp)
         elif svc == "co2":
             _update_co2(rrd_dir, summary or "", timestamp)
         elif svc == "soil":
@@ -1554,12 +1568,14 @@ def graph_png(host, service, period="24h", width=500, height=150):
                 cmd += ["DEF:{0}={1}:{0}:AVERAGE".format(ds, rrd_path),
                         "LINE2:{0}{1}:{0}".format(ds, color)]
 
-        elif svc in ("rcpu", "scpu", "memolt"):
+        elif svc in ("rcpu", "scpu", "scpu1m", "scpu5s", "memolt"):
             rrd_path = os.path.join(rrd_dir, "{}.rrd".format(svc))
             if not _rrd_exists(rrd_path):
                 return None
-            label = {"rcpu": "CPU router", "scpu": "CPU switch", "memolt": "Memoria TP-Link"}.get(svc, svc)
-            color = {"rcpu": "#0077cc", "scpu": "#0077cc", "memolt": "#6a1b9a"}.get(svc, "#0077cc")
+            label = {"rcpu": "CPU router", "scpu": "CPU switch (5s)", "scpu1m": "CPU switch (1m)",
+                     "scpu5s": "CPU switch (5s)", "memolt": "Memoria TP-Link"}.get(svc, svc)
+            color = {"rcpu": "#0077cc", "scpu": "#0077cc", "scpu1m": "#0077cc",
+                     "scpu5s": "#0077cc", "memolt": "#6a1b9a"}.get(svc, "#0077cc")
             cmd += [
                 "--vertical-label", "%",
                 "--upper-limit", "100",
@@ -1593,6 +1609,17 @@ def graph_png(host, service, period="24h", width=500, height=150):
                 "--title", "MACs aprendidas {}".format(host),
                 "DEF:macs={}:macs:AVERAGE".format(rrd_path),
                 "AREA:macs#43a047:MACs",
+            ]
+
+        elif svc == "wassoc":
+            rrd_path = os.path.join(rrd_dir, "wassoc.rrd")
+            if not _rrd_exists(rrd_path):
+                return None
+            cmd += [
+                "--vertical-label", "Clientes",
+                "--title", "WiFi asociados {}".format(host),
+                "DEF:assoc={}:assoc:AVERAGE".format(rrd_path),
+                "AREA:assoc#0288d1:Asociados",
             ]
 
         elif svc == "uptime":

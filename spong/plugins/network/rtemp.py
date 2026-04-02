@@ -4,9 +4,11 @@ import time
 from ... import config
 from .snmp import snmp_get_int
 
-# MikroTik health MIB — values in tenths of °C (e.g. 370 = 37.0°C)
-_OID_BOARD = [1, 3, 6, 1, 4, 1, 14988, 1, 1, 3, 10, 0]  # mtxrHlTemperature
-_OID_CPU   = [1, 3, 6, 1, 4, 1, 14988, 1, 1, 3, 14, 0]  # mtxrHlCpuTemperature
+# MikroTik RouterOS health MIB — values in tenths of °C (e.g. 370 = 37.0°C)
+_OID_BOARD = [1, 3, 6, 1, 4, 1, 14988, 1, 1, 3, 10, 0]  # mtxrHlTemperature (RouterOS)
+_OID_CPU   = [1, 3, 6, 1, 4, 1, 14988, 1, 1, 3, 14, 0]  # mtxrHlCpuTemperature (RouterOS)
+# MikroTik SwOS (CSS series) — temperature at a different OID
+_OID_SWOS  = [1, 3, 6, 1, 4, 1, 14988, 1, 1, 3, 11, 0]  # mtxrHlVoltage slot used for temp in SwOS
 
 _WARN = 70   # yellow  (°C)
 _CRIT = 85   # red     (°C)
@@ -35,8 +37,11 @@ def check_rtemp(hostname: str) -> tuple[str, str, str]:
     host = ips[0] if ips else hostname
 
     raw_board = snmp_get_int(host, community, _OID_BOARD)
-    # Use multi-sample minimum for CPU temp to handle round-robin cycling on some models
     raw_cpu   = _snmp_get_min(host, community, _OID_CPU)
+
+    # SwOS fallback: if neither RouterOS OID responds, try SwOS OID
+    if raw_board is None and raw_cpu is None:
+        raw_board = snmp_get_int(host, community, _OID_SWOS)
 
     if raw_board is None and raw_cpu is None:
         return "red", f"rtemp: no SNMP response from {hostname}", ""

@@ -6,10 +6,10 @@ import time
 from ... import config
 
 
-def _tcp_fetch(host: str, port: int, request: str, timeout: int = 10) -> str:
+def _tcp_fetch(connect_host: str, port: int, request: str, timeout: int = 10) -> str:
     try:
         start = time.time()
-        with socket.create_connection((host, port), timeout=timeout) as sock:
+        with socket.create_connection((connect_host, port), timeout=timeout) as sock:
             sock.sendall(request.encode())
             chunks = []
             while True:
@@ -22,6 +22,16 @@ def _tcp_fetch(host: str, port: int, request: str, timeout: int = 10) -> str:
         return b"".join(chunks).decode(errors="replace")
     except Exception as e:
         return f"[connection error: {e}]"
+
+
+def _resolve(hname: str, hostname: str) -> str:
+    """Return IP to connect to: use spong's configured IP when hname matches
+    the spong hostname (avoids DNS failures for unresolvable device names)."""
+    if hname == hostname:
+        ips = config.host_ips(hostname)
+        if ips:
+            return ips[0]
+    return hname
 
 
 def check_http(hostname: str) -> tuple[str, str, str]:
@@ -45,13 +55,15 @@ def check_http(hostname: str) -> tuple[str, str, str]:
         if not hname or hname == "_HOST_":
             hname = hostname
 
+        connect_host = _resolve(hname, hostname)
+
         method = "GET"
         request = (f"{method} {path} HTTP/1.1\r\n"
                    f"Host: {hname}:{port}\r\n"
                    f"Connection: close\r\n\r\n")
 
         t0 = time.time()
-        response = _tcp_fetch(hname, port, request)
+        response = _tcp_fetch(connect_host, port, request)
         elapsed = f"{time.time() - t0:.3f}"
         full_message += f"->{method} {path} HTTP/1.1\nHost: {hname}:{port}\n{response}\n\n"
 

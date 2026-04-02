@@ -1,4 +1,4 @@
-# SPONG v3.3 — Network & Services Monitor
+# SPONG v3.3.1 — Network & Services Monitor
 
 **SPONG** (Simple Preventive Operations Network Guardian) is a network and services monitoring system originally written in Perl. v3 is a complete rewrite in Python 3, keeping full compatibility with the original database and configuration files.
 
@@ -49,10 +49,10 @@
 
 ```bash
 # 1. Descargar el .deb desde Releases
-wget https://github.com/mostro3000/spong-v3/releases/latest/download/spong-server_3.3-1_all.deb
+wget https://github.com/mostro3000/spong-v3/releases/latest/download/spong-server_3.3.1-1_all.deb
 
 # 2. Instalar (el postinst configura dependencias pip y activa los 4 servicios systemd)
-dpkg -i spong-server_3.3-1_all.deb
+dpkg -i spong-server_3.3.1-1_all.deb
 
 # 3. Editar la configuración
 nano /usr/local/spong/etc/spong.yaml    # servidor, thresholds, checks
@@ -69,8 +69,8 @@ xdg-open http://localhost:8090/
 ### Cliente remoto (en otro host)
 
 ```bash
-wget https://github.com/mostro3000/spong-v3/releases/latest/download/spong-client_3.3-1_all.deb
-dpkg -i spong-client_3.3-1_all.deb   # instalación interactiva: pregunta servidor, hostname, checks
+wget https://github.com/mostro3000/spong-v3/releases/latest/download/spong-client_3.3.1-1_all.deb
+dpkg -i spong-client_3.3.1-1_all.deb   # instalación interactiva: pregunta servidor, hostname, checks
 ```
 
 ### Migración desde SPONG Perl (spong.conf / spong.hosts / spong.groups)
@@ -760,14 +760,14 @@ Los paquetes `.deb` permiten instalar SPONG en cualquier sistema Debian/Ubuntu s
 cd /usr/local/spong/packaging
 bash build-deb.sh
 # Genera:
-#   dist/spong-server_3.3-1_all.deb  (~53 KB)
-#   dist/spong-client_3.3-1_all.deb  (~17 KB)
+#   dist/spong-server_3.3.1-1_all.deb  (~53 KB)
+#   dist/spong-client_3.3.1-1_all.deb  (~17 KB)
 ```
 
 ### Instalar el servidor
 
 ```bash
-dpkg -i spong-server_3.3-1_all.deb
+dpkg -i spong-server_3.3.1-1_all.deb
 # Dependencias: python3, python3-pip, rrdtool, fping, iputils-ping
 # El postinst:
 #   - Crea directorios var/database, var/rrd, var/archives, tmp/
@@ -780,7 +780,7 @@ dpkg -i spong-server_3.3-1_all.deb
 ### Instalar solo el agente cliente
 
 ```bash
-dpkg -i spong-client_3.3-1_all.deb
+dpkg -i spong-client_3.3.1-1_all.deb
 # Dependencias: python3
 # El postinst es interactivo — pregunta:
 #   - Hostname/IP del servidor SPONG
@@ -850,6 +850,43 @@ En GitHub → pestaña **Actions** → seleccionar el workflow → sección **Ar
 
 ## 16. Historial de cambios
 
+### v3.3.1 — 2026-04
+
+**Fix: scpu — soporte Cisco SG550X + SwOS**
+- `scpu.py` ahora prueba el OID Cisco SG500/SG550 (`1.3.6.1.4.1.9.6.1.101.1.7.0`) antes que TP-Link y HR CPU
+- Si ningún OID responde y el `sysDescr` contiene `SwOS`, retorna `clear` (SwOS no soporta CPU via SNMP)
+- Corrección de dependencia: `snmp_get_str` se agregó a `snmp.py` en el mismo cambio que `scpu.py` lo importaba; el agente de red debía reiniciarse para cargar la versión nueva
+
+**Fix: rtemp — fallback SwOS**
+- Agrega OID alternativo MikroTik SwOS para temperatura cuando los OIDs RouterOS no responden
+
+**Fix: NTP — detección de formato moderno**
+- `ntp.py` detecta el formato de salida moderno de ntpdate (`+X.XXXXXX +/- Y.YYYYYY ... sN`)
+- El summary ahora incluye el offset: `ntp ok offset -0.003s`
+
+**Fix: HTTP — resolución via config**
+- `http.py` usa la IP configurada en Spong (no DNS) cuando el `hname` coincide con el hostname monitoreado; evita fallos en switches/routers con nombres no resolvibles
+
+**Nuevos plugins de red**
+- `wassoc.py`: clientes WiFi asociados (AP via SNMP)
+- `wuptime.py`: uptime de AP via SNMP
+- `poppassd.py`: chequeo de servicio poppassd
+- `scpu1m.py`, `scpu5s.py`: CPU switch promedio 1 min / 5 seg
+- `freq_in.py`, `freq_out.py`, `volt_in.py`, `volt_out.py`, `temp_bat.py`, `temp_ext.py`: métricas UPS extendidas
+
+**RRD — nuevos gráficos**
+- `wassoc`: gráfico de clientes WiFi asociados
+- `scpu1m`, `scpu5s`: gráficos de CPU switch en ventanas 1m/5s
+
+**Refactor interno**
+- `snmp.py`: helper `_snmp_get_raw()` compartido entre `snmp_get_int` y `snmp_get_str`; socket manejado con context manager (sin leaks)
+- `rrd.py`: helper `_update_count_rrd()` compartido entre `_update_macs` y `_update_wassoc`
+- Dependencia `rpcbind` agregada al paquete server (requerida por NFS check)
+
+**Versión bumpeada a 3.3.1**
+- `spong/__init__.py`: `3.3.1`
+- Paquetes: `spong-server_3.3.1-1_all.deb`, `spong-client_3.3.1-1_all.deb`
+
 ### v3.3 — 2026-04
 
 **Gráficos RRD — leyenda con estadísticas**
@@ -883,7 +920,7 @@ En GitHub → pestaña **Actions** → seleccionar el workflow → sección **Ar
 
 **Versión bumpeada a 3.3**
 - `spong/__init__.py`: `3.3.0`
-- Paquetes: `spong-server_3.3-1_all.deb`, `spong-client_3.3-1_all.deb`
+- Paquetes: `spong-server_3.3.1-1_all.deb`, `spong-client_3.3.1-1_all.deb`
 
 ### v3.2 — 2026-04
 
@@ -919,7 +956,7 @@ En GitHub → pestaña **Actions** → seleccionar el workflow → sección **Ar
 
 **Versión bumpeada a 3.2**
 - `spong/__init__.py`: `3.2.0`
-- Paquetes: `spong-server_3.3-1_all.deb`, `spong-client_3.3-1_all.deb`
+- Paquetes: `spong-server_3.3.1-1_all.deb`, `spong-client_3.3.1-1_all.deb`
 
 ### v3.1 — 2026-03 (parte 10)
 
@@ -1116,7 +1153,7 @@ python3 /usr/local/spong/bin/spong-migrate.py \
 
 **Versión bumpeada a 3.1**
 - Tooltip del logo actualizado a v3.1 en todos los idiomas
-- Paquetes .deb: `spong-server_3.3-1_all.deb` (53 KB), `spong-client_3.3-1_all.deb` (17 KB)
+- Paquetes .deb: `spong-server_3.3.1-1_all.deb` (53 KB), `spong-client_3.3.1-1_all.deb` (17 KB)
 
 ### v3.0 — 2026-03 (parte 3)
 
@@ -1124,7 +1161,7 @@ python3 /usr/local/spong/bin/spong-migrate.py \
 - Creados `packaging/build-deb.sh`, `spong-server/DEBIAN/` y `spong-client/DEBIAN/`
 - `spong-server`: incluye todo (server + network + client + web), postinst instala dependencias pip y habilita 4 servicios systemd
 - `spong-client`: solo el agente, postinst interactivo pregunta servidor/hostname/checks
-- Paquetes generados: `spong-server_3.3-1_all.deb` (49 KB) y `spong-client_3.3-1_all.deb` (17 KB)
+- Paquetes generados: `spong-server_3.3.1-1_all.deb` (49 KB) y `spong-client_3.3.1-1_all.deb` (17 KB)
 
 ### v3.0 — 2026-03 (parte 2)
 

@@ -1,8 +1,8 @@
 Package: spong-server
-Version: 3.3-1
+Version: 3.3.1-1
 Architecture: all
 Maintainer: SPONG <spong@localhost>
-Depends: python3 (>= 3.9), python3-pip, rrdtool, fping, iputils-ping, snmp
+Depends: python3 (>= 3.9), python3-pip, rrdtool, fping, iputils-ping, snmp, rpcbind
 Recommends: apache2
 Description: SPONG v3 - Sistema de Monitoreo de Red y Servicios (Servidor)
  Servidor central de monitoreo SPONG v3. Incluye el servidor de estado,
