@@ -27,10 +27,11 @@ echo "Instalando dependencias del sistema..."
 apt-get install -y -q rrdtool fping snmp rpcbind 2>/dev/null || \
     echo "  Aviso: no se pudo instalar dependencias via apt. Instalar manualmente: apt install rrdtool fping snmp rpcbind"
 
-# 4. Dependencias Python
-echo "Instalando dependencias Python..."
-pip3 install --quiet flask werkzeug pyyaml tinytuya 2>/dev/null || \
-    echo "  Aviso: no se pudo instalar dependencias via pip. Instalar manualmente: pip3 install flask werkzeug pyyaml tinytuya"
+# 4. Dependencias Python (tinytuya no tiene paquete apt)
+echo "Instalando dependencias Python adicionales..."
+pip3 install --quiet --break-system-packages tinytuya 2>/dev/null || \
+pip3 install --quiet tinytuya 2>/dev/null || \
+    echo "  Aviso: no se pudo instalar tinytuya via pip. Instalar manualmente: pip3 install tinytuya"
 
 # 4. Configuración inicial si no existe
 if [ ! -f "$SPONG_DIR/etc/spong.yaml" ]; then
@@ -42,6 +43,9 @@ if [ ! -f "$SPONG_DIR/etc/hosts.yaml" ]; then
 fi
 if [ ! -f "$SPONG_DIR/etc/groups.yaml" ]; then
     cp "$SPONG_DIR/etc/groups.yaml.example" "$SPONG_DIR/etc/groups.yaml" 2>/dev/null || true
+fi
+if [ ! -f "$SPONG_DIR/etc/message.yaml" ]; then
+    cp "$SPONG_DIR/etc/message.yaml.example" "$SPONG_DIR/etc/message.yaml" 2>/dev/null || true
 fi
 
 # 5. Systemd
