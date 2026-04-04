@@ -315,9 +315,9 @@ def inject_i18n():
     lang = request.cookies.get("lang", "es")
     if lang not in _SUPPORTED_LANGS:
         lang = "es"
-    theme = request.cookies.get("theme", "light")
+    theme = request.cookies.get("theme", "dark")
     if theme not in ("light", "dark"):
-        theme = "light"
+        theme = "dark"
     return {
         "_": _make_translator(lang),
         "current_lang": lang,

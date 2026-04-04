@@ -906,7 +906,7 @@ def update_from_status(host, service, summary, message, timestamp):
             _update_tcp_time(rrd_dir, "http", summary or "", timestamp)
         elif svc == "ssh":
             _update_tcp_time(rrd_dir, "ssh", summary or "", timestamp)
-        elif svc in ("telnet", "ftp", "smtp", "imap", "ntp", "rtsp"):
+        elif svc in ("telnet", "ftp", "smtp", "imap", "ntp", "rtsp", "spamd"):
             _update_tcp_time(rrd_dir, svc, summary or "", timestamp)
         else:
             log.debug("update_from_status: unrecognised service '%s' for host %s", service, host)
@@ -1525,12 +1525,13 @@ def graph_png(host, service, period="24h", width=500, height=150):
                 return None
             cmd += _tcp_time_graph_args(rrd_path, "SSH {}".format(host), "#8e24aa")
 
-        elif svc in ("telnet", "ftp", "smtp", "imap", "ntp", "rtsp"):
+        elif svc in ("telnet", "ftp", "smtp", "imap", "ntp", "rtsp", "spamd"):
             rrd_path = os.path.join(rrd_dir, "{}-time.rrd".format(svc))
             if not _rrd_exists(rrd_path):
                 return None
             _SVC_COLORS = {"telnet": "#e65100", "ftp": "#0277bd", "smtp": "#2e7d32",
-                           "imap": "#6a1b9a", "ntp": "#00695c", "rtsp": "#00838f"}
+                           "imap": "#6a1b9a", "ntp": "#00695c", "rtsp": "#00838f",
+                           "spamd": "#c0392b"}
             color = _SVC_COLORS.get(svc, "#555555")
             cmd += _tcp_time_graph_args(rrd_path, "{} {}".format(svc.upper(), host), color)
 

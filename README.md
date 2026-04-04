@@ -852,6 +852,10 @@ En GitHub → pestaña **Actions** → seleccionar el workflow → sección **Ar
 
 ### v3.3.2 — 2026-04
 
+**Fix: tema oscuro por defecto**
+- La interfaz web ahora inicia en modo oscuro para usuarios sin cookie de preferencia de tema
+- El modo claro sigue disponible con el botón ☀ en el header
+
 **Fix: instalador .deb — dependencias Python**
 - Reemplazado `python3-pip` / `python3-wheel` en `Depends` por paquetes apt nativos: `python3-flask`, `python3-werkzeug`, `python3-yaml`
 - Elimina el error de instalación en Debian 12+ / Ubuntu 24.04 donde `python3-wheel` no existe como paquete separado
