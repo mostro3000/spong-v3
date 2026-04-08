@@ -3,12 +3,13 @@
 from .temp import _read_value, _http_read
 
 _HTTP_MAP: dict[str, tuple] = {
-    "living": ("http://esp1s-sensor-temperatura/json", "humidity_pct"),
+    "living": ("http://sensor-temp-living/json", "humidity_pct"),
+    "pieza-chica": ("http://sensor-temp-pieza-chica/json", "humidity_pct"),
+    "pieza-ninias": ("http://sensor-temp-pieza-ninias/json", "humidity_pct"),
 }
 
 _HOST_MAP: dict[str, tuple[str, str]] = {
     "exterior":     ("/var/www/html/tiempo.json",      "humedad"),
-    "pieza-ninias": ("/var/www/html/hpieza1piso.json", "value"),
 }
 
 # Hosts remotos via SSH: host → (ip, path, [clave1, clave2, ...])

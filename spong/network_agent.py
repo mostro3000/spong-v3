@@ -114,19 +114,24 @@ class NetworkAgent:
 
         return bad_services
 
-    def _check_hosts_parallel(self, hostnames: list[str], workers: int) -> list:
-        """Check a list of hosts in parallel. Returns combined list of (host, svc) failures."""
+    def _check_hosts_parallel(self, hostnames: list[str], workers: int,
+                               batch_size: int = 20) -> list:
+        """Check hosts in parallel batches. Each batch runs fully before the next starts."""
         all_bad = []
-        max_workers = workers if workers > 0 else len(hostnames)
-        with ThreadPoolExecutor(max_workers=max_workers) as pool:
-            futures = {pool.submit(self.run_host, h): h for h in hostnames}
-            for future in as_completed(futures):
-                hostname = futures[future]
-                try:
-                    bad = future.result()
-                    all_bad.extend(bad)
-                except Exception as e:
-                    log.error("Unexpected error checking host %s: %s", hostname, e)
+        max_workers = min(workers, batch_size) if workers > 0 else batch_size
+        for i in range(0, len(hostnames), batch_size):
+            chunk = hostnames[i:i + batch_size]
+            log.debug("Checking batch %d-%d of %d hosts",
+                      i + 1, i + len(chunk), len(hostnames))
+            with ThreadPoolExecutor(max_workers=max_workers) as pool:
+                futures = {pool.submit(self.run_host, h): h for h in chunk}
+                for future in as_completed(futures):
+                    hostname = futures[future]
+                    try:
+                        bad = future.result()
+                        all_bad.extend(bad)
+                    except Exception as e:
+                        log.error("Unexpected error checking host %s: %s", hostname, e)
         return all_bad
 
     def run(self, nosleep: bool = False) -> None:
@@ -135,6 +140,7 @@ class NetworkAgent:
         recheck_sleep = config.get("network.recheck_sleep", 15)
         crit_level = config.get("network.crit_warn_level", 1)
         workers = int(config.get("network.workers", 30))
+        batch_size = int(config.get("network.batch_size", 20))
         last_check = time.time()
 
         while self._running:
@@ -142,7 +148,7 @@ class NetworkAgent:
             active_hosts = [h for h, d in hosts.items() if not d.get("skip_network_checks")]
 
             t0 = time.time()
-            all_bad = self._check_hosts_parallel(active_hosts, workers)
+            all_bad = self._check_hosts_parallel(active_hosts, workers, batch_size)
             elapsed = time.time() - t0
             log.info("Checked %d hosts in %.1fs (%d failures)", len(active_hosts), elapsed, len(all_bad))
 
@@ -152,7 +158,7 @@ class NetworkAgent:
                     break
                 time.sleep(recheck_sleep)
                 recheck_hosts = list({h for h, s in all_bad})
-                all_bad = self._check_hosts_parallel(recheck_hosts, workers)
+                all_bad = self._check_hosts_parallel(recheck_hosts, workers, batch_size)
 
             if nosleep:
                 break

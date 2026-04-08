@@ -29,7 +29,9 @@ def _read_value(path: str, key: str) -> float | None:
 
 # Hosts via HTTP: host → (url, clave1, [clave2, ...])
 _HTTP_MAP: dict[str, tuple] = {
-    "living": ("http://esp1s-sensor-temperatura/json", "temperature_c"),
+    "living": ("http://sensor-temp-living/json", "temperature_c"),
+    "pieza-ninias": ("http://sensor-temp-pieza-ninias/json", "temperature_c"),
+    "pieza-chica": ("http://sensor-temp-pieza-chica/json", "temperature_c"),
 }
 
 # Mapa host → (archivo JSON local, clave dentro del JSON)
@@ -37,7 +39,6 @@ _HOST_MAP: dict[str, tuple[str, str]] = {
     "exterior":    ("/var/www/html/tiempo.json",      "temperatura"),
     "comedor":     ("/var/www/html/tcomedor.json",    "value"),
     "garaje":      ("/var/www/html/tgarage.json",     "value"),
-    "pieza-ninias":("/var/www/html/tpieza1piso.json", "value"),
     "oficina":     ("/var/www/html/toficina.json",    "value"),
 }
 
@@ -53,6 +54,7 @@ _THRESHOLDS: dict[str, tuple[float, float, float, float]] = {
     "comedor":      (15, 27, 10, 39),
     "garaje":       (10, 32, 5,  38),
     "pieza-ninias": (10, 32, 5,  38),
+    "pieza-chica":  (10, 32, 5,  38),
     "oficina":      (10, 32, 5,  38),
     "riego-patio":  (10, 32, 5,  38),
 }
