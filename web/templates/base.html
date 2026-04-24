@@ -3,7 +3,6 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta id="refresh-meta" http-equiv="refresh" content="120">
   <title>{% block title %}SPONG{% endblock %}</title>
   <style>
     /* ---- Tema claro (default) ---- */
@@ -436,6 +435,7 @@
     <a href="{{ url_for('problems') }}">&#9888; {{ _('Problemas') }}</a>
     <a href="{{ url_for('acks_page') }}">&#10003; {{ _('Reconocidos') }}</a>
     <a href="{{ url_for('uptime_page') }}">&#8987; {{ _('Disponibilidad') }}</a>
+    <a href="{{ (request.script_root or '') ~ '/history' }}">&#128340; {{ _('Historial') }}</a>
   </nav>
   <a href="{{ url_for('set_theme', theme='light' if current_theme == 'dark' else 'dark') }}"
      class="theme-btn" title="{{ 'Modo claro' if current_theme == 'dark' else 'Modo oscuro' }}">
@@ -454,7 +454,7 @@
     </div>
   </div>
   <div class="spacer"></div>
-  <button id="refresh-btn" onclick="location.reload()" title="{{ _('Actualizar ahora') }}">↻ <span id="countdown">120</span>s</button>
+  <button id="refresh-btn" onclick="location.reload()" title="{{ _('Actualizar ahora') }}">↻{% if auto_refresh_seconds %} <span id="countdown">{{ auto_refresh_seconds }}</span>s{% endif %}</button>
   <span id="live-clock">{{ time.strftime('%Y-%m-%d %H:%M:%S') }}</span>
 </div>
 
@@ -465,6 +465,7 @@
       <a href="{{ url_for('problems') }}"><span class="icon">&#9888;</span> {{ _('Problemas') }}</a>
       <a href="{{ url_for('acks_page') }}"><span class="icon">&#10003;</span> {{ _('Reconocidos') }}</a>
       <a href="{{ url_for('uptime_page') }}"><span class="icon">&#8987;</span> {{ _('Disponibilidad') }}</a>
+      <a href="{{ (request.script_root or '') ~ '/history' }}"><span class="icon">&#128340;</span> {{ _('Historial') }}</a>
     </div>
     {% if sidebar_groups %}
     <h2>{{ _('Con problemas') }}</h2>
@@ -542,10 +543,13 @@ function toggleSidebar() {
   }, 1000);
 })();
 
-// Countdown refresh
+// Countdown refresh (overview pages only, and never in background tabs)
 (function() {
-  var n = 120, el = document.getElementById('countdown');
+  var n = {{ auto_refresh_seconds|int }};
+  var el = document.getElementById('countdown');
+  if (!el || !n) return;
   setInterval(function() {
+    if (document.hidden) return;
     n--;
     if (n <= 0) { location.reload(); return; }
     el.textContent = n;

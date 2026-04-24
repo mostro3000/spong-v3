@@ -35,8 +35,10 @@
       {% for svc in group.service_cols %}
         {% if svc in hdata.services %}
           {% set s = hdata.services[svc] %}
+          {% set cell_href = url_for('ack', host=hostname, service=svc) if s.color == 'red' else url_for('service_detail', hostname=hostname, service=svc) %}
+          {% set cell_title = _('Reconocer') ~ ' ' ~ svc ~ ': ' ~ s.summary if s.color == 'red' else svc ~ ': ' ~ s.summary %}
           <td>
-            <a href="{{ url_for('service_detail', hostname=hostname, service=svc) }}" title="{{ svc }}: {{ s.summary }}">
+            <a href="{{ cell_href }}" title="{{ cell_title }}">
               <span class="cell color-{{ s.color }}"></span>
             </a>
           </td>

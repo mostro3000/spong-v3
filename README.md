@@ -1,4 +1,4 @@
-# SPONG v3.4.0 — Network & Services Monitor
+# SPONG v3.4.1 — Network & Services Monitor
 
 **SPONG** (Simple Preventive Operations Network Guardian) is a network and services monitoring system originally written in Perl. v3 is a complete rewrite in Python 3, keeping full compatibility with the original database and configuration files.
 
@@ -49,10 +49,10 @@
 
 ```bash
 # 1. Descargar el .deb desde Releases
-wget https://github.com/mostro3000/spong-v3/releases/latest/download/spong-server_3.4.0-1_all.deb
+wget https://github.com/mostro3000/spong-v3/releases/latest/download/spong-server_3.4.1-1_all.deb
 
 # 2. Instalar (el postinst configura dependencias pip y activa los 4 servicios systemd)
-dpkg -i spong-server_3.4.0-1_all.deb
+dpkg -i spong-server_3.4.1-1_all.deb
 
 # 3. Editar la configuración
 nano /usr/local/spong/etc/spong.yaml    # servidor, thresholds, checks
@@ -69,8 +69,8 @@ xdg-open http://localhost:8090/
 ### Cliente remoto (en otro host)
 
 ```bash
-wget https://github.com/mostro3000/spong-v3/releases/latest/download/spong-client_3.4.0-1_all.deb
-dpkg -i spong-client_3.4.0-1_all.deb   # instalación interactiva: pregunta servidor, hostname, checks
+wget https://github.com/mostro3000/spong-v3/releases/latest/download/spong-client_3.4.1-1_all.deb
+dpkg -i spong-client_3.4.1-1_all.deb   # instalación interactiva: pregunta servidor, hostname, checks
 ```
 
 ### Migración desde SPONG Perl (spong.conf / spong.hosts / spong.groups)
@@ -218,7 +218,7 @@ systemctl restart spong-network   # después de editar plugins de red o rrd.py..
 
 > **Nota:** `spong/rrd.py` es importado por `spong-server`. Los cambios en `rrd.py` requieren reiniciar `spong-server`, no `spong-network`.
 
-La **interfaz web** re-lee `spong.yaml` en cada request pero requiere reinicio para cambios en `hosts.yaml` o `groups.yaml`.
+La **interfaz web** carga la configuración al iniciar. Reiniciar `spong-web` después de cambios en `spong.yaml`, `hosts.yaml` o `groups.yaml`.
 
 ---
 
@@ -268,6 +268,9 @@ thresholds:
   hddtemp:
     warn: 50        # °C
     crit: 60
+  iftraffic:
+    warn: 70        # % de utilizacion por interfaz
+    crit: 90
 
 # Procesos que el check "jobs" debe verificar
 processes:
@@ -283,6 +286,7 @@ processes:
 web:
   auth_user: "spong"        # Basic Auth (vacío = sin auth)
   auth_password: "spong123"
+  general_history_days: 7   # días a mostrar en /history
 
 cleanup:
   old_service_days: 20   # días hasta borrar servicios sin datos
@@ -314,6 +318,22 @@ hosts:
 - El `:` después de un servicio significa **stop_after**: si ese servicio falla, no se chequean los siguientes. Ejemplo: `ping: http ssh` — si ping falla, no se intenta http ni ssh
 - El orden importa: determina el orden de visualización en la interfaz web
 - Los servicios del **cliente local** (disk, cpu, memory, jobs, etc.) deben estar en la lista del host donde corre `spong-client` (actualmente `s2`)
+
+**Configuración opcional para `iftraffic`:**
+
+```yaml
+  mk:
+    services: "ping: http https ssh dns rcpu rtemp snmp macs iftraffic"
+    contact: "mt"
+    ip_addr: ["192.168.0.2"]
+    iftraffic_interfaces: ["ether1", "bridge*", "sfp-sfpplus1"]
+    iftraffic_ignore: ["pppoe-*", "veth*"]
+```
+
+- `iftraffic_interfaces`: whitelist de nombres o patrones tipo shell (`bridge*`, `ether1`)
+- `iftraffic_ignore`: interfaces a excluir del cálculo
+- si no se define `iftraffic_interfaces`, el plugin toma todas las interfaces `admin up` no ignoradas
+- la primera corrida queda en `clear` con el mensaje `iftraffic: esperando segunda muestra`, porque necesita dos lecturas para calcular el promedio
 
 ### 4.3 `groups.yaml` — Grupos de hosts
 
@@ -361,7 +381,7 @@ El `spong-network` ejecuta estos plugins contra los hosts remotos configurados e
 |--------|----------|-------------|
 | `ping.py` | `ping` | Conectividad ICMP — 10 pings por ciclo, reporta min/avg/max/loss |
 | `http.py` | `http` | HTTP GET, código de respuesta, tiempo de respuesta |
-| `https.py` | `https` | HTTPS GET con fallback SSL legacy y TCP para certs débiles |
+| `https.py` | `https` | HTTPS GET con fallback SSL legacy y TCP para certs débiles; alerta por vencimiento de certificado |
 | `ssh.py` | `ssh` | Conexión TCP puerto 22, banner SSH, tiempo de respuesta |
 | `mysql.py` | `mysql` | Conexión TCP puerto 3306, tiempo de respuesta |
 | `snmp.py` | `snmp` | Consulta SNMPv1 (sysDescr del equipo) |
@@ -377,6 +397,7 @@ El `spong-network` ejecuta estos plugins contra los hosts remotos configurados e
 | `rcpu.py` | `rcpu` | CPU de router MikroTik via SNMP (`hrProcessorLoad` + OID MikroTik) |
 | `rtemp.py` | `rtemp` | Temperatura de router MikroTik via SNMP (placa y CPU en °C) |
 | `scpu.py` | `scpu` | CPU de switch TP-Link JetStream via SNMP |
+| `iftraffic.py` | `iftraffic` | Tráfico y utilización por interfaz via SNMP IF-MIB |
 | `macs.py` | `macs` | Cantidad de MACs aprendidas via SNMP walk (`dot1dTpFdbTable`) |
 | `termica.py` | `termica` | Llaves térmicas Tuya: tensión, corriente, potencia, energía, corriente de fuga |
 | `rtsp.py` | `rtsp` | Disponibilidad de cámara: prueba RTSP/554 con OPTIONS estándar, fallback Tapo/2020 |
@@ -385,6 +406,7 @@ El `spong-network` ejecuta estos plugins contra los hosts remotos configurados e
 | `ups.py` | `ups` | UPS APC via SNMP: tensión entrada/salida, frecuencia, temperatura batería/exterior |
 | `interfaces.py` | `interfaces` | Interfaces de red caídas via SNMP (admin up / oper down) |
 | `nfs.py` | `nfs` | Disponibilidad NFS via `rpcinfo -p` (nfsd + mountd) |
+| `mem.py` | `mem` | Memoria % via SNMP en TP-Link o RouterOS (`hrStorage`), alias corto de `memolt` |
 
 **Detalles de plugins SNMP:**
 
@@ -399,7 +421,19 @@ El `spong-network` ejecuta estos plugins contra los hosts remotos configurados e
 
 - **`scpu.py`** usa OID TP-Link JetStream (`1.3.6.1.4.1.11863.6.4.1.1.1.1.2.1`) con fallback a `hrProcessorLoad`.
 
-- **`https.py`** intenta TLS moderno → TLS legacy (SECLEVEL=0, TLSv1 para equipos con certs RSA-1024) → TCP puro. Reporta verde si el puerto responde aunque el handshake SSL falle por clave débil.
+- **`mem.py` / `memolt.py`** prueban primero `tpSysMonitorMemoryUtilization.1` (TP-Link) y, si no responde, caen a `HOST-RESOURCES-MIB::hrStorageRam` / `main memory`. Esto permite usar el mismo servicio en switches JetStream y routers MikroTik RouterOS.
+
+- **`iftraffic.py`** calcula tráfico promedio por interfaz entre muestras usando contadores IF-MIB/ifXTable (`ifHCInOctets`, `ifHCOutOctets`, `ifHighSpeed`, fallback a contadores de 32 bits). Reporta la interfaz con mayor utilización y detalla in/out Mbps por interfaz. Configuración opcional por host:
+  - `iftraffic_interfaces`: lista o string con nombres/patrones de interfaces a incluir
+  - `iftraffic_ignore`: lista o string con nombres/patrones a ignorar
+  - también reutiliza `ignore_interfaces`
+  - umbrales globales en `spong.yaml` → `thresholds.iftraffic.warn` / `crit`
+
+- **`https.py`** intenta TLS moderno → TLS legacy (SECLEVEL=0, TLSv1 para equipos con certs RSA-1024) → TCP puro. Si puede leer el certificado, agrega `notAfter` al detalle y degrada el estado por vencimiento:
+  - `< 3 días` para vencer → **rojo**
+  - `3 a < 6 días` para vencer → **amarillo**
+  - `>= 6 días` → no degrada por certificado
+  - Si el handshake SSL falla y cae al fallback TCP puro, el check sigue validando disponibilidad del puerto pero no puede evaluar la fecha del certificado.
 
 **Sensores IoT via SSH JSON (`_ssh_json.py`):**
 
@@ -482,6 +516,7 @@ El plugin incluye un caché interno de 55 s para evitar saturar los dispositivos
 | `/` | Vista principal por grupos. Matriz host × servicio con círculos de colores. |
 | `/host/<hostname>` | Detalle de un host: todos sus servicios, estado, tiempo en estado actual, último reporte, gráficos RRD. |
 | `/service/<hostname>/<servicio>` | Detalle de un servicio específico con historial y gráficos. |
+| `/history` | Historial general de cambios de estado de todos los servicios. Muestra por default los últimos 7 días, configurable en `web.general_history_days`. |
 | `/problems` | Lista de todos los servicios con problemas (rojo, amarillo, violeta) ordenados por severidad. Incluye botón ACK directo. |
 | `/acks` | Lista de reconocimientos activos con estado actual de los servicios reconocidos. |
 | `/ack` | Formulario para crear un nuevo reconocimiento. |
@@ -508,10 +543,13 @@ Módulos Apache requeridos: `proxy`, `proxy_http`, `headers` (habilitados con `a
 - **Auto-refresh:** cada 120 segundos con countdown visible en el header
 - **Reloj en vivo:** actualizado cada segundo
 - **Tooltips:** al pasar el mouse sobre un círculo de la matriz muestra el resumen del servicio
+- **Acceso rápido a ACK desde la matriz:** en `/`, si un servicio está en **rojo**, al hacer clic en el círculo se abre directamente el formulario de **Reconocer** con `host` y `service` precargados
 - **Gráficos toggle:** en la vista de host, el botón 📊 muestra/oculta los gráficos de cada servicio
 - **Lightbox:** clic en cualquier gráfico lo amplía a 1200×300 px sobre fondo oscuro. Cerrar con clic o `Escape`
 - **Sidebar:** muestra grupos con problemas (rojos), ordenados según `groups.yaml`
 - **Formulario ACK con memoria:** el contacto, duración y mensaje del último reconocimiento se recuerdan via `localStorage` y se pre-rellenan en el próximo
+- **Historial simplificado por host:** en `/host/<hostname>` la tabla de historial muestra solo **cambios de estado** de los servicios (transiciones de color), no cada corrida repetida ni los ACKs
+- **Historial general:** `/history` muestra los cambios de estado de todos los hosts y servicios en orden cronológico de ocurrencia. El rango por default es **7 días** y se configura con `web.general_history_days`
 
 ### Columnas de servicios en la matriz
 
@@ -546,6 +584,7 @@ Los archivos RRD se guardan en `/usr/local/spong/var/rrd/<hostname>/`.
 | `ntp` | `ntp-time.rrd` | Tiempo de respuesta NTP (segundos) |
 | `rcpu` | `rcpu.rrd` | % CPU router (SNMP) |
 | `scpu` | `scpu.rrd` | % CPU switch (SNMP) |
+| `iftraffic` | `iftraffic.rrd` | Mbps totales entrada/salida + % de utilización máxima |
 | `rtemp` | `rtemp.rrd` | Temperatura router en °C (placa y CPU) |
 | `macs` | `macs.rrd` | Cantidad de MACs aprendidas |
 | `temp` | `temp.rrd` | Temperatura sensor IoT (°C) |
@@ -559,6 +598,10 @@ Los archivos RRD se guardan en `/usr/local/spong/var/rrd/<hostname>/`.
 | `ruptime` | `uptime.rrd` | Días de uptime (reutiliza el RRD y gráfico de `uptime`) |
 
 Los RRDs se actualizan cada vez que el servidor recibe una actualización de estado. Si el archivo RRD no existe, se crea automáticamente al primer dato.
+
+**`iftraffic`** usa un gráfico de 2 paneles:
+- tráfico total de entrada/salida en Mbps
+- utilización máxima observada entre las interfaces monitoreadas (%)
 
 **Períodos disponibles:** 1h, 24h, 7d, 30d, 1y
 
@@ -632,7 +675,10 @@ Un reconocimiento suprime la visualización de un problema marcándolo como **az
 
 ### Crear un ACK
 
-Desde la interfaz web: clic en el servicio → "Reconocer", o desde `/problems` → botón ACK.
+Desde la interfaz web:
+- en `/` hacer clic en un círculo **rojo** abre directamente el formulario de ACK para ese host/servicio
+- en `/service/...` usar el botón **Reconocer**
+- en `/problems` usar el botón ACK
 
 **Campos:**
 - **Host:** nombre del host
@@ -692,6 +738,12 @@ timestamp <report_time> <start_time>
 ```
 
 El nombre del archivo codifica el color actual (`servicio-color`). Cuando el color cambia, el archivo viejo se elimina y se crea uno nuevo.
+
+**Historial de estados:**
+- `history/current` puede incluir eventos `status` y `ack`
+- las nuevas entradas `status` se guardan solo cuando **cambia el color** del servicio; si el check vuelve a reportar el mismo color, no se agrega otra entrada repetida
+- la vista `/host/<hostname>` filtra ese historial para mostrar únicamente transiciones de estado por servicio
+- la vista `/history` consolida ese historial para todos los hosts y muestra solo transiciones de estado, ordenadas cronológicamente
 
 ---
 
@@ -760,14 +812,14 @@ Los paquetes `.deb` permiten instalar SPONG en cualquier sistema Debian/Ubuntu s
 cd /usr/local/spong/packaging
 bash build-deb.sh
 # Genera:
-#   dist/spong-server_3.4.0-1_all.deb  (~53 KB)
-#   dist/spong-client_3.4.0-1_all.deb  (~17 KB)
+#   dist/spong-server_3.4.1-1_all.deb  (~53 KB)
+#   dist/spong-client_3.4.1-1_all.deb  (~17 KB)
 ```
 
 ### Instalar el servidor
 
 ```bash
-dpkg -i spong-server_3.4.0-1_all.deb
+dpkg -i spong-server_3.4.1-1_all.deb
 # Dependencias: python3, python3-pip, rrdtool, fping, iputils-ping
 # El postinst:
 #   - Crea directorios var/database, var/rrd, var/archives, tmp/
@@ -780,7 +832,7 @@ dpkg -i spong-server_3.4.0-1_all.deb
 ### Instalar solo el agente cliente
 
 ```bash
-dpkg -i spong-client_3.4.0-1_all.deb
+dpkg -i spong-client_3.4.1-1_all.deb
 # Dependencias: python3
 # El postinst es interactivo — pregunta:
 #   - Hostname/IP del servidor SPONG
@@ -849,6 +901,55 @@ En GitHub → pestaña **Actions** → seleccionar el workflow → sección **Ar
 ---
 
 ## 16. Historial de cambios
+
+### v3.4.1 — 2026-04
+
+**Feat: interfaz web — historial general**
+- Nueva vista `/history` con los cambios de estado de todos los hosts/servicios
+- Muestra solo transiciones reales de color; excluye ACKs y estados repetidos consecutivos
+- Ordenado por ocurrencia cronológica
+- Nuevo parámetro `web.general_history_days` en `spong.yaml` para configurar cuántos días mostrar
+- Default actual: `7` días
+
+**Feat: plugin SNMP — `iftraffic`**
+- Nuevo plugin `iftraffic.py` para tráfico y utilización por interfaz
+- Usa contadores SNMP estándar (`ifHCInOctets` / `ifHCOutOctets`, fallback 32-bit)
+- Soporta filtros por host con `iftraffic_interfaces` e `iftraffic_ignore`
+- Umbrales globales en `thresholds.iftraffic.warn` / `crit`
+
+**Fix: plugin SNMP — `mem` en MikroTik**
+- `mem.py` / `memolt.py` ahora prueban primero el OID TP-Link y, si no responde, usan `hrStorageRam` / `main memory`
+- El mismo servicio `mem` queda operativo en `sw` (JetStream) y `mk` (RouterOS) sin plugins separados
+- El gráfico pasó a mostrarse como memoria SNMP genérica en vez de “Memoria TP-Link”
+
+**Fix: interfaz web — acceso rápido a ACK**
+- En la matriz principal (`/`), hacer clic sobre un círculo rojo ahora abre `/ack` con `host` y `service` precargados
+- Los demás estados mantienen el acceso al detalle del servicio
+
+**Fix: historial por host — solo transiciones**
+- La tabla de historial en `/host/<hostname>` muestra solo cambios reales de estado por servicio
+- Se excluyen ACKs y estados repetidos consecutivos de la misma severidad/color
+- Los nuevos eventos `status` se persisten únicamente cuando cambia el color del servicio
+
+**Fix: RRD — gráfico de `ruptime`**
+- `ruptime` reutiliza correctamente el RRD `uptime.rrd` y ahora genera gráfico PNG igual que `uptime`
+- El toggle de gráficos en la vista de host y la vista de servicio ya funciona para `ruptime`
+
+**Feat: HTTPS — vencimiento de certificado**
+- El plugin `https` intenta leer `notAfter` del certificado durante el handshake TLS
+- Umbrales de vencimiento:
+  - `< 3 días` → rojo
+  - `3 a < 6 días` → amarillo
+  - `>= 6 días` → sin alerta por certificado
+- El detalle del servicio incluye la fecha de expiración cuando el certificado pudo leerse
+- Si el host solo permite fallback TCP por TLS legado/débil, el check mantiene la validación de disponibilidad pero no puede evaluar el vencimiento
+
+**Mantenimiento: bump de versión**
+- `spong/__init__.py`: `3.4.1`
+- `setup.py`: `3.4.1`
+- Paquetes: `spong-server_3.4.1-1_all.deb`, `spong-client_3.4.1-1_all.deb`
+
+---
 
 ### v3.4.0 — 2026-04
 
@@ -1036,8 +1137,9 @@ thresholds:
 
 - `ups.py` — UPS APC via SNMP (PowerNet MIB): tensión entrada/salida, frecuencia entrada/salida, temperatura batería y exterior (sonda opcional). RRD con 2 paneles apilados (tensión + frecuencia). Umbrales para red Argentina 220V/50Hz
 - `interfaces.py` — interfaces de red caídas via SNMP IF-MIB: detecta interfaces admin up / oper down. Lista configurable de interfaces a ignorar (`ignore_interfaces` en hosts.yaml)
+- `iftraffic.py` — tráfico/utilización por interfaz via SNMP IF-MIB/ifXTable: calcula Mbps promedio entre muestras y marca amarillo/rojo por % de uso. Configurable con `iftraffic_interfaces`, `iftraffic_ignore` y `thresholds.iftraffic`
 - `nfs.py` — disponibilidad NFS via `rpcinfo -p`: verifica nfsd (100003) y mountd (100005)
-- `memolt.py` — uso de memoria % en switches/routers TP-Link via TPLINK-SYSMONITOR-MIB (OID verificado en T2600G). RRD gráfico AREA violeta. Uso: `services: "snmp scpu memolt"`
+- `memolt.py` / `mem.py` — uso de memoria % via SNMP. Prueba primero TPLINK-SYSMONITOR-MIB (JetStream/TP-Link) y luego `HOST-RESOURCES-MIB::hrStorageRam` / `main memory` (RouterOS/MikroTik). `mem` es alias corto de `memolt`. RRD gráfico AREA violeta. Uso: `services: "snmp scpu mem"` o `services: "snmp scpu memolt"`
 
 **Fix presence plugin**
 

@@ -115,14 +115,17 @@ class HistoryEntry:
         except ValueError:
             return None
         svc = parts[2]
-        color = parts[3] if len(parts) > 3 else ""
-        summary = parts[4] if len(parts) > 4 else ""
-        user = parts[3] if etype == "ack" and len(parts) > 3 else ""
+        if etype == "ack":
+            return cls(
+                event_type=etype,
+                timestamp=ts,
+                service=svc,
+                user=parts[3] if len(parts) > 3 else "",
+            )
         return cls(
             event_type=etype,
             timestamp=ts,
             service=svc,
-            color=color,
-            summary=summary,
-            user=user,
+            color=parts[3] if len(parts) > 3 else "",
+            summary=" ".join(parts[4:]) if len(parts) > 4 else "",
         )

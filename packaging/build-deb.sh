@@ -3,12 +3,12 @@
 # Ejecutar desde /usr/local/spong/packaging/
 #
 # Produce:
-#   spong-server_3.2-1_all.deb  — servidor completo (server + network + client + web)
-#   spong-client_3.2-1_all.deb  — solo agente cliente
+#   spong-server_3.4.1-1_all.deb  — servidor completo (server + network + client + web)
+#   spong-client_3.4.1-1_all.deb  — solo agente cliente
 
 set -e
 
-VERSION="3.4.0-1"
+VERSION="3.4.1-1"
 # Directorio raíz del repo: funciona tanto en /usr/local/spong como en CI (GitHub Actions)
 SPONG_SRC="$(cd "$(dirname "$0")/.." && pwd)"
 BUILD_DIR="/tmp/spong-deb-build"
@@ -30,7 +30,9 @@ mkdir -p "$BUILD_DIR"
 copy_tree() {
     local src="$1" dst="$2"
     mkdir -p "$dst"
-    rsync -a --exclude="__pycache__" --exclude="*.pyc" --exclude="*.pyo" "$src/" "$dst/"
+    rsync -a --no-owner --no-group \
+        --exclude="__pycache__" --exclude="*.pyc" --exclude="*.pyo" \
+        "$src/" "$dst/"
 }
 
 # ===========================================================================

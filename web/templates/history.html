@@ -1,0 +1,206 @@
+{% extends "base.html" %}
+{% block title %}SPONG - {{ _('Historial') }}{% endblock %}
+{% block content %}
+
+{% set color_labels = {
+  'red': _('Red'),
+  'yellow': _('Yellow'),
+  'green': _('Green'),
+  'purple': _('Purple'),
+  'clear': _('Clear'),
+  'blue': _('Blue')
+} %}
+{% set selected_labels = [] %}
+{% for option in color_options %}
+  {% if option in color_filters %}
+    {% set _ = selected_labels.append(color_labels.get(option, option)) %}
+  {% endif %}
+{% endfor %}
+{% set selected_services = [] %}
+{% for option in service_options %}
+  {% if option in service_filters %}
+    {% set _ = selected_services.append(option) %}
+  {% endif %}
+{% endfor %}
+
+<div style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; margin-bottom:14px;">
+  <div class="page-title" style="margin:0;">&#128340; {{ _('Historial general') }} <span class="sub">{{ history_days }}d</span></div>
+  <a class="btn btn-sm" href="{{ url_for('uptime_page') }}">&#8987; {{ _('Disponibilidad') }}</a>
+</div>
+
+<div class="card" style="margin-bottom:14px; padding:12px 14px; overflow:visible; position:relative; z-index:5;">
+  <form method="get" action="{{ url_for('history_page') }}" style="display:flex; gap:10px; flex-wrap:wrap; align-items:end;">
+    <div>
+      <div style="font-size:11px; color:var(--text-m); margin-bottom:4px;">{{ _('Servicio') }}</div>
+      <details class="history-filter-dropdown">
+        <summary>{{ selected_services|join(', ') if selected_services else _('Todos') }}</summary>
+        <div class="history-filter-menu history-service-menu">
+          {% for option in service_options %}
+          <label>
+            <input type="checkbox" name="service" value="{{ option }}"{% if option in service_filters %} checked{% endif %}>
+            <span class="history-service-pill">{{ option }}</span>
+          </label>
+          {% endfor %}
+        </div>
+      </details>
+    </div>
+    <div>
+      <div style="font-size:11px; color:var(--text-m); margin-bottom:4px;">{{ _('Estado') }}</div>
+      <details class="history-filter-dropdown">
+        <summary>{{ selected_labels|join(', ') if selected_labels else _('Todos') }}</summary>
+        <div class="history-filter-menu history-color-menu">
+          {% for option in color_options %}
+          <label>
+            <input type="checkbox" name="color" value="{{ option }}"{% if option in color_filters %} checked{% endif %}>
+            <span class="badge color-{{ option }}">{{ color_labels.get(option, option) }}</span>
+          </label>
+          {% endfor %}
+        </div>
+      </details>
+    </div>
+    <div style="display:flex; gap:8px;">
+      <button class="btn btn-sm" type="submit">Filtrar</button>
+      <a class="btn btn-sm" href="{{ url_for('history_page') }}" style="background:#78909c;">Limpiar</a>
+    </div>
+  </form>
+</div>
+
+<style>
+  .global-history {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  .global-history th {
+    background: var(--surface2);
+    color: var(--text-m);
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--border);
+    text-align: left;
+  }
+  .global-history td {
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--border2);
+    vertical-align: top;
+  }
+  .global-history tr:hover td { background: var(--hover); }
+  .global-history a { color: var(--link); text-decoration: none; }
+  .global-history a:hover { text-decoration: underline; }
+  .global-history .ts { white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .history-filter-dropdown {
+    min-width: 180px;
+    position: relative;
+    z-index: 40;
+  }
+  .history-filter-dropdown summary {
+    list-style: none;
+    cursor: pointer;
+    padding: 7px 34px 7px 9px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: #1f2730;
+    color: var(--text-f);
+    user-select: none;
+    position: relative;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .history-filter-dropdown summary::-webkit-details-marker { display: none; }
+  .history-filter-dropdown summary::after {
+    content: "▾";
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-m);
+    font-size: 11px;
+  }
+  .history-filter-dropdown[open] summary {
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+  }
+  .history-filter-menu {
+    position: absolute;
+    top: calc(100% - 1px);
+    left: 0;
+    min-width: 200px;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-top: 0;
+    border-bottom-left-radius: 6px;
+    border-bottom-right-radius: 6px;
+    background: #1f2730;
+    box-shadow: 0 10px 24px rgba(0,0,0,0.28);
+    z-index: 50;
+  }
+  .history-filter-menu label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 0;
+    color: var(--text-f);
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .history-filter-menu input {
+    margin: 0;
+    flex: 0 0 auto;
+  }
+  .history-color-menu .badge {
+    display: inline-flex;
+    align-items: center;
+    min-width: 74px;
+    justify-content: center;
+  }
+  .history-service-menu {
+    max-height: 280px;
+    overflow: auto;
+  }
+  .history-service-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 10px;
+    border-radius: 999px;
+    border: 1px solid #41505f;
+    background: #27313b;
+    color: var(--text-f);
+    font-size: 12px;
+    line-height: 1.2;
+  }
+</style>
+
+{% if history %}
+<div class="card" style="padding:0; overflow:auto;">
+  <table class="global-history">
+    <thead>
+      <tr>
+        <th>{{ _('Fecha') }}</th>
+        <th>Host</th>
+        <th>{{ _('Servicio') }}</th>
+        <th>{{ _('Estado') }}</th>
+        <th>{{ _('Resumen') }}</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for item in history %}
+      <tr>
+        <td class="ts">{{ item.entry.timestamp | int | strftime('%Y-%m-%d %H:%M') }}</td>
+        <td><a href="{{ url_for('host_detail', hostname=item.host) }}">{{ item.host }}</a></td>
+        <td><a href="{{ url_for('service_detail', hostname=item.host, service=item.entry.service) }}">{{ item.entry.service }}</a></td>
+        <td><span class="badge color-{{ item.entry.color }}">{{ item.entry.color }}</span></td>
+        <td style="color:var(--text-f);">{{ item.entry.summary }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="ok-msg">Sin cambios de estado ({{ history_days }}d){% if service_filters or color_filters %} para el filtro actual{% endif %}</div>
+{% endif %}
+
+{% endblock %}

@@ -9,6 +9,24 @@ import socket
 from ... import config
 
 
+def _int_value(value, default: int) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _thresholds_for(hostname: str) -> tuple[int, int]:
+    host_cfg = config.get_host(hostname) or {}
+    warn = _int_value(config.get_threshold("wassoc", "warn", 10), 10)
+    crit = _int_value(config.get_threshold("wassoc", "crit", 20), 20)
+    warn = _int_value(host_cfg.get("wassoc_warn"), warn)
+    crit = _int_value(host_cfg.get("wassoc_crit"), crit)
+    if crit <= warn:
+        crit = warn + 1
+    return warn, crit
+
+
 def _http_get(host: str, path: str, timeout: int = 10) -> tuple[int, str]:
     """Returns (http_status_code, body). status=0 on connection error."""
     try:
@@ -42,17 +60,16 @@ def check_wassoc(hostname: str) -> tuple[str, str, str]:
     if status >= 400:
         return "clear", f"wassoc: HTTP {status} (endpoint no disponible)", body
 
-    # Extract first integer from body
     m = re.search(r"(\d+)", body)
     if not m:
         return "red", "wassoc: respuesta inesperada", body
 
     count = int(m.group(1))
+    warn, crit = _thresholds_for(hostname)
     message = f"{count} wireless assoc\n{body}"
 
-    if count < 5:
+    if count < warn:
         return "green", f"wassoc: {count} asociados", message
-    elif count < 10:
+    if count < crit:
         return "yellow", f"wassoc: {count} asociados", message
-    else:
-        return "red", f"wassoc: {count} asociados", message
+    return "red", f"wassoc: {count} asociados", message

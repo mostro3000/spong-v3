@@ -26,6 +26,27 @@ GRAPH_COLORS = [
 ]
 
 
+_TCP_TIME_GRAPH_META = {
+    "dns": ("DNS", "#ff6600"),
+    "ftp": ("FTP", "#0277bd"),
+    "http": ("HTTP", "#0077cc"),
+    "https": ("HTTPS", "#00aa44"),
+    "imap": ("IMAP", "#6a1b9a"),
+    "mysql": ("MySQL", "#0077cc"),
+    "ntp": ("NTP", "#00695c"),
+    "pop": ("POP3", "#3949ab"),
+    "poppassd": ("POPPASSD", "#6d4c41"),
+    "proxy2": ("HTTP Proxy", "#546e7a"),
+    "proxy": ("HTTP Proxy", "#546e7a"),
+    "proxy_google": ("Google via proxy", "#1e88e5"),
+    "rtsp": ("RTSP", "#00838f"),
+    "smtp": ("SMTP", "#2e7d32"),
+    "spamd": ("SPAMD", "#c0392b"),
+    "ssh": ("SSH", "#8e24aa"),
+    "telnet": ("Telnet", "#e65100"),
+}
+
+
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
@@ -143,6 +164,111 @@ def get_rrd_name(host, service_prefix, mountpoint):
         log.error("Failed to write name-map %s: %s", map_file, exc)
 
     return rrd_name
+
+
+def _read_name_map(rrd_dir, service_prefix):
+    """Return {rrd_name: mountpoint} for disk/diski name maps."""
+    map_file = os.path.join(rrd_dir, "{}-name-map".format(service_prefix))
+    entries = {}
+    if not os.path.isfile(map_file):
+        return entries
+    try:
+        with open(map_file, "r") as fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                parts = line.split(":", 1)
+                if len(parts) == 2:
+                    entries[parts[0]] = parts[1]
+    except Exception as exc:
+        log.error("Failed to read name-map %s: %s", map_file, exc)
+    return entries
+
+
+def _partition_rrds(rrd_dir, service_prefix):
+    """Return [(rrd_name, mountpoint, path)] for all disk/diski partition RRDs."""
+    entries = _read_name_map(rrd_dir, service_prefix)
+    results = []
+    for fname in sorted(os.listdir(rrd_dir)):
+        if not (fname.startswith(service_prefix + "-") and fname.endswith(".rrd")):
+            continue
+        rrd_name = fname[len(service_prefix) + 1:-4]
+        path = os.path.join(rrd_dir, fname)
+        mountpoint = entries.get(rrd_name, "/" + rrd_name.replace("-", "/"))
+        results.append((rrd_name, mountpoint, path))
+    results.sort(key=lambda item: (item[1] != "/", item[1]))
+    return results
+
+
+
+def _graph_include_mountpoint(mountpoint):
+    """Hide noisy pseudo-filesystems from combined disk graphs."""
+    noisy = (
+        "/dev",
+        "/dev/shm",
+        "/run",
+        "/run/lock",
+        "/run/shm",
+    )
+    if mountpoint in noisy:
+        return False
+    if "/dev/.static/dev" in mountpoint:
+        return False
+    if mountpoint.endswith("/lib/init/rw"):
+        return False
+    if mountpoint.endswith("/dev") or mountpoint.endswith("/dev/shm"):
+        return False
+    return True
+
+
+def _graph_mountpoint_label(mountpoint):
+    """Compact labels so disk legends stay readable."""
+    if mountpoint == "/":
+        return "root"
+    if mountpoint.startswith("/extra/vz/root/"):
+        rest = mountpoint[len("/extra/vz/root/"):]
+        return "vz/" + rest[:18]
+    if mountpoint.startswith("/extra/"):
+        return mountpoint[1:20]
+    return mountpoint[1:19] if mountpoint.startswith("/") else mountpoint[:18]
+
+
+
+def _current_service_message(host, service):
+    """Return the current persisted message body for a host/service."""
+    svc_dir = os.path.join("/usr/local/spong/var/database", host, "services")
+    for color in ("red", "yellow", "green", "purple", "clear", "blue"):
+        path = os.path.join(svc_dir, "{}-{}".format(service, color))
+        if not os.path.isfile(path):
+            continue
+        try:
+            lines = open(path, "r", errors="replace").read().splitlines()
+        except Exception:
+            return ""
+        for i, line in enumerate(lines):
+            if re.match(r"^(?:timestamp\s+\d+\s+\d+|\d+\s+)", line):
+                continue
+            return "\n".join(lines[i:])
+        return ""
+    return ""
+
+
+def _mountpoints_from_df_message(message):
+    """Extract mountpoints from persisted df/df -i status messages."""
+    mountpoints = []
+    seen = set()
+    pattern = re.compile(r"\s\d+%\s+(/\S*)$")
+    for line in (message or "").splitlines():
+        match = pattern.search(line.strip())
+        if not match:
+            continue
+        mountpoint = match.group(1)
+        if mountpoint in seen:
+            continue
+        seen.add(mountpoint)
+        mountpoints.append(mountpoint)
+    return mountpoints
 
 
 # ---------------------------------------------------------------------------
@@ -362,12 +488,82 @@ def _update_count_rrd(rrd_dir, summary, timestamp, pattern, filename, ds_name):
     _update_rrd(path, timestamp, [count])
 
 
+def _extract_first_float(*texts):
+    for text in texts:
+        if not text:
+            continue
+        m = re.search(r"(-?\d+(?:[.,]\d+)?)", text)
+        if m:
+            return float(m.group(1).replace(",", "."))
+    return None
+
+
+def _update_scalar_rrd(rrd_dir, summary, message, timestamp, filename, ds_name, ds_min="U", ds_max="U"):
+    value = _extract_first_float(summary, message)
+    if value is None:
+        return
+    path = os.path.join(rrd_dir, filename)
+    if not _rrd_exists(path):
+        _create_rrd(path, 300, [f"DS:{ds_name}:GAUGE:600:{ds_min}:{ds_max}"], _RRA_DEFS, timestamp)
+    _update_rrd(path, timestamp, [value])
+
+
+def _update_temp(rrd_dir, summary, message, timestamp):
+    _update_scalar_rrd(rrd_dir, summary, message, timestamp, "temp.rrd", "temp", -40, 150)
+
+
+def _update_hum(rrd_dir, summary, message, timestamp):
+    _update_scalar_rrd(rrd_dir, summary, message, timestamp, "hum.rrd", "hum", 0, 100)
+
+
 def _update_macs(rrd_dir, summary, timestamp):
     _update_count_rrd(rrd_dir, summary, timestamp, r"(\d+)\s+MACs", "macs.rrd", "macs")
 
 
 def _update_wassoc(rrd_dir, summary, timestamp):
     _update_count_rrd(rrd_dir, summary, timestamp, r"wassoc:\s*(\d+)", "wassoc.rrd", "assoc")
+
+
+def _update_qmailq(rrd_dir, summary, message, timestamp):
+    text = "\n".join(part for part in (summary, message) if part)
+    m_local = re.search(r"Local Queue:\s*(\d+)", text)
+    m_remote = re.search(r"Remote Queue:\s*(\d+)", text)
+    if not m_local and not m_remote:
+        return
+    local = int(m_local.group(1)) if m_local else "U"
+    remote = int(m_remote.group(1)) if m_remote else "U"
+    path = os.path.join(rrd_dir, "qmailq.rrd")
+    if not _rrd_exists(path):
+        _create_rrd(path, 300, [
+            "DS:local:GAUGE:600:0:U",
+            "DS:remote:GAUGE:600:0:U",
+        ], _RRA_DEFS, timestamp)
+    _update_rrd(path, timestamp, [local, remote])
+
+
+def _update_iftraffic(rrd_dir, summary, message, timestamp):
+    """Update iftraffic.rrd from iftraffic plugin output."""
+    m_total = re.search(
+        r"Total monitorizado:\s*in\s*([\d.]+)\s*Mbps,\s*out\s*([\d.]+)\s*Mbps",
+        message or "",
+    )
+    if not m_total:
+        return
+
+    total_in = float(m_total.group(1))
+    total_out = float(m_total.group(2))
+
+    m_util = re.search(r"iftraffic:\s+.+?\s+([\d.]+)%\s+max\b", summary or "")
+    peak_util = float(m_util.group(1)) if m_util else "U"
+
+    path = os.path.join(rrd_dir, "iftraffic.rrd")
+    if not _rrd_exists(path):
+        _create_rrd(path, 300, [
+            "DS:in:GAUGE:600:0:100000",
+            "DS:out:GAUGE:600:0:100000",
+            "DS:util:GAUGE:600:0:100",
+        ], _RRA_DEFS, timestamp)
+    _update_rrd(path, timestamp, [total_in, total_out, peak_util])
 
 
 def _update_uptime(rrd_dir, summary, timestamp):
@@ -713,6 +909,82 @@ def _graph_ups_stacked(rrd_path, host, start, width, height):
     return buf.getvalue()
 
 
+def _graph_iftraffic_stacked(rrd_path, host, start, width, height):
+    """Two stacked panels: total throughput + peak interface utilization."""
+    import subprocess, io
+    from PIL import Image
+
+    panel_h = max(height // 2 - 10, 120)
+    panels = [
+        {
+            "title": f"Tráfico interfaces — {host}",
+            "vlabel": "Mbps",
+            "defs": [
+                f"DEF:tin={rrd_path}:in:AVERAGE",
+                f"DEF:tout={rrd_path}:out:AVERAGE",
+            ],
+            "draw": [
+                "AREA:tin#1565c0:Entrada total ",
+                r"GPRINT:tin:MAX:Máx\:%6.1lf Mbps",
+                r"GPRINT:tin:MIN:  Mín\:%6.1lf Mbps",
+                r"GPRINT:tin:AVERAGE:  Prom\:%6.1lf Mbps",
+                r"GPRINT:tin:LAST:  Últ\:%6.1lf Mbps\l",
+                "LINE2:tout#2e7d32:Salida total ",
+                r"GPRINT:tout:MAX:Máx\:%6.1lf Mbps",
+                r"GPRINT:tout:MIN:  Mín\:%6.1lf Mbps",
+                r"GPRINT:tout:AVERAGE:  Prom\:%6.1lf Mbps",
+                r"GPRINT:tout:LAST:  Últ\:%6.1lf Mbps\l",
+            ],
+        },
+        {
+            "title": f"Utilización máxima — {host}",
+            "vlabel": "%",
+            "defs": [
+                f"DEF:util={rrd_path}:util:AVERAGE",
+            ],
+            "draw": [
+                "--upper-limit", "100",
+                "HRULE:70#f9a825:Warn 70%",
+                "HRULE:90#e53935:Crit 90%",
+                "AREA:util#8e24aa66:Util máx ",
+                "LINE2:util#8e24aa",
+                r"GPRINT:util:MAX:Máx\:%5.1lf%%",
+                r"GPRINT:util:MIN:  Mín\:%5.1lf%%",
+                r"GPRINT:util:AVERAGE:  Prom\:%5.1lf%%",
+                r"GPRINT:util:LAST:  Últ\:%5.1lf%%\l",
+            ],
+        },
+    ]
+
+    images = []
+    for p in panels:
+        cmd = [
+            "rrdtool", "graph", "-",
+            "--start", str(start), "--end", "now",
+            "--width", str(width), "--height", str(panel_h),
+            "--title", p["title"],
+            "--vertical-label", p["vlabel"],
+            "--color", "BACK#ffffff",
+            "--color", "CANVAS#f5f5ff",
+            "--slope-mode",
+        ] + p["defs"] + p["draw"]
+        r = subprocess.run(cmd, capture_output=True)
+        if r.returncode == 0:
+            images.append(Image.open(io.BytesIO(r.stdout)).convert("RGB"))
+
+    if not images:
+        return None
+    total_h = sum(im.height for im in images)
+    out = Image.new("RGB", (images[0].width, total_h), (255, 255, 255))
+    y = 0
+    for im in images:
+        out.paste(im, (0, y))
+        y += im.height
+    buf = io.BytesIO()
+    out.save(buf, format="PNG")
+    return buf.getvalue()
+
+
 def _update_termica(rrd_dir, summary, message, timestamp):
     """Update termica.rrd with voltage, current, power, energy, leakage, temp.
 
@@ -771,9 +1043,9 @@ def _update_tcp_time(rrd_dir, service, summary, timestamp):
 
 
 def _update_hddtemp(rrd_dir, host, summary, timestamp):
-    # summary: "disk temps: sdb:39°C, sdc:42°C"
+    # Accept both legacy "disk temps: sda:39°C" and current "/dev/sda: 39" summaries.
     temps = {}
-    for m in re.finditer(r"(\w+):(\d+)°C", summary):
+    for m in re.finditer(r"(?:/dev/)?([A-Za-z0-9._-]+)\s*:\s*(\d+)(?:\s*°[CF])?", summary):
         dev = m.group(1)[:19]
         temps[dev] = int(m.group(2))
     if not temps:
@@ -852,8 +1124,7 @@ def update_from_status(host, service, summary, message, timestamp):
             _update_disk(rrd_dir, host, message or "", timestamp)
         elif svc == "diski":
             _update_diski(rrd_dir, host, message or "", timestamp)
-        elif svc in ("cpu", "la"):
-            _update_cpu(rrd_dir, host, summary or "", timestamp)
+
         elif svc == "memory":
             _update_memory(rrd_dir, host, summary or "", message or "", timestamp)
         elif svc == "processes":
@@ -872,12 +1143,22 @@ def update_from_status(host, service, summary, message, timestamp):
             _update_rcpu(rrd_dir, summary or "", timestamp, "scpu5s.rrd")
         elif svc == "memolt":
             _update_rcpu(rrd_dir, summary or "", timestamp, "memolt.rrd")
+        elif svc == "mem":
+            _update_rcpu(rrd_dir, summary or "", timestamp, "mem.rrd")
         elif svc == "rtemp":
             _update_rtemp(rrd_dir, summary or "", timestamp)
+        elif svc == "temp":
+            _update_temp(rrd_dir, summary or "", message or "", timestamp)
+        elif svc == "hum":
+            _update_hum(rrd_dir, summary or "", message or "", timestamp)
         elif svc == "macs":
             _update_macs(rrd_dir, summary or "", timestamp)
         elif svc == "wassoc":
             _update_wassoc(rrd_dir, summary or "", timestamp)
+        elif svc == "qmailq":
+            _update_qmailq(rrd_dir, summary or "", message or "", timestamp)
+        elif svc == "iftraffic":
+            _update_iftraffic(rrd_dir, summary or "", message or "", timestamp)
         elif svc == "co2":
             _update_co2(rrd_dir, summary or "", timestamp)
         elif svc == "soil":
@@ -888,25 +1169,9 @@ def update_from_status(host, service, summary, message, timestamp):
             _update_ups(rrd_dir, summary or "", timestamp)
         elif svc == "speedtest":
             _update_speedtest(rrd_dir, summary or "", timestamp)
-        elif svc == "ruptime":
-            _update_uptime(rrd_dir, summary or "", timestamp)
-        elif svc == "termica":
-            _update_termica(rrd_dir, summary or "", message or "", timestamp)
-        elif svc in _SENSOR_META:
-            _update_sensor(rrd_dir, svc, summary or "", timestamp)
         elif svc == "uptime":
             _update_uptime(rrd_dir, summary or "", timestamp)
-        elif svc == "dns":
-            _update_tcp_time(rrd_dir, "dns", summary or "", timestamp)
-        elif svc == "mysql":
-            _update_tcp_time(rrd_dir, "mysql", summary or "", timestamp)
-        elif svc == "https":
-            _update_tcp_time(rrd_dir, "https", summary or "", timestamp)
-        elif svc == "http":
-            _update_tcp_time(rrd_dir, "http", summary or "", timestamp)
-        elif svc == "ssh":
-            _update_tcp_time(rrd_dir, "ssh", summary or "", timestamp)
-        elif svc in ("telnet", "ftp", "smtp", "imap", "ntp", "rtsp", "spamd"):
+        elif svc in _TCP_TIME_GRAPH_META:
             _update_tcp_time(rrd_dir, svc, summary or "", timestamp)
         else:
             log.debug("update_from_status: unrecognised service '%s' for host %s", service, host)
@@ -952,7 +1217,7 @@ def _append_legends(cmd):
         if not m:
             continue
         var = m.group(1)
-        if var in _NO_AUTO_LEGEND:
+        if var in _NO_AUTO_LEGEND or re.match(r"p\d+$", var):
             continue
         if var in _TEMP_DS:
             fmt = "%5.1lf"
@@ -1295,7 +1560,7 @@ def _graph_speedtest_compare(rrd_path, host, width, height):
 # Public API: graph_png
 # ---------------------------------------------------------------------------
 
-def graph_png(host, service, period="24h", width=500, height=150):
+def graph_png(host, service, period="24h", width=500, height=150, mounts="filtered"):
     """
     Generate a PNG graph for a service and return it as bytes.
 
@@ -1401,21 +1666,29 @@ def graph_png(host, service, period="24h", width=500, height=150):
             ]
 
         elif svc == "diski":
-            rrd_path = os.path.join(rrd_dir, "diski-root.rrd")
-            if not _rrd_exists(rrd_path):
-                candidates = [f for f in os.listdir(rrd_dir)
-                              if f.startswith("diski-") and f.endswith(".rrd")]
-                if not candidates:
-                    return None
-                rrd_path = os.path.join(rrd_dir, sorted(candidates)[0])
-            name = os.path.basename(rrd_path)[6:-4]
+            partitions = _partition_rrds(rrd_dir, "diski")
+            current_mounts = set(_mountpoints_from_df_message(_current_service_message(host, "diski")))
+            if current_mounts:
+                partitions = [p for p in partitions if p[1] in current_mounts]
+            if mounts != "full":
+                partitions = [p for p in partitions if _graph_include_mountpoint(p[1])]
+            if not partitions:
+                return None
+            colors = ["#7e57c2", "#3949ab", "#1e88e5", "#00897b", "#43a047", "#fdd835", "#fb8c00", "#e53935", "#8e24aa", "#6d4c41"]
+            label_width = 12 if width < 900 else 18
             cmd += [
                 "--vertical-label", "% inodos",
                 "--upper-limit", "100",
-                "--title", "Inodos {} {}".format(name, host),
-                "DEF:pct={}:pct:AVERAGE".format(rrd_path),
-                "AREA:pct#aa55ff:% inodos",
+                "--title", "Inodos por particion {}".format(host),
             ]
+            for idx, (_rrd_name, mountpoint, rrd_path) in enumerate(partitions):
+                ds = "p{}".format(idx)
+                color = colors[idx % len(colors)]
+                label = _graph_mountpoint_label(mountpoint)[:label_width]
+                cmd += [
+                    "DEF:{}={}:pct:AVERAGE".format(ds, rrd_path),
+                    "LINE2:{}{}:{}".format(ds, color, label),
+                ]
 
         elif svc.startswith("disk-"):
             name = svc[5:]  # strip "disk-"
@@ -1432,26 +1705,30 @@ def graph_png(host, service, period="24h", width=500, height=150):
             ]
 
         elif svc == "disk":
-            # Generic disk — graph root if available, else first disk found
-            rrd_path = os.path.join(rrd_dir, "disk-root.rrd")
-            if not _rrd_exists(rrd_path):
-                # Try to find any disk rrd
-                candidates = [
-                    f for f in os.listdir(rrd_dir)
-                    if f.startswith("disk-") and f.endswith(".rrd")
-                ]
-                if not candidates:
-                    log.debug("graph_png: no disk RRDs found for %s", host)
-                    return None
-                rrd_path = os.path.join(rrd_dir, sorted(candidates)[0])
-            name = os.path.basename(rrd_path)[5:-4]  # strip "disk-" and ".rrd"
+            partitions = _partition_rrds(rrd_dir, "disk")
+            current_mounts = set(_mountpoints_from_df_message(_current_service_message(host, "disk")))
+            if current_mounts:
+                partitions = [p for p in partitions if p[1] in current_mounts]
+            if mounts != "full":
+                partitions = [p for p in partitions if _graph_include_mountpoint(p[1])]
+            if not partitions:
+                log.debug("graph_png: no disk RRDs found for %s", host)
+                return None
+            colors = ["#ff9800", "#43a047", "#1e88e5", "#8e24aa", "#e53935", "#00897b", "#6d4c41", "#3949ab", "#fb8c00", "#7cb342"]
+            label_width = 12 if width < 900 else 18
             cmd += [
-                "--vertical-label", "%",
+                "--vertical-label", "% usado",
                 "--upper-limit", "100",
-                "--title", "Disco {} {}".format(name, host),
-                "DEF:pct={}:pct:AVERAGE".format(rrd_path),
-                "AREA:pct#ffaa00:% usado",
+                "--title", "Disco por particion {}".format(host),
             ]
+            for idx, (_rrd_name, mountpoint, rrd_path) in enumerate(partitions):
+                ds = "p{}".format(idx)
+                color = colors[idx % len(colors)]
+                label = _graph_mountpoint_label(mountpoint)[:label_width]
+                cmd += [
+                    "DEF:{}={}:pct:AVERAGE".format(ds, rrd_path),
+                    "LINE2:{}{}:{}".format(ds, color, label),
+                ]
 
         elif svc == "memory":
             rrd_path = os.path.join(rrd_dir, "mem.rrd")
@@ -1481,6 +1758,13 @@ def graph_png(host, service, period="24h", width=500, height=150):
                     "--title", "Jobs {}".format(host),
                     "DEF:j={}:jobs:AVERAGE".format(rrd_path),
                     "LINE2:j#cc6600:jobs",
+                ]
+            elif svc == "la":
+                cmd += [
+                    "--vertical-label", "load",
+                    "--title", "Load {}".format(host),
+                    "DEF:la={}:loadavg:AVERAGE".format(rrd_path),
+                    "LINE2:la#0000cc:load avg",
                 ]
             else:
                 cmd += [
@@ -1519,39 +1803,12 @@ def graph_png(host, service, period="24h", width=500, height=150):
                 cmd += ["DEF:{0}={1}:{0}:AVERAGE".format(ds, rrd_path),
                         "LINE2:{0}{1}:{0}".format(ds, color)]
 
-        elif svc == "ssh":
-            rrd_path = os.path.join(rrd_dir, "ssh-time.rrd")
-            if not _rrd_exists(rrd_path):
-                return None
-            cmd += _tcp_time_graph_args(rrd_path, "SSH {}".format(host), "#8e24aa")
-
-        elif svc in ("telnet", "ftp", "smtp", "imap", "ntp", "rtsp", "spamd"):
+        elif svc in _TCP_TIME_GRAPH_META:
             rrd_path = os.path.join(rrd_dir, "{}-time.rrd".format(svc))
             if not _rrd_exists(rrd_path):
                 return None
-            _SVC_COLORS = {"telnet": "#e65100", "ftp": "#0277bd", "smtp": "#2e7d32",
-                           "imap": "#6a1b9a", "ntp": "#00695c", "rtsp": "#00838f",
-                           "spamd": "#c0392b"}
-            color = _SVC_COLORS.get(svc, "#555555")
-            cmd += _tcp_time_graph_args(rrd_path, "{} {}".format(svc.upper(), host), color)
-
-        elif svc == "http":
-            rrd_path = os.path.join(rrd_dir, "http-time.rrd")
-            if not _rrd_exists(rrd_path):
-                return None
-            cmd += _tcp_time_graph_args(rrd_path, "HTTP {}".format(host), "#0077cc")
-
-        elif svc == "https":
-            rrd_path = os.path.join(rrd_dir, "https-time.rrd")
-            if not _rrd_exists(rrd_path):
-                return None
-            cmd += _tcp_time_graph_args(rrd_path, "HTTPS {}".format(host), "#00aa44")
-
-        elif svc == "mysql":
-            rrd_path = os.path.join(rrd_dir, "mysql-time.rrd")
-            if not _rrd_exists(rrd_path):
-                return None
-            cmd += _tcp_time_graph_args(rrd_path, "MySQL {}".format(host), "#0077cc")
+            label, color = _TCP_TIME_GRAPH_META[svc]
+            cmd += _tcp_time_graph_args(rrd_path, "{} {}".format(label, host), color)
 
         elif svc == "hddtemp":
             rrd_path = os.path.join(rrd_dir, "hddtemp.rrd")
@@ -1569,14 +1826,14 @@ def graph_png(host, service, period="24h", width=500, height=150):
                 cmd += ["DEF:{0}={1}:{0}:AVERAGE".format(ds, rrd_path),
                         "LINE2:{0}{1}:{0}".format(ds, color)]
 
-        elif svc in ("rcpu", "scpu", "scpu1m", "scpu5s", "memolt"):
+        elif svc in ("rcpu", "scpu", "scpu1m", "scpu5s", "memolt", "mem"):
             rrd_path = os.path.join(rrd_dir, "{}.rrd".format(svc))
             if not _rrd_exists(rrd_path):
                 return None
             label = {"rcpu": "CPU router", "scpu": "CPU switch (5s)", "scpu1m": "CPU switch (1m)",
-                     "scpu5s": "CPU switch (5s)", "memolt": "Memoria TP-Link"}.get(svc, svc)
+                     "scpu5s": "CPU switch (5s)", "memolt": "Memoria SNMP", "mem": "Memoria SNMP"}.get(svc, svc)
             color = {"rcpu": "#0077cc", "scpu": "#0077cc", "scpu1m": "#0077cc",
-                     "scpu5s": "#0077cc", "memolt": "#6a1b9a"}.get(svc, "#0077cc")
+                     "scpu5s": "#0077cc", "memolt": "#6a1b9a", "mem": "#6a1b9a"}.get(svc, "#0077cc")
             cmd += [
                 "--vertical-label", "%",
                 "--upper-limit", "100",
@@ -1601,6 +1858,30 @@ def graph_png(host, service, period="24h", width=500, height=150):
                 cmd += ["DEF:{0}={1}:{0}:AVERAGE".format(ds, rrd_path),
                         "LINE2:{0}{1}:{0}".format(ds, color)]
 
+        elif svc == "temp":
+            rrd_path = os.path.join(rrd_dir, "temp.rrd")
+            if not _rrd_exists(rrd_path):
+                return None
+            cmd += [
+                "--vertical-label", "°C",
+                "--title", "Temperatura {}".format(host),
+                "DEF:temp={}:temp:AVERAGE".format(rrd_path),
+                "LINE2:temp#ff6600:Temperatura",
+            ]
+
+        elif svc == "hum":
+            rrd_path = os.path.join(rrd_dir, "hum.rrd")
+            if not _rrd_exists(rrd_path):
+                return None
+            cmd += [
+                "--vertical-label", "%",
+                "--lower-limit", "0",
+                "--upper-limit", "100",
+                "--title", "Humedad {}".format(host),
+                "DEF:hum={}:hum:AVERAGE".format(rrd_path),
+                "AREA:hum#4fc3f7:Humedad",
+            ]
+
         elif svc == "macs":
             rrd_path = os.path.join(rrd_dir, "macs.rrd")
             if not _rrd_exists(rrd_path):
@@ -1623,7 +1904,27 @@ def graph_png(host, service, period="24h", width=500, height=150):
                 "AREA:assoc#0288d1:Asociados",
             ]
 
-        elif svc == "uptime":
+        elif svc == "qmailq":
+            rrd_path = os.path.join(rrd_dir, "qmailq.rrd")
+            if not _rrd_exists(rrd_path):
+                return None
+            cmd += [
+                "--vertical-label", "mensajes",
+                "--lower-limit", "0",
+                "--title", "Qmail Queue {}".format(host),
+                "DEF:local={}:local:AVERAGE".format(rrd_path),
+                "DEF:remote={}:remote:AVERAGE".format(rrd_path),
+                "LINE2:local#ef6c00:Local",
+                "LINE2:remote#1565c0:Remote",
+            ]
+
+        elif svc == "iftraffic":
+            rrd_path = os.path.join(rrd_dir, "iftraffic.rrd")
+            if not _rrd_exists(rrd_path):
+                return None
+            return _graph_iftraffic_stacked(rrd_path, host, start, width, height)
+
+        elif svc in ("uptime", "ruptime"):
             rrd_path = os.path.join(rrd_dir, "uptime.rrd")
             if not _rrd_exists(rrd_path):
                 return None
@@ -1633,12 +1934,6 @@ def graph_png(host, service, period="24h", width=500, height=150):
                 "DEF:d={}:days:AVERAGE".format(rrd_path),
                 "AREA:d#43a047:días",
             ]
-
-        elif svc == "dns":
-            rrd_path = os.path.join(rrd_dir, "dns-time.rrd")
-            if not _rrd_exists(rrd_path):
-                return None
-            cmd += _tcp_time_graph_args(rrd_path, "DNS {}".format(host), "#ff6600")
 
         elif svc == "co2":
             rrd_path = os.path.join(rrd_dir, "co2.rrd")
@@ -1671,12 +1966,6 @@ def graph_png(host, service, period="24h", width=500, height=150):
             if not _rrd_exists(rrd_path):
                 return None
             return _graph_ups_stacked(rrd_path, host, start, width, height)
-
-        elif svc == "ruptime":
-            rrd_path = os.path.join(rrd_dir, "uptime.rrd")
-            if not _rrd_exists(rrd_path):
-                return None
-            svc = "uptime"  # reusar el gráfico de uptime existente
 
         elif svc == "termica":
             rrd_path = os.path.join(rrd_dir, "termica.rrd")

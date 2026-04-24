@@ -25,6 +25,17 @@ from .protocol import parse_update, parse_query, StatusMessage, AckMessage, AckD
 log = logging.getLogger(__name__)
 
 BINDIR = Path("/usr/local/spong/bin")
+PLUGIN_DIR = Path("/usr/local/spong/spong/plugins")
+
+
+def _plugin_service_names(kind: str) -> set[str]:
+    path = PLUGIN_DIR / kind
+    if not path.exists():
+        return set()
+    return {
+        item.stem for item in path.glob("*.py")
+        if item.name != "__init__.py" and not item.name.startswith("_")
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -73,6 +84,8 @@ async def _process_status(msg: StatusMessage) -> None:
 
 
 def _db_save_status(msg: StatusMessage) -> bool:
+    previous = database.load_service(msg.host, msg.service)
+    state_changed = previous is None or previous.color != msg.color
     changed = database.save_status(
         host=msg.host,
         service=msg.service,
@@ -87,7 +100,7 @@ def _db_save_status(msg: StatusMessage) -> bool:
         _rrd.update_from_status(msg.host, msg.service, msg.summary, msg.message, msg.timestamp)
     except Exception as _e:
         log.debug("rrd update skipped: %s", _e)
-    if changed:
+    if state_changed:
         entry = HistoryEntry(
             event_type=msg.cmd,
             timestamp=msg.timestamp,
@@ -408,19 +421,23 @@ async def handle_bb_update(reader: asyncio.StreamReader, writer: asyncio.StreamW
 
 async def stale_data_scanner(interval: int = 900) -> None:
     """Periodically mark stale services as purple."""
+    network_plugins = _plugin_service_names("network")
+    client_services = set(config.get_checks()) | _plugin_service_names("client")
     while True:
         await asyncio.sleep(interval)
         hosts = database.list_hosts()
         for host in hosts:
             configured = {s for s, _ in config.host_services(host)}
+            allowed = configured | client_services
             for svc_name, svc in database.load_all_services(host).items():
-                # Remove services no longer configured for this host
-                if configured and svc_name not in configured:
-                    log.debug("removing unconfigured service %s/%s", host, svc_name)
+                # Only delete removed network checks. Client/legacy-client services are
+                # allowed to report independently of hosts.yaml service lists.
+                if configured and svc_name not in allowed and svc_name in network_plugins:
+                    log.debug("removing unconfigured network service %s/%s", host, svc_name)
                     database.delete_service(host, svc_name)
                     continue
                 age = time.time() - svc.report_time
-                # Services not updated in 2x their expected interval → purple
+                # Services not updated in 2x their expected interval -> purple
                 if age > 1800 and svc.color not in ("purple", "clear"):
                     log.debug("marking %s/%s purple (age=%.0fs)", host, svc_name, age)
                     database.save_status(

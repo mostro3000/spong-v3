@@ -2,7 +2,10 @@
 {% block title %}SPONG - {{ _('Disponibilidad') }}{% endblock %}
 {% block content %}
 
-<div class="page-title">&#8987; {{ _('Disponibilidad histórica') }}</div>
+<div style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; margin-bottom:14px;">
+  <div class="page-title" style="margin:0;">&#8987; {{ _('Disponibilidad histórica') }}</div>
+  <a class="btn btn-sm" href="{{ (request.script_root or '') ~ '/history' }}">&#128340; {{ _('Historial') }}</a>
+</div>
 
 <style>
   .uptime-table { width: 100%; border-collapse: collapse; font-size: 13px; }

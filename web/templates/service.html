@@ -46,15 +46,24 @@
   badge.addEventListener('click', function() {
     var host = badge.dataset.host;
     var svc  = badge.dataset.svc;
+    var now = Date.now();
+    var cooldownUntil = parseInt(badge.dataset.cooldownUntil || '0', 10);
+    if (badge.dataset.pending === '1' || now < cooldownUntil) return;
     var prev = badge.textContent;
+    badge.dataset.pending = '1';
     badge.textContent = '…';
     badge.style.opacity = '0.6';
+
+    function finishRequest() {
+      badge.dataset.pending = '';
+      badge.dataset.cooldownUntil = String(Date.now() + 5000);
+      badge.style.opacity = '1';
+    }
 
     function applyResult(d) {
       badge.className = 'badge color-' + d.color + ' svc-badge';
       badge.style.cursor = 'pointer';
       badge.textContent = d.color;
-      badge.style.opacity = '1';
       if (d.summary) document.getElementById('svc-summary').textContent = d.summary;
       if (d.report_time) document.getElementById('svc-report').textContent =
         new Date(d.report_time * 1000).toLocaleString('sv').replace('T', ' ');
@@ -69,13 +78,14 @@
           pre.textContent = d.message;
         }
       }
+      finishRequest();
     }
 
     function fallback() {
       fetch(_base + '/api/service/' + host + '/' + svc)
         .then(function(r) { return r.json(); })
         .then(applyResult)
-        .catch(function() { badge.textContent = prev; badge.style.opacity = '1'; });
+        .catch(function() { badge.textContent = prev; finishRequest(); });
     }
 
     fetch(_base + '/api/check/' + host + '/' + svc, {method: 'POST'})
@@ -83,7 +93,7 @@
         if (r.status === 400) { fallback(); return null; }
         return r.json().then(applyResult);
       })
-      .catch(function() { badge.textContent = prev; badge.style.opacity = '1'; });
+      .catch(function() { badge.textContent = prev; finishRequest(); });
   });
 })();
 </script>
@@ -91,27 +101,108 @@
 {% if svc.message and false %}{# mensaje ya mostrado arriba #}{% endif %}
 
 <h3>{{ _('Gráficos') }}</h3>
-<div id="rrd-graphs">
-  {% for period, label in [("1h", _('1 hora')),("24h", _('24 horas')),("7d", _('7 días')),("30d", _('30 días')),("1y", _('1 año'))] %}
-  <div style="margin-bottom:14px; display:inline-block; margin-right:12px; vertical-align:top;">
-    <div style="font-size:10px; font-weight:700; color:#90a4ae; text-transform:uppercase; letter-spacing:0.4px; margin-bottom:4px;">{{ label }}</div>
-    <img src="{{ url_for('rrd_graph', hostname=hostname, service=service, period=period, w=500, h=120) }}"
-         onerror="this.parentElement.style.display='none'"
-         onclick="openLightbox(this.src, '{{ label }}')"
-         style="border:1px solid #e0e4ea; border-radius:4px; display:block; box-shadow:0 1px 3px rgba(0,0,0,0.08); cursor:zoom-in;">
-  </div>
-  {% endfor %}
-  {% if service == 'speedtest' %}
-  <div style="margin-bottom:14px; display:inline-block; margin-right:12px; vertical-align:top;">
-    <div style="font-size:10px; font-weight:700; color:#90a4ae; text-transform:uppercase; letter-spacing:0.4px; margin-bottom:4px;">{{ _('Comparar períodos') }}</div>
-    <img src="{{ url_for('rrd_graph', hostname=hostname, service=service, period='compare', w=500, h=360) }}"
-         onerror="this.parentElement.style.display='none'"
-         onclick="openLightbox(this.src, '{{ _('Comparar períodos') }}')"
-         style="border:1px solid #e0e4ea; border-radius:4px; display:block; box-shadow:0 1px 3px rgba(0,0,0,0.08); cursor:zoom-in;">
-  </div>
-  {% endif %}
+<div style="margin-bottom:12px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+  <button id="load-graphs-btn" class="btn" type="button">{{ _('Ver gráficos') }}</button>
 </div>
+<div id="rrd-graphs" data-host="{{ hostname }}" data-service="{{ service }}"></div>
 
+<script>
+(function() {
+  var container = document.getElementById('rrd-graphs');
+  var button = document.getElementById('load-graphs-btn');
+  if (!container || !button) return;
+
+  var periods = [
+    {period: '1h', label: {{ _('1 hora')|tojson }}},
+    {period: '24h', label: {{ _('24 horas')|tojson }}},
+    {period: '7d', label: {{ _('7 días')|tojson }}},
+    {period: '30d', label: {{ _('30 días')|tojson }}},
+    {period: '1y', label: {{ _('1 año')|tojson }}}
+  ];
+  var showLabel = {{ _('Ver gráficos')|tojson }};
+  var hideLabel = {{ _('Ocultar gráficos')|tojson }};
+  var compareLabel = {{ _('Comparar períodos')|tojson }};
+
+  function graphWrap(label) {
+    var wrap = document.createElement('div');
+    wrap.style.marginBottom = '14px';
+    wrap.style.display = 'inline-block';
+    wrap.style.marginRight = '12px';
+    wrap.style.verticalAlign = 'top';
+
+    var title = document.createElement('div');
+    title.style.fontSize = '10px';
+    title.style.fontWeight = '700';
+    title.style.color = '#90a4ae';
+    title.style.textTransform = 'uppercase';
+    title.style.letterSpacing = '0.4px';
+    title.style.marginBottom = '4px';
+    title.textContent = label;
+    wrap.appendChild(title);
+    return wrap;
+  }
+
+  function graphImg(src, label, wrap, height) {
+    var img = document.createElement('img');
+    img.loading = 'lazy';
+    img.decoding = 'async';
+    img.src = src;
+    img.style.border = '1px solid #e0e4ea';
+    img.style.borderRadius = '4px';
+    img.style.display = 'block';
+    img.style.boxShadow = '0 1px 3px rgba(0,0,0,0.08)';
+    img.style.cursor = 'zoom-in';
+    if (height) img.height = height;
+    img.onerror = function() { wrap.style.display = 'none'; };
+    img.onclick = function() { openLightbox(img.src, label); };
+    return img;
+  }
+
+  button.addEventListener('click', function() {
+    if (container.dataset.loaded === '1') {
+      container.hidden = !container.hidden;
+      button.textContent = container.hidden ? showLabel : hideLabel;
+      return;
+    }
+
+    var host = container.dataset.host;
+    var service = container.dataset.service;
+    var base = {{ url_for('index')|tojson }}.replace(/\/$/, '');
+
+    if (service === 'cpu') {
+      periods.forEach(function(item) {
+        var loadWrap = graphWrap(item.label + ' · Load');
+        var loadSrc = base + '/rrd/' + encodeURIComponent(host) + '/la.png?period=' + encodeURIComponent(item.period) + '&w=500&h=120';
+        loadWrap.appendChild(graphImg(loadSrc, item.label + ' · Load', loadWrap));
+        container.appendChild(loadWrap);
+
+        var jobsWrap = graphWrap(item.label + ' · Jobs');
+        var jobsSrc = base + '/rrd/' + encodeURIComponent(host) + '/jobs.png?period=' + encodeURIComponent(item.period) + '&w=500&h=120';
+        jobsWrap.appendChild(graphImg(jobsSrc, item.label + ' · Jobs', jobsWrap));
+        container.appendChild(jobsWrap);
+      });
+    } else {
+      periods.forEach(function(item) {
+        var wrap = graphWrap(item.label);
+        var src = base + '/rrd/' + encodeURIComponent(host) + '/' + encodeURIComponent(service) + '.png?period=' + encodeURIComponent(item.period) + '&w=500&h=120';
+        wrap.appendChild(graphImg(src, item.label, wrap));
+        container.appendChild(wrap);
+      });
+    }
+
+    if (service === 'speedtest') {
+      var compareWrap = graphWrap(compareLabel);
+      var compareSrc = base + '/rrd/' + encodeURIComponent(host) + '/' + encodeURIComponent(service) + '.png?period=compare&w=500&h=360';
+      compareWrap.appendChild(graphImg(compareSrc, compareLabel, compareWrap, 360));
+      container.appendChild(compareWrap);
+    }
+
+    container.dataset.loaded = '1';
+    container.hidden = false;
+    button.textContent = hideLabel;
+  });
+})();
+</script>
 {% else %}
 <p style="color:#90a4ae; margin-top:12px;">{{ _('No hay datos para este servicio.') }}</p>
 {% endif %}

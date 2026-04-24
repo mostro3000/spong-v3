@@ -46,7 +46,7 @@
 <h3>{{ _('Servicios') }}</h3>
 <div class="card">
 <table>
-  <thead><tr><th>{{ _('Servicio') }}</th><th>{{ _('Estado') }}</th><th style="text-align:center;">{{ _('Graf.') }}</th><th>{{ _('En este estado') }}</th><th>{{ _('Último reporte') }}</th><th>{{ _('Resumen') }}</th></tr></thead>
+  <thead><tr><th>{{ _('Servicio') }}</th><th><span id="check-all-status" style="cursor:pointer;" title="Clic para actualizar todos">{{ _('Estado') }}</span></th><th style="text-align:center;">{{ _('Graf.') }}</th><th>{{ _('En este estado') }}</th><th>{{ _('Último reporte') }}</th><th>{{ _('Resumen') }}</th></tr></thead>
   <tbody>
   {% for svc_name, svc in services %}
   <tr>
@@ -56,7 +56,7 @@
               title="Clic para actualizar">{{ svc.color }}</span></td>
     <td style="text-align:center;">
       <span class="graph-toggle btn btn-sm" data-host="{{ hostname }}" data-svc="{{ svc_name }}"
-            style="cursor:pointer; background:#eceff1; color:#546e7a; border:1px solid #cdd5df; visibility:hidden;"
+            style="cursor:pointer; background:#eceff1; color:#546e7a; border:1px solid #cdd5df;"
             title="{{ _('Graf.') }}">📊</span>
     </td>
     <td style="font-size:11px; color:#546e7a; white-space:nowrap;" title="{{ _('desde') }} {{ svc.start_time | int | strftime('%Y-%m-%d %H:%M') }}">
@@ -72,13 +72,36 @@
     <td colspan="6" style="padding:8px 12px; background:#f8f9fb;">
       <div style="display:flex; gap:10px; flex-wrap:wrap;">
         {% for period, label in [("1h","1h"),("24h","24h"),("7d","7d"),("30d","30d"),("1y","1a")] %}
+        {% if svc_name == 'cpu' %}
         <div style="text-align:center;">
-          <div style="font-size:10px; color:#90a4ae; margin-bottom:3px; font-weight:600;">{{ label }}</div>
-          <img src="{{ url_for('rrd_graph', hostname=hostname, service=svc_name, period=period, w=220, h=80) }}"
+          <div style="font-size:10px; color:#90a4ae; margin-bottom:3px; font-weight:600;">{{ label }} · Load</div>
+          <img data-src="{{ url_for('rrd_graph', hostname=hostname, service='la', period=period, w=220, h=80) }}"
+               data-label="{{ label }} · Load"
+               loading="lazy" decoding="async"
                onerror="this.parentElement.style.display='none'"
-               onclick="openLightbox(this.src, '{{ label }}')"
+               onclick="if (this.src) openLightbox(this.src, this.dataset.label)"
                style="border:1px solid #e0e4ea; border-radius:3px; display:block; cursor:zoom-in;">
         </div>
+        <div style="text-align:center;">
+          <div style="font-size:10px; color:#90a4ae; margin-bottom:3px; font-weight:600;">{{ label }} · Jobs</div>
+          <img data-src="{{ url_for('rrd_graph', hostname=hostname, service='jobs', period=period, w=220, h=80) }}"
+               data-label="{{ label }} · Jobs"
+               loading="lazy" decoding="async"
+               onerror="this.parentElement.style.display='none'"
+               onclick="if (this.src) openLightbox(this.src, this.dataset.label)"
+               style="border:1px solid #e0e4ea; border-radius:3px; display:block; cursor:zoom-in;">
+        </div>
+        {% else %}
+        <div style="text-align:center;">
+          <div style="font-size:10px; color:#90a4ae; margin-bottom:3px; font-weight:600;">{{ label }}</div>
+          <img data-src="{{ url_for('rrd_graph', hostname=hostname, service=svc_name, period=period, w=220, h=80) }}"
+               data-label="{{ label }}"
+               loading="lazy" decoding="async"
+               onerror="this.parentElement.style.display='none'"
+               onclick="if (this.src) openLightbox(this.src, this.dataset.label)"
+               style="border:1px solid #e0e4ea; border-radius:3px; display:block; cursor:zoom-in;">
+        </div>
+        {% endif %}
         {% endfor %}
       </div>
     </td>
@@ -89,24 +112,26 @@
 </div>
 
 <script>
+function _loadGraphRow(row) {
+  row.querySelectorAll('img[data-src]').forEach(function(img) {
+    if (img.dataset.loaded) return;
+    img.src = img.dataset.src;
+    img.dataset.loaded = '1';
+  });
+}
+
 document.querySelectorAll('.graph-toggle').forEach(function(el) {
   el.addEventListener('click', function() {
     var row = document.getElementById('graph-' + this.dataset.svc);
     var visible = row.style.display !== 'none';
+    if (!visible) _loadGraphRow(row);
     row.style.display = visible ? 'none' : '';
     this.style.background = visible ? '' : '#4a6fa5';
     this.style.color = visible ? '' : '#fff';
   });
-  // Verificar si hay gráfico disponible (HEAD request al gráfico 24h)
-  var host = el.dataset.host, svc = el.dataset.svc;
-  var url = '{{ url_for("rrd_graph", hostname="__H__", service="__S__", period="24h", w=10, h=10) }}'
-              .replace('__H__', host).replace('__S__', svc);
-  fetch(url, {method:'HEAD'}).then(function(r){
-    if (r.ok) el.style.visibility = 'visible';
-  }).catch(function(){});
 });
 
-// Refresh individual service status on badge click
+// Refresh service status on demand.
 var _base = '{{ url_for("index") }}'.replace(/\/$/, '');
 
 function _timeAgo(sec) {
@@ -116,82 +141,136 @@ function _timeAgo(sec) {
   return '{{ _("hace") }} ' + Math.floor(sec/3600) + 'h';
 }
 
+function _delay(ms) {
+  return new Promise(function(resolve) { setTimeout(resolve, ms); });
+}
+
+function updateSidebar(host, svc, newColor) {
+  var ok = ['green', 'clear', 'blue'].indexOf(newColor) !== -1;
+  if (!ok) return; // sigue en problema, no tocar
+  // Buscar sg-item que tenga el link a este servicio
+  document.querySelectorAll('#sidebar .sg-item').forEach(function(item) {
+    var links = item.querySelectorAll('a');
+    var matched = false;
+    links.forEach(function(a) {
+      if (a.href.indexOf('/' + host) !== -1 && a.href.indexOf('/' + svc) !== -1) matched = true;
+    });
+    if (!matched) return;
+    var group = item.closest('.sidebar-group');
+    item.remove();
+    // Actualizar contador del grupo
+    var remaining = group.querySelectorAll('.sg-item').length;
+    if (remaining === 0) {
+      group.remove();
+      // Si no quedan grupos con problemas, mostrar "sin problemas"
+      if (!document.querySelector('#sidebar .sidebar-group')) {
+        var h2 = document.querySelector('#sidebar h2');
+        if (h2) h2.remove();
+        var box = document.createElement('div');
+        box.className = 'no-problems-box';
+        box.innerHTML = '&#10003; {{ _("Sin problemas") }}';
+        document.getElementById('sidebar').appendChild(box);
+      }
+    } else {
+      var countEl = group.querySelector('.sg-count');
+      if (countEl) countEl.textContent = remaining;
+    }
+  });
+}
+
+function finishRequest(el) {
+  el.dataset.pending = '';
+  el.dataset.cooldownUntil = String(Date.now() + 5000);
+  el.style.opacity = '1';
+}
+
+function applyResult(el, host, svc, d, isCheck) {
+  el.className = 'badge color-' + d.color + ' svc-badge';
+  el.style.cursor = 'pointer';
+  el.textContent = d.color;
+  var row = el.closest('tr');
+  var cells = row.querySelectorAll('td');
+  // Resumen (última columna)
+  cells[cells.length - 1].textContent = d.summary;
+  // Último reporte (columna 4, índice 4)
+  if (isCheck && d.report_time) {
+    var lag = Math.floor(Date.now() / 1000 - d.report_time);
+    var span = cells[4].querySelector('span') || cells[4];
+    span.textContent = _timeAgo(lag);
+    span.style.color = '#43a047';
+  }
+  if (isCheck) updateSidebar(host, svc, d.color);
+  finishRequest(el);
+}
+
+function checkBadge(el) {
+  var host = el.dataset.host;
+  var svc  = el.dataset.svc;
+  var now = Date.now();
+  var cooldownUntil = parseInt(el.dataset.cooldownUntil || '0', 10);
+  if (el.dataset.pending === '1' || now < cooldownUntil) return Promise.resolve(false);
+  var prev = el.textContent;
+  el.dataset.pending = '1';
+  el.textContent = '...';
+  el.style.opacity = '0.6';
+
+  function fallbackRead() {
+    return fetch(_base + '/api/service/' + host + '/' + svc)
+      .then(function(r) { return r.json(); })
+      .then(function(d) { applyResult(el, host, svc, d, false); return true; })
+      .catch(function() { el.textContent = prev; finishRequest(el); return false; });
+  }
+
+  return fetch(_base + '/api/check/' + host + '/' + svc, {method: 'POST'})
+    .then(function(r) {
+      if (r.status === 400) return fallbackRead();
+      return r.json().then(function(d) {
+        applyResult(el, host, svc, d, d.checked !== false);
+        return d.checked !== false;
+      });
+    })
+    .catch(function() { el.textContent = prev; finishRequest(el); return false; });
+}
+
 document.querySelectorAll('.svc-badge').forEach(function(badge) {
   badge.addEventListener('click', function() {
-    var host = this.dataset.host;
-    var svc  = this.dataset.svc;
-    var el   = this;
-    var prev = el.textContent;
-    el.textContent = '…';
-    el.style.opacity = '0.6';
-
-    function updateSidebar(host, svc, newColor) {
-      var ok = ['green', 'clear', 'blue'].indexOf(newColor) !== -1;
-      if (!ok) return; // sigue en problema, no tocar
-      // Buscar sg-item que tenga el link a este servicio
-      document.querySelectorAll('#sidebar .sg-item').forEach(function(item) {
-        var links = item.querySelectorAll('a');
-        var matched = false;
-        links.forEach(function(a) {
-          if (a.href.indexOf('/' + host) !== -1 && a.href.indexOf('/' + svc) !== -1) matched = true;
-        });
-        if (!matched) return;
-        var group = item.closest('.sidebar-group');
-        item.remove();
-        // Actualizar contador del grupo
-        var remaining = group.querySelectorAll('.sg-item').length;
-        if (remaining === 0) {
-          group.remove();
-          // Si no quedan grupos con problemas, mostrar "sin problemas"
-          if (!document.querySelector('#sidebar .sidebar-group')) {
-            var h2 = document.querySelector('#sidebar h2');
-            if (h2) h2.remove();
-            var box = document.createElement('div');
-            box.className = 'no-problems-box';
-            box.innerHTML = '&#10003; {{ _("Sin problemas") }}';
-            document.getElementById('sidebar').appendChild(box);
-          }
-        } else {
-          var countEl = group.querySelector('.sg-count');
-          if (countEl) countEl.textContent = remaining;
-        }
-      });
-    }
-
-    function applyResult(d, isCheck) {
-      el.className = 'badge color-' + d.color + ' svc-badge';
-      el.style.cursor = 'pointer';
-      el.textContent = d.color;
-      el.style.opacity = '1';
-      var row = el.closest('tr');
-      var cells = row.querySelectorAll('td');
-      // Resumen (última columna)
-      cells[cells.length - 1].textContent = d.summary;
-      // Último reporte (columna 4, índice 4)
-      if (isCheck && d.report_time) {
-        var lag = Math.floor(Date.now() / 1000 - d.report_time);
-        var span = cells[4].querySelector('span') || cells[4];
-        span.textContent = _timeAgo(lag);
-        span.style.color = '#43a047';
-      }
-      if (isCheck) updateSidebar(host, svc, d.color);
-    }
-
-    function fallbackRead() {
-      fetch(_base + '/api/service/' + host + '/' + svc)
-        .then(function(r) { return r.json(); })
-        .then(function(d) { applyResult(d, false); })
-        .catch(function() { el.textContent = prev; el.style.opacity = '1'; });
-    }
-
-    fetch(_base + '/api/check/' + host + '/' + svc, {method: 'POST'})
-      .then(function(r) {
-        if (r.status === 400) { fallbackRead(); return null; }
-        return r.json().then(function(d) { applyResult(d, true); });
-      })
-      .catch(function() { el.textContent = prev; el.style.opacity = '1'; });
+    checkBadge(this);
   });
 });
+
+var checkAllStatus = document.getElementById('check-all-status');
+if (checkAllStatus) {
+  checkAllStatus.addEventListener('click', function() {
+    var header = this;
+    if (header.dataset.pending === '1') return;
+    var badges = Array.prototype.slice.call(document.querySelectorAll('.svc-badge'));
+    if (!badges.length) return;
+    var label = header.dataset.label || header.textContent;
+    header.dataset.label = label;
+    header.dataset.pending = '1';
+    header.style.opacity = '0.65';
+
+    var done = 0;
+    function updateProgress() {
+      header.textContent = label + ' (' + done + '/' + badges.length + ')';
+    }
+
+    updateProgress();
+    badges.reduce(function(chain, badge) {
+      return chain
+        .then(function() { return checkBadge(badge); })
+        .then(function() {
+          done += 1;
+          updateProgress();
+          return _delay(150);
+        });
+    }, Promise.resolve()).then(function() {
+      header.textContent = label;
+      header.style.opacity = '1';
+      header.dataset.pending = '';
+    });
+  });
+}
 </script>
 
 {% if history %}

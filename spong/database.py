@@ -63,23 +63,16 @@ def save_status(
     message: str,
     ttl: int = 0,
 ) -> bool:
-    """Save a status update. Returns True if color changed."""
+    """Save a status update. Returns True if the service color changed."""
     _ensure_dirs(host)
     svc_dir = _services_dir(host)
 
-    # Read previous start_time if same-color file already exists
-    existing_file = svc_dir / f"{service}-{color}"
+    previous = load_service(host, service)
     start_time = report_time
-    if existing_file.exists():
-        try:
-            first_line = existing_file.read_text().splitlines()[0]
-            m = re.match(r"timestamp (\d+) (\d+)", first_line)
-            if m:
-                start_time = float(m.group(1))
-        except Exception:
-            pass
+    if previous and previous.color == color:
+        start_time = previous.start_time
 
-    color_changed = not existing_file.exists()
+    color_changed = previous is None or previous.color != color
 
     # Remove old color files for this service
     for c in COLORS:
@@ -91,12 +84,13 @@ def save_status(
                 pass
 
     # Write the new status file
+    status_file = svc_dir / f"{service}-{color}"
     expire = 0 if ttl == 0 else int(report_time) + ttl
     data = (f"timestamp {int(start_time)} {int(report_time)}\n"
             f"{int(report_time)} {summary}\n"
             f"{message}")
     try:
-        existing_file.write_text(data)
+        status_file.write_text(data)
         if expire:
             # Store expire time in the filename? No – track via mtime or separate field.
             # We encode it in a comment line:
@@ -295,18 +289,38 @@ def append_history(host: str, entry: HistoryEntry) -> None:
         f.write(entry.format_line())
 
 
-def load_history(host: str, max_age_days: float = 7) -> list[HistoryEntry]:
-    """Load history entries newer than max_age_days."""
+def load_history(
+    host: str,
+    max_age_days: float = 7,
+    *,
+    status_changes_only: bool = False,
+) -> list[HistoryEntry]:
+    """Load history entries newer than max_age_days.
+
+    When status_changes_only is True, only keep color-bearing entries and
+    collapse repeated consecutive states per service.
+    """
     history_file = _history_dir(host) / "current"
     if not history_file.exists():
         return []
     cutoff = time.time() - max_age_days * 86400
     entries = []
+    last_color_by_service: dict[str, str] = {}
     try:
         for line in history_file.read_text().splitlines():
             entry = HistoryEntry.from_line(line)
-            if entry and entry.timestamp >= cutoff:
-                entries.append(entry)
+            if not entry:
+                continue
+            if status_changes_only:
+                if not entry.color:
+                    continue
+                prev_color = last_color_by_service.get(entry.service)
+                last_color_by_service[entry.service] = entry.color
+                if prev_color == entry.color:
+                    continue
+            if entry.timestamp < cutoff:
+                continue
+            entries.append(entry)
     except Exception as e:
         log.error("load_history %s: %s", host, e)
     return entries
