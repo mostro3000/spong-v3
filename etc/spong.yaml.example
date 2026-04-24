@@ -1,0 +1,141 @@
+# SPONG main configuration — example / template
+# Copy to spong.yaml and edit before running.
+# This file is safe to commit; spong.yaml (with real credentials) is gitignored.
+
+server:
+  host: "spong-server"        # hostname or IP of the SPONG server
+  update_port: 1998
+  query_port: 1999
+  bb_port: 1984
+  alarm_timeout: 10           # seconds, 0 to disable
+
+database:
+  path: "/usr/local/spong/var/database"
+  archive_path: "/usr/local/spong/var/archives"
+
+tmp_path: "/usr/local/spong/tmp"
+
+status_history: true          # keep full status change files
+
+logging:
+  to_file: true
+  to_syslog: false
+
+sleep:
+  default: 300
+  spong-server: 400
+  spong-client: 100
+  spong-network: 300
+
+network:
+  crit_warn_level: 1          # failures before reporting critical
+  recheck_sleep: 15           # seconds between rechecks
+  workers: 30                 # hosts checked in parallel (0 = unlimited)
+
+# Client check plugins to run
+checks: "disk diski cpu jobs logs memory sensors hddtemp uptime"
+
+# Thresholds
+thresholds:
+  disk:
+    warn:
+      ALL: 90
+      /usr: 95
+      page: 50
+    crit:
+      ALL: 95
+      /usr: 98
+      page: 80
+  disk_ignore:
+    - "cd\\d"
+    - "cdrom"
+    - ":"
+    - "proc"
+  cpu:
+    warn: 7.0
+    crit: 8.0
+  memory:
+    warn: 90
+    crit: 95
+  mailq:
+    warn: 80
+    crit: 100
+  speedtest:
+    down_warn: 10             # Mbps
+    down_crit:  5
+    up_warn:   10
+    up_crit:    5
+    ping_warn:  50            # ms
+    ping_crit: 100
+    interval: 280
+    server_id: 0              # 0 = auto-select closest server
+  iftraffic:
+    warn: 70                  # % interface utilization
+    crit: 90
+
+# Required/warned processes (client check)
+processes:
+  crit: []
+  warn: []
+
+# Log monitoring
+log_checks: []
+
+# Network check defaults
+http:
+  port: 80
+  urls:
+    DEFAULT:
+      - "http://{host}/"
+
+# External commands
+commands:
+  df: "/bin/df"
+  dfi: "/bin/df -i"
+  uptime: "/usr/bin/uptime"
+  ps: "/bin/ps ax"
+  ping: "/bin/ping -c 2 {host}"
+  traceroute: "/usr/sbin/traceroute"
+  sendmail: "/usr/sbin/sendmail -t"
+  mailq: "/usr/sbin/sendmail -bp"
+  ntpdate: "/usr/sbin/ntpdate -q"
+  dns: "/usr/bin/nslookup"
+  memcheck: "/usr/bin/free"
+
+sensor_thresholds:
+  cpu_temp_max: 65.0
+  mb_temp_max: 60.0
+  cpu_rpm_min: 0
+
+# Messaging settings
+messaging:
+  send_mode: "RED-CHANGE"     # RED | CHANGE | RED-CHANGE | NONE
+  page_mode: "YES"            # YES | NONE
+  messages_per_hour: 5
+  ident_messages_per_hour: 3
+
+# Cleanup settings
+cleanup:
+  old_service_days: 20
+  old_history_days: 30
+
+# Web interface settings
+web:
+  # Basic Auth for the monitor dashboard — leave empty to disable
+  auth_user: "admin"
+  auth_password: "changeme"
+
+  # Basic Auth for the config UI (/config/) — separate credentials
+  # Set to empty string to disable the config UI entirely
+  config_user: "config"
+  config_password: "changeme2"
+
+  general_history_days: 7     # days shown in /history
+  auto_refresh_seconds: 300   # dashboard auto-refresh interval (0 = off)
+  graph_cache_seconds: 60     # RRD graph cache TTL
+  graph_cache_entries: 512    # max cached graph entries
+  check_cooldown_seconds: 15  # minimum seconds between on-demand rechecks
+
+date_format: "%d/%m/%y"
+time_format: "%H:%M:%S"
+datetime_format: "%c"
