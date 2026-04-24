@@ -1,8 +1,8 @@
-# SPONG v3.4.1 — Network & Services Monitor
+# SPONG v3.4.2 — Network & Services Monitor
 
 **SPONG** (Simple Preventive Operations Network Guardian) is a network and services monitoring system originally written in Perl. v3 is a complete rewrite in Python 3, keeping full compatibility with the original database and configuration files.
 
-> **Features:** multi-group host matrix · RRD graphs (SmokePing-style ping) · ACK/acknowledgements · 7-language UI · dark mode · mobile-responsive UI · historical uptime % · on-demand service checks · .deb packages · migration script from Perl config
+> **Features:** multi-group host matrix · RRD graphs (SmokePing-style ping) · ACK/acknowledgements · 7-language UI · dark mode · mobile-responsive UI · historical uptime % · on-demand service checks · cached graph API · .deb packages · migration script from Perl config
 
 [![Build .deb](https://github.com/mostro3000/spong-v3/actions/workflows/build-deb.yml/badge.svg)](https://github.com/mostro3000/spong-v3/actions/workflows/build-deb.yml)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
@@ -49,10 +49,10 @@
 
 ```bash
 # 1. Descargar el .deb desde Releases
-wget https://github.com/mostro3000/spong-v3/releases/latest/download/spong-server_3.4.1-1_all.deb
+wget https://github.com/mostro3000/spong-v3/releases/latest/download/spong-server_3.4.2-1_all.deb
 
-# 2. Instalar (el postinst configura dependencias pip y activa los 4 servicios systemd)
-dpkg -i spong-server_3.4.1-1_all.deb
+# 2. Instalar (el postinst configura dependencias y activa los 4 servicios systemd)
+dpkg -i spong-server_3.4.2-1_all.deb
 
 # 3. Editar la configuración
 nano /usr/local/spong/etc/spong.yaml    # servidor, thresholds, checks
@@ -69,9 +69,11 @@ xdg-open http://localhost:8090/
 ### Cliente remoto (en otro host)
 
 ```bash
-wget https://github.com/mostro3000/spong-v3/releases/latest/download/spong-client_3.4.1-1_all.deb
-dpkg -i spong-client_3.4.1-1_all.deb   # instalación interactiva: pregunta servidor, hostname, checks
+wget https://github.com/mostro3000/spong-v3/releases/latest/download/spong-client_3.4.2-1_all.deb
+dpkg -i spong-client_3.4.2-1_all.deb   # instalación interactiva: pregunta servidor, hostname, checks
 ```
+
+> Si el asset `3.4.2-1` todavía no está publicado en GitHub Releases, construir localmente con `cd packaging && bash build-deb.sh` o crear el tag `v3.4.2` para que CI publique los `.deb`.
 
 ### Migración desde SPONG Perl (spong.conf / spong.hosts / spong.groups)
 
@@ -79,6 +81,21 @@ dpkg -i spong-client_3.4.1-1_all.deb   # instalación interactiva: pregunta serv
 cd /etc/spong/   # o donde estén los archivos viejos
 python3 /usr/local/spong/bin/spong-migrate.py --all --outdir /usr/local/spong/etc/
 ```
+
+---
+
+## Estado actual del código
+
+SPONG v3.4.2 está organizado como una aplicación Python 3 con cuatro procesos principales: servidor TCP asyncio, agente de red, agente local y UI Flask. La base de datos sigue siendo de archivos para mantener compatibilidad con SPONG Perl; los RRD se actualizan desde el servidor cuando llegan estados nuevos.
+
+El repositorio contiene el código Python en `spong/`, la UI en `web/`, wrappers ejecutables en `bin/`, configuración en `etc/`, empaquetado Debian en `packaging/` y capturas en `docs/screenshots/`. También conserva datos locales bajo `var/` y código histórico Perl en `lib/`, `cgi-bin/` y `www/`; esos árboles no son necesarios para entender la implementación Python nueva.
+
+Resumen operativo:
+- **Versión actual:** `spong.__version__ = 3.4.2`, `setup.py = 3.4.2`, paquetes `3.4.2-1`
+- **Runtime:** Python 3.10+ para instalación por `setup.py`; los paquetes Debian declaran `python3 >= 3.9`
+- **Dependencias principales:** `pyyaml`, `flask`, `werkzeug`, `rrdtool`, `fping`, `snmp`, `rpcbind`; `tinytuya` solo para plugins Tuya
+- **Persistencia:** `/usr/local/spong/var/database`, `/usr/local/spong/var/rrd`, `/usr/local/spong/var/archives`
+- **CI/CD:** GitHub Actions construye `.deb` en push/PR y publica assets cuando se empuja un tag `v*`
 
 ---
 
@@ -109,7 +126,9 @@ python3 /usr/local/spong/bin/spong-migrate.py --all --outdir /usr/local/spong/et
 ┌─────────────────────────────────────────────────────────────┐
 │                        SPONG Server                          │
 │                   (spong/server.py :1998)                    │
-│  - Recibe actualizaciones de estado via TCP                  │
+│  - Recibe updates via TCP 1998                               │
+│  - Responde queries legacy/texto via TCP 1999                │
+│  - Acepta protocolo BigBrother compatible via TCP 1984       │
 │  - Escribe en base de datos                                  │
 │  - Actualiza RRDs                                            │
 │  - Ejecuta scanner de servicios stale                        │
@@ -121,10 +140,11 @@ python3 /usr/local/spong/bin/spong-migrate.py --all --outdir /usr/local/spong/et
 │ (spong/network_      │   │  (spong/client_agent.py) │
 │  agent.py)           │   │                          │
 │                      │   │  Corre en el host local  │
-│  Chequea hosts        │   │  (s2) y ejecuta plugins  │
+│  Chequea hosts        │   │  y ejecuta plugins       │
 │  remotos via red:     │   │  locales: disk, cpu,     │
 │  ping, http, ssh,     │   │  memory, jobs, sensors,  │
-│  mysql, snmp, dns...  │   │  hddtemp, uptime, logs   │
+│  mysql, snmp, dns...  │   │  hddtemp, uptime, logs,  │
+│                      │   │  speedtest               │
 └─────────────────────┘   └──────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────┐
@@ -139,9 +159,9 @@ python3 /usr/local/spong/bin/spong-migrate.py --all --outdir /usr/local/spong/et
 **Flujo de datos:**
 1. El **Network Agent** hace ping/http/ssh/etc. a los hosts remotos
 2. El **Client Agent** ejecuta checks locales (disk, cpu, etc.) en el host donde corre
-3. Ambos envían resultados al **Server** via TCP (puerto 1998)
-4. El **Server** guarda los datos en la base de datos y actualiza los RRDs
-5. La **Interfaz Web** lee la base de datos y muestra el estado
+3. Ambos envían resultados al **Server** via TCP (`server.update_port`, default 1998)
+4. El **Server** guarda los datos en la base, dispara notificaciones si corresponde y actualiza los RRDs
+5. La **Interfaz Web** lee la base, cachea snapshots/graphs y muestra estado, historial y ACKs
 
 ---
 
@@ -149,9 +169,9 @@ python3 /usr/local/spong/bin/spong-migrate.py --all --outdir /usr/local/spong/et
 
 | Proceso | Archivo | Puerto | Descripción |
 |---------|---------|--------|-------------|
-| `spong-server` | `spong/server.py` | TCP 1998 (recepción) | Servidor central. Recibe updates, escribe DB, actualiza RRDs, escanea stale |
+| `spong-server` | `spong/server.py` | TCP 1998, 1999, 1984 | Servidor central. Recibe updates, responde queries, acepta BigBrother, escribe DB, actualiza RRDs, escanea stale |
 | `spong-network` | `spong/network_agent.py` | — | Agente de red. Chequea hosts remotos via ping, http, ssh, etc. |
-| `spong-client` | `spong/client_agent.py` | — | Agente local. Ejecuta checks en el host donde corre (s2) |
+| `spong-client` | `spong/client_agent.py` | — | Agente local. Ejecuta checks en el host definido por `hostname:` o `socket.gethostname()` |
 | `spong-web` | `web/app.py` | TCP 8090 | Interfaz web Flask |
 
 ---
@@ -220,6 +240,34 @@ systemctl restart spong-network   # después de editar plugins de red o rrd.py..
 
 La **interfaz web** carga la configuración al iniciar. Reiniciar `spong-web` después de cambios en `spong.yaml`, `hosts.yaml` o `groups.yaml`.
 
+### Ejecución local / diagnóstico
+
+Los wrappers en `bin/` cargan el código desde `/usr/local/spong` y aceptan `--config` para usar otro `spong.yaml`.
+
+```bash
+# Servidor en foreground con logs DEBUG
+/usr/local/spong/bin/spong-server --nodaemonize --debug
+
+# Un ciclo de checks remotos y salida
+/usr/local/spong/bin/spong-network --nosleep --debug
+
+# Un ciclo de checks locales y salida
+/usr/local/spong/bin/spong-client --nosleep --debug
+
+# Enviar un estado manual
+/usr/local/spong/bin/spong-status --host mi-host --service prueba \
+  --color yellow --summary "prueba manual" --message "detalle opcional"
+
+# Listar y crear ACKs desde CLI
+/usr/local/spong/bin/spong-ack --list
+/usr/local/spong/bin/spong-ack mi-host "http|https" +4h --contact admin --message "mantenimiento"
+
+# Limpieza/archivo manual de base de datos
+/usr/local/spong/bin/spong-cleanup --old-service 20 --old-history 30
+```
+
+`spong-network` y `spong-client` soportan `--restart` y `--kill`: envían `SIGHUP` o `SIGQUIT` al PID guardado en `tmp_path`.
+
 ---
 
 ## 4. Configuración
@@ -236,6 +284,9 @@ server:
   bb_port: 1984       # puerto BigBrother (legacy)
   alarm_timeout: 10   # timeout en segundos para alarmas
 
+hostname: "s2"         # opcional: nombre que usa spong-client; si falta usa socket.gethostname()
+tmp_path: "/usr/local/spong/tmp"
+
 database:
   path: "/usr/local/spong/var/database"
   archive_path: "/usr/local/spong/var/archives"
@@ -248,9 +299,11 @@ sleep:
 network:
   crit_warn_level: 1    # reintentos antes de reportar crítico
   recheck_sleep: 15     # segundos entre reintentos
+  workers: 30           # hilos máximos dentro de cada lote
+  batch_size: 20        # hosts por lote de chequeo
 
 # Plugins del cliente a ejecutar
-checks: "disk diski cpu jobs logs memory sensors hddtemp uptime"
+checks: "disk diski cpu jobs logs memory sensors hddtemp uptime speedtest"
 
 thresholds:
   disk:
@@ -271,6 +324,15 @@ thresholds:
   iftraffic:
     warn: 70        # % de utilizacion por interfaz
     crit: 90
+  speedtest:
+    down_warn: 10   # Mbps
+    down_crit: 5
+    up_warn: 10
+    up_crit: 5
+    ping_warn: 50   # ms
+    ping_crit: 100
+    interval: 3600  # segundos mínimos entre mediciones
+    server_id: null # opcional: ID fijo de servidor Ookla
 
 # Procesos que el check "jobs" debe verificar
 processes:
@@ -287,11 +349,17 @@ web:
   auth_user: "spong"        # Basic Auth (vacío = sin auth)
   auth_password: "spong123"
   general_history_days: 7   # días a mostrar en /history
+  auto_refresh_seconds: 300 # refresh automático en vistas generales; 0 deshabilita
+  graph_cache_seconds: 60   # TTL de caché para /rrd/*.png
+  graph_cache_entries: 512  # máximo de entradas de caché de gráficos
+  check_cooldown_seconds: 15 # rate limit de checks on-demand por host/servicio
 
 cleanup:
   old_service_days: 20   # días hasta borrar servicios sin datos
   old_history_days: 30   # días de historial a conservar
 ```
+
+Las configuraciones migradas desde SPONG Perl pueden conservar claves legacy (`web.frames`, `web.gifs_url`, `commands.*`, etc.). La implementación Python usa solo las claves documentadas o consultadas por los plugins actuales.
 
 ### 4.2 `hosts.yaml` — Definición de hosts
 
@@ -317,7 +385,7 @@ hosts:
 - Los servicios se listan separados por espacios
 - El `:` después de un servicio significa **stop_after**: si ese servicio falla, no se chequean los siguientes. Ejemplo: `ping: http ssh` — si ping falla, no se intenta http ni ssh
 - El orden importa: determina el orden de visualización en la interfaz web
-- Los servicios del **cliente local** (disk, cpu, memory, jobs, etc.) deben estar en la lista del host donde corre `spong-client` (actualmente `s2`)
+- Los servicios del **cliente local** (`disk`, `cpu`, `memory`, `jobs`, `speedtest`, etc.) deben estar en la lista del host que reporta `spong-client`
 
 **Configuración opcional para `iftraffic`:**
 
@@ -355,7 +423,7 @@ Los grupos se muestran en la interfaz web en el orden en que aparecen en este ar
 
 ## 5. Plugins del cliente (checks locales)
 
-El `spong-client` ejecuta estos plugins en el host local (`s2`). Se configuran en `spong.yaml` → `checks`.
+El `spong-client` ejecuta estos plugins en el host local. El nombre reportado sale de `hostname:` en `spong.yaml`; si falta, usa `socket.gethostname()`. Los checks se configuran en `spong.yaml` → `checks`.
 
 | Plugin | Servicio | Qué mide | Umbrales en spong.yaml |
 |--------|----------|----------|------------------------|
@@ -368,8 +436,10 @@ El `spong-client` ejecuta estos plugins en el host local (`s2`). Se configuran e
 | `hddtemp.py` | `hddtemp` | Temperatura de discos (`hddtemp`) | `thresholds.hddtemp.warn/crit` |
 | `uptime.py` | `uptime` | Uptime del sistema | — |
 | `logs.py` | `logs` | Patrones en archivos de log | `log_checks[]` en spong.yaml |
+| `speedtest.py` | `speedtest` | Bajada/subida/ping/jitter via Ookla CLI | `thresholds.speedtest.*` |
+| `processes.py` | `jobs` | Alias legacy del check de procesos | `processes.crit/warn` |
 
-**Agregar un host al monitoreo local:** agregar los servicios correspondientes en `hosts.yaml` para ese host.
+Para que la UI muestre los checks locales, los mismos servicios deben figurar también en `hosts.yaml` para ese hostname.
 
 ---
 
@@ -390,23 +460,41 @@ El `spong-network` ejecuta estos plugins contra los hosts remotos configurados e
 | `ftp.py` | `ftp` | Conexión TCP puerto 21 |
 | `smtp.py` | `smtp` | Conexión SMTP puerto 25 |
 | `imap.py` | `imap` | Conexión IMAP puerto 143 |
+| `pop.py` | `pop` | Conexión POP3 puerto 110 |
+| `poppassd.py` | `poppassd` | Conexión TCP al servicio poppassd |
+| `spamd.py` | `spamd` | Conexión al servicio spamd |
+| `proxy.py` / `proxy2.py` | `proxy`, `proxy2` | Disponibilidad de proxy HTTP |
+| `proxy_google.py` | `proxy_google` | Proxy HTTP contra `www.google.com/generate_204` |
 | `ntp.py` | `ntp` | Servidor NTP |
 | `temp.py` | `temp` | Temperatura: lee JSON local en `/var/www/html/` o via SSH JSON (ej: `riego-patio`) |
 | `hum.py` | `hum` | Humedad: lee JSON local o via SSH JSON |
 | `co2.py` | `co2` | Calidad del aire via SSH JSON: eCO2 (ppm), TVOC (ppb), AQI (0–5) |
+| `presence.py` | `presence` | Sensor Tuya mmWave: presencia, distancia y luminosidad |
+| `viento.py` | `viento` | Velocidad de viento desde JSON local |
+| `presion.py` | `presion` | Presión atmosférica desde JSON local |
+| `rafaga.py` | `rafaga` | Ráfaga de viento desde JSON local |
 | `rcpu.py` | `rcpu` | CPU de router MikroTik via SNMP (`hrProcessorLoad` + OID MikroTik) |
 | `rtemp.py` | `rtemp` | Temperatura de router MikroTik via SNMP (placa y CPU en °C) |
 | `scpu.py` | `scpu` | CPU de switch TP-Link JetStream via SNMP |
+| `scpu1m.py` / `scpu5s.py` | `scpu1m`, `scpu5s` | CPU de switch en ventanas 1 min / 5 seg |
+| `suptime.py` | `suptime` | Uptime SNMP (`sysUpTime`) para switches/routers |
+| `wuptime.py` | `wuptime` | Uptime vía endpoint HTTP `/uptime` |
+| `wassoc.py` | `wassoc` | Clientes WiFi asociados via SNMP |
+| `mem.py` / `memolt.py` | `mem`, `memolt` | Memoria % via SNMP en TP-Link o RouterOS (`hrStorage`) |
 | `iftraffic.py` | `iftraffic` | Tráfico y utilización por interfaz via SNMP IF-MIB |
 | `macs.py` | `macs` | Cantidad de MACs aprendidas via SNMP walk (`dot1dTpFdbTable`) |
 | `termica.py` | `termica` | Llaves térmicas Tuya: tensión, corriente, potencia, energía, corriente de fuga |
 | `rtsp.py` | `rtsp` | Disponibilidad de cámara: prueba RTSP/554 con OPTIONS estándar, fallback Tapo/2020 |
+| `camara1.py` ... `camara8.py` | `camara1` ... `camara8` | Cámaras HTTP con endpoint `/cN.txt` |
+| `dvrcam1.py` ... `dvrcam16.py` | `dvrcam1` ... `dvrcam16` | Canales DVR leídos desde dump externo `/tmp/<ip>` |
 | `soil.py` | `soil` | Sensores de suelo via SSH JSON: humedad de pasto/canteros, lluvia, válvulas |
 | `ruptime.py` | `ruptime` | Uptime via SSH para hosts sin spong-client (caché 55s) |
 | `ups.py` | `ups` | UPS APC via SNMP: tensión entrada/salida, frecuencia, temperatura batería/exterior |
+| `volt_in.py` / `volt_out.py` | `volt_in`, `volt_out` | Métricas individuales de tensión UPS APC via SNMP |
+| `freq_in.py` / `freq_out.py` | `freq_in`, `freq_out` | Métricas individuales de frecuencia UPS APC via SNMP |
+| `temp_bat.py` / `temp_ext.py` | `temp_bat`, `temp_ext` | Temperaturas de batería/exterior UPS APC via SNMP |
 | `interfaces.py` | `interfaces` | Interfaces de red caídas via SNMP (admin up / oper down) |
 | `nfs.py` | `nfs` | Disponibilidad NFS via `rpcinfo -p` (nfsd + mountd) |
-| `mem.py` | `mem` | Memoria % via SNMP en TP-Link o RouterOS (`hrStorage`), alias corto de `memolt` |
 
 **Detalles de plugins SNMP:**
 
@@ -474,6 +562,23 @@ python3 -m tinytuya scan
 
 El plugin incluye un caché interno de 55 s para evitar saturar los dispositivos cuando SPONG consulta múltiples hosts en el mismo ciclo. La configuración se recarga automáticamente si el archivo cambia (comparación de mtime).
 
+**Sensores Tuya de presencia (`presence.py`):**
+
+Configurar `/usr/local/spong/etc/sensors.yaml` a partir de `sensors.yaml.example`. Cada clave bajo `presence:` debe coincidir con un hostname de `hosts.yaml`; el plugin lee presencia, distancia y lux por protocolo local Tuya, conserva el último lux conocido cuando el dispositivo omite ese DPS y usa caché de 55 s.
+
+```yaml
+presence:
+  sensor-cocina:
+    id: "DEVICE_ID"
+    ip: "192.168.0.x"
+    local_key: "LOCAL_KEY_16_CHARS"
+    version: 3.5
+```
+
+**Cámaras legacy (`camaraN` / `dvrcamN`):**
+
+`camara1` ... `camara8` consultan `http://<ip>/cN.txt` y esperan al menos una grabación reportada. `dvrcam1` ... `dvrcam16` leen un dump generado externamente en `/tmp/<ip>` y buscan el estado `signal` del canal.
+
 **Patrón host virtual:** Un mismo dispositivo físico puede aparecer en dos grupos con distintos roles. Por ejemplo, `riegopi` (IP 192.168.0.78) aparece en el grupo **Servers** con servicios `ping: ssh`, y `riego-patio` (misma IP) aparece en **Clima** con servicios `temp hum co2`. Esto permite separar los datos del sistema operativo del host de los datos de sensores ambientales.
 
 **Stop_after (`:`):** Si `ping` falla en un host con `ping: http ssh`, el agente omite http y ssh automáticamente para ese ciclo.
@@ -520,9 +625,12 @@ El plugin incluye un caché interno de 55 s para evitar saturar los dispositivos
 | `/problems` | Lista de todos los servicios con problemas (rojo, amarillo, violeta) ordenados por severidad. Incluye botón ACK directo. |
 | `/acks` | Lista de reconocimientos activos con estado actual de los servicios reconocidos. |
 | `/ack` | Formulario para crear un nuevo reconocimiento. |
+| `/uptime` | Disponibilidad histórica por grupo/host/servicio para 1, 7 y 30 días. |
 | `/api/status` | JSON con el estado de todos los hosts y servicios. |
 | `/api/problems` | JSON con solo los servicios con problemas. |
-| `/rrd/<hostname>/<servicio>.png` | Imagen PNG del gráfico RRD. Parámetros: `period` (1h/24h/7d/30d/1y), `w`, `h`. |
+| `/api/service/<hostname>/<servicio>` | JSON de un servicio concreto. |
+| `/api/check/<hostname>/<servicio>` | POST para ejecutar un check de red on-demand; si no hay plugin devuelve estado de solo lectura. |
+| `/rrd/<hostname>/<servicio>.png` | Imagen PNG del gráfico RRD. Parámetros: `period` (1h/24h/7d/30d/1y/compare para speedtest), `w`, `h`, `mounts` (filtered/full). |
 
 ### Proxy Apache (`/spong`)
 
@@ -540,16 +648,18 @@ Módulos Apache requeridos: `proxy`, `proxy_http`, `headers` (habilitados con `a
 
 ### Características visuales
 
-- **Auto-refresh:** cada 120 segundos con countdown visible en el header
+- **Auto-refresh:** configurable con `web.auto_refresh_seconds` (default 300 s; `0` deshabilita) con countdown visible en el header
 - **Reloj en vivo:** actualizado cada segundo
 - **Tooltips:** al pasar el mouse sobre un círculo de la matriz muestra el resumen del servicio
 - **Acceso rápido a ACK desde la matriz:** en `/`, si un servicio está en **rojo**, al hacer clic en el círculo se abre directamente el formulario de **Reconocer** con `host` y `service` precargados
+- **Checks on-demand:** clic en el badge de estado ejecuta el plugin de red en tiempo real con timeout de 35 s y cooldown configurable por `web.check_cooldown_seconds`
 - **Gráficos toggle:** en la vista de host, el botón 📊 muestra/oculta los gráficos de cada servicio
+- **Caché de gráficos:** `/rrd/...png` usa caché en memoria con `web.graph_cache_seconds` y `web.graph_cache_entries`
 - **Lightbox:** clic en cualquier gráfico lo amplía a 1200×300 px sobre fondo oscuro. Cerrar con clic o `Escape`
 - **Sidebar:** muestra grupos con problemas (rojos), ordenados según `groups.yaml`
 - **Formulario ACK con memoria:** el contacto, duración y mensaje del último reconocimiento se recuerdan via `localStorage` y se pre-rellenan en el próximo
 - **Historial simplificado por host:** en `/host/<hostname>` la tabla de historial muestra solo **cambios de estado** de los servicios (transiciones de color), no cada corrida repetida ni los ACKs
-- **Historial general:** `/history` muestra los cambios de estado de todos los hosts y servicios en orden cronológico de ocurrencia. El rango por default es **7 días** y se configura con `web.general_history_days`
+- **Historial general:** `/history` muestra los cambios de estado de todos los hosts y servicios en orden cronológico de ocurrencia. Soporta filtros multi-selección por servicio y color; el rango por default es **7 días** y se configura con `web.general_history_days`
 
 ### Columnas de servicios en la matriz
 
@@ -581,29 +691,44 @@ Los archivos RRD se guardan en `/usr/local/spong/var/rrd/<hostname>/`.
 | `ftp` | `ftp-time.rrd` | Tiempo de respuesta FTP/21 (segundos) |
 | `smtp` | `smtp-time.rrd` | Tiempo de respuesta SMTP/25 (segundos) |
 | `imap` | `imap-time.rrd` | Tiempo de respuesta IMAP/143 (segundos) |
+| `pop` | `pop-time.rrd` | Tiempo de respuesta POP3/110 (segundos) |
+| `poppassd` | `poppassd-time.rrd` | Tiempo de respuesta poppassd (segundos) |
+| `spamd` | `spamd-time.rrd` | Tiempo de respuesta spamd (segundos) |
+| `proxy`, `proxy2`, `proxy_google` | `<svc>-time.rrd` | Tiempo de respuesta de proxy HTTP (segundos) |
 | `ntp` | `ntp-time.rrd` | Tiempo de respuesta NTP (segundos) |
+| `dns` | `dns-time.rrd` | Tiempo de respuesta DNS (segundos) |
+| `rtsp` | `rtsp-time.rrd` | Tiempo de respuesta RTSP (segundos) |
 | `rcpu` | `rcpu.rrd` | % CPU router (SNMP) |
 | `scpu` | `scpu.rrd` | % CPU switch (SNMP) |
+| `scpu1m`, `scpu5s` | `<svc>.rrd` | % CPU switch en ventanas 1 min / 5 seg |
+| `mem`, `memolt` | `<svc>.rrd` | % memoria SNMP |
 | `iftraffic` | `iftraffic.rrd` | Mbps totales entrada/salida + % de utilización máxima |
 | `rtemp` | `rtemp.rrd` | Temperatura router en °C (placa y CPU) |
 | `macs` | `macs.rrd` | Cantidad de MACs aprendidas |
+| `wassoc` | `wassoc.rrd` | Cantidad de clientes WiFi asociados |
 | `temp` | `temp.rrd` | Temperatura sensor IoT (°C) |
 | `hum` | `hum.rrd` | Humedad sensor IoT (%) |
 | `viento` | `viento.rrd` | Velocidad del viento (km/h) |
 | `presion` | `presion.rrd` | Presión atmosférica (hPa) |
 | `rafaga` | `rafaga.rrd` | Ráfaga de viento (km/h) |
 | `co2` | `co2.rrd` | Calidad del aire: eCO2 (ppm), TVOC (ppb), AQI (3 DS) |
+| `presence` | `presence.rrd` | Estado de presencia, distancia y lux |
+| `speedtest` | `speedtest.rrd` | Bajada/subida (Mbps), ping y jitter (ms) |
+| `ups` | `ups.rrd` | UPS APC: tensión, frecuencia y temperaturas |
 | `termica` | `termica.rrd` | Tensión (V), corriente (A), potencia (W), energía (kWh), fuga (mA), temp interna (°C) |
 | `soil` | `soil.rrd` | Humedad de suelo: 8 DS (lluvia, válvulas, 3 pasto, 3 cantero) |
+| `uptime` | `uptime.rrd` | Días de uptime reportados por `spong-client` |
 | `ruptime` | `uptime.rrd` | Días de uptime (reutiliza el RRD y gráfico de `uptime`) |
 
 Los RRDs se actualizan cada vez que el servidor recibe una actualización de estado. Si el archivo RRD no existe, se crea automáticamente al primer dato.
+
+**`disk` / `diski`** crean un RRD por filesystem usando un name-map estable. El endpoint `/rrd/<host>/disk.png` o `/diski.png` genera un gráfico combinado de particiones; `mounts=filtered` oculta filesystems ruidosos (`/dev`, `/run`, etc.) y `mounts=full` muestra todos.
 
 **`iftraffic`** usa un gráfico de 2 paneles:
 - tráfico total de entrada/salida en Mbps
 - utilización máxima observada entre las interfaces monitoreadas (%)
 
-**Períodos disponibles:** 1h, 24h, 7d, 30d, 1y
+**Períodos disponibles:** 1h, 24h, 7d, 30d, 1y. `speedtest` agrega `period=compare` para comparar semana actual, semana anterior y hace 1 mes.
 
 ### Gráfico de ping estilo SmokePing
 
@@ -812,18 +937,21 @@ Los paquetes `.deb` permiten instalar SPONG en cualquier sistema Debian/Ubuntu s
 cd /usr/local/spong/packaging
 bash build-deb.sh
 # Genera:
-#   dist/spong-server_3.4.1-1_all.deb  (~53 KB)
-#   dist/spong-client_3.4.1-1_all.deb  (~17 KB)
+#   dist/spong-server_3.4.2-1_all.deb
+#   dist/spong-client_3.4.2-1_all.deb
 ```
 
 ### Instalar el servidor
 
 ```bash
-dpkg -i spong-server_3.4.1-1_all.deb
-# Dependencias: python3, python3-pip, rrdtool, fping, iputils-ping
+dpkg -i spong-server_3.4.2-1_all.deb
+# Depends: python3, python3-flask, python3-werkzeug, python3-yaml,
+#          rrdtool, fping, iputils-ping, snmp, rpcbind
+# Recommends: apache2
 # El postinst:
 #   - Crea directorios var/database, var/rrd, var/archives, tmp/
-#   - pip install flask werkzeug
+#   - Instala dependencias de sistema faltantes con apt-get si puede
+#   - Intenta instalar tinytuya con pip3 para plugins Tuya
 #   - Copia *.yaml.example → *.yaml si no existen
 #   - systemctl enable/start: spong-server, spong-network, spong-client, spong-web
 #   - Opcionalmente configura Apache ProxyPass /spong/
@@ -832,8 +960,9 @@ dpkg -i spong-server_3.4.1-1_all.deb
 ### Instalar solo el agente cliente
 
 ```bash
-dpkg -i spong-client_3.4.1-1_all.deb
-# Dependencias: python3
+dpkg -i spong-client_3.4.2-1_all.deb
+# Depends: python3
+# Recommends: smartmontools, lm-sensors
 # El postinst es interactivo — pregunta:
 #   - Hostname/IP del servidor SPONG
 #   - Nombre de este host
@@ -884,13 +1013,13 @@ El archivo `.github/workflows/build-deb.yml` automatiza la construcción de los 
 |--------|----------|
 | Push a `main` | Construye los `.deb` y los sube como artefacto del workflow (disponibles 30 días) |
 | Pull Request a `main` | Verifica que el build no se rompe |
-| Tag `v*` (ej: `v3.2`) | Build + crea un **GitHub Release** con los `.deb` adjuntos |
+| Tag `v*` (ej: `v3.4.2`) | Build + crea un **GitHub Release** con los `.deb` adjuntos |
 
 ### Crear una release oficial
 
 ```bash
-git tag v3.1
-git push origin v3.1
+git tag v3.4.2
+git push origin v3.4.2
 # GitHub Actions construye y publica la release automáticamente
 ```
 
@@ -901,6 +1030,23 @@ En GitHub → pestaña **Actions** → seleccionar el workflow → sección **Ar
 ---
 
 ## 16. Historial de cambios
+
+### v3.4.2 — 2026-04
+
+**Documentación y release**
+- README actualizado contra el código actual: estructura del repo, ejecución local, CLI, APIs web, cachés, configuración y plugins reales
+- Metadata de versión sincronizada: `spong.__version__`, `setup.py`, `build-deb.sh` y controles Debian en `3.4.2` / `3.4.2-1`
+
+**Web**
+- Documentadas las opciones `web.auto_refresh_seconds`, `web.graph_cache_seconds`, `web.graph_cache_entries` y `web.check_cooldown_seconds`
+- `/api/service/<host>/<service>` y `/api/check/<host>/<service>` quedan documentados para checks on-demand y lectura puntual de estado
+- `/history` documentado con filtros multi-selección por servicio y color
+
+**Plugins y RRD**
+- Inventario principal actualizado con plugins de proxy, POP/poppassd/spamd, cámaras legacy, DVR, presencia Tuya, uptime HTTP/SNMP, AP WiFi y métricas UPS individuales
+- Gráficos RRD actualizados en la documentación para `speedtest`, `presence`, `wassoc`, `scpu1m/scpu5s`, `mem/memolt`, `rtsp`, `dns`, `pop`, `proxy*`, `spamd`, `ups`, `uptime` y `disk/diski` combinados
+
+---
 
 ### v3.4.1 — 2026-04
 
