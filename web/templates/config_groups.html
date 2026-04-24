@@ -1,0 +1,58 @@
+{% extends "config_base.html" %}
+{% block title %}Grupos — SPONG Config{% endblock %}
+{% block content %}
+<div class="list-header">
+  <h1 style="margin:0;">Grupos <span style="font-size:14px; color:var(--text-m); font-weight:400;">({{ groups|length }})</span></h1>
+  <a href="{{ url_for('config_admin.group_edit') }}" class="btn btn-primary">+ Agregar grupo</a>
+</div>
+
+<div class="card" style="padding:0; overflow:hidden;">
+  <table>
+    <thead>
+      <tr>
+        <th>Clave</th>
+        <th>Nombre</th>
+        <th>Miembros</th>
+        <th>Opciones</th>
+        <th style="width:120px;"></th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for key, group in groups.items() %}
+      <tr>
+        <td><span class="mono">{{ key }}</span></td>
+        <td style="font-weight:500; color:var(--text-h);">{{ group.get('name', key) }}</td>
+        <td>
+          <span style="color:var(--text-m);">{{ (group.get('members') or []) | length }} hosts</span>
+          <div style="margin-top:4px; display:flex; flex-wrap:wrap; gap:4px;">
+            {% for m in (group.get('members') or [])[:6] %}
+              <span class="tag">{{ m }}</span>
+            {% endfor %}
+            {% if (group.get('members') or []) | length > 6 %}
+              <span style="color:var(--text-m); font-size:11px;">+{{ (group.get('members')|length) - 6 }} más</span>
+            {% endif %}
+          </div>
+        </td>
+        <td style="font-size:12px; color:var(--text-m);">
+          {% if group.get('compress') %}<span class="tag">compacto</span>{% endif %}
+          {% if not group.get('display', True) %}<span class="tag">oculto</span>{% endif %}
+        </td>
+        <td>
+          <div class="actions">
+            <a href="{{ url_for('config_admin.group_edit', group_key=key) }}" class="btn btn-secondary btn-sm">Editar</a>
+            <form method="post" action="{{ url_for('config_admin.group_delete', group_key=key) }}"
+                  onsubmit="return confirm('¿Eliminar el grupo «{{ group.get('name', key) }}»?');" style="display:inline;">
+              <button type="submit" class="btn btn-danger btn-sm">Borrar</button>
+            </form>
+          </div>
+        </td>
+      </tr>
+    {% else %}
+      <tr><td colspan="5" style="text-align:center; color:var(--text-m); padding:30px;">
+        No hay grupos configurados. <a href="{{ url_for('config_admin.group_edit') }}" style="color:var(--link);">Agregar el primero</a>.
+      </td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

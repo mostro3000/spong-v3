@@ -32,6 +32,9 @@ config.load_all()
 
 app = Flask(__name__, template_folder="templates")
 
+from config_admin import config_bp
+app.register_blueprint(config_bp)
+
 # Support reverse-proxy with path prefix (e.g. Apache ProxyPass /spong → localhost:8090)
 # Apache must set:  RequestHeader set X-Forwarded-Prefix /spong
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -155,6 +158,8 @@ def _service_status_payload(hostname, service, svc=None):
     color = svc.color
     if color not in ("green", "blue") and any(ack.covers(service) for ack in acks):
         color = "blue"
+    if color in ("red", "yellow") and config.is_suppressed(hostname, service):
+        color = "clear"
     return {
         "color": color,
         "summary": svc.summary,
@@ -214,6 +219,7 @@ def _build_dashboard_snapshot():
             services = database.load_all_services(host)
             acks = database.load_acks(host)
             _apply_ack_colors(services, acks)
+            _apply_schedule_suppression(host, services)
             host_color = worst_color([
                 "green" if s.color == "blue" else s.color
                 for s in services.values()
@@ -301,6 +307,9 @@ def _check_auth(username, password):
 
 @app.before_request
 def require_auth():
+    # /config/ tiene su propio auth gestionado por el Blueprint
+    if request.path.startswith('/config'):
+        return
     expected_user = config.get("web.auth_user", "")
     if not expected_user:
         return  # auth deshabilitada
@@ -644,12 +653,20 @@ def _apply_ack_colors(services: dict, acks: list) -> None:
                 svc.color = "blue"
 
 
+def _apply_schedule_suppression(hostname: str, services: dict) -> None:
+    """Suppress red/yellow to clear when inside a configured time window, in-place."""
+    for svc_name, svc in services.items():
+        if svc.color in ("red", "yellow") and config.is_suppressed(hostname, svc_name):
+            svc.color = "clear"
+
+
 @app.route("/host/<hostname>")
 def host_detail(hostname):
     host_cfg = config.get_host(hostname)
     services = database.load_all_services(hostname)
     acks = database.load_acks(hostname)
     _apply_ack_colors(services, acks)
+    _apply_schedule_suppression(hostname, services)
     history = database.load_history(hostname, max_age_days=7, status_changes_only=True)
     # Order services by hosts.yaml order, then any extras alphabetically
     cfg_order = [s for s, _ in config.host_services(hostname)]
@@ -694,6 +711,7 @@ def problems():
         services = database.load_all_services(hostname)
         acks = database.load_acks(hostname)
         _apply_ack_colors(services, acks)
+        _apply_schedule_suppression(hostname, services)
         for svc_name, svc in sorted(services.items()):
             if svc.color in ("red", "yellow", "purple"):
                 issues.append({

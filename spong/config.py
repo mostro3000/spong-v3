@@ -161,3 +161,45 @@ def host_ips(hostname: str) -> list[str]:
     if not host:
         return [hostname]
     return host.get("ip_addr", [hostname])
+
+
+def get_service_schedules(hostname: str, service: str) -> list[dict]:
+    host = get_host(hostname)
+    if not host:
+        return []
+    return host.get("schedules", {}).get(service, [])
+
+
+def is_suppressed(hostname: str, service: str, ts: float | None = None) -> bool:
+    """Return True if the service is in a configured suppression window.
+
+    Schedule format (in hosts.yaml under host → schedules → service):
+      - days: "1-5"   # 1=lunes … 7=domingo; rango o lista "1,2,3"
+        from: "07:30"
+        to:   "16:00"
+    """
+    import time as _time
+    schedules = get_service_schedules(hostname, service)
+    if not schedules:
+        return False
+    lt = _time.localtime(ts or _time.time())
+    weekday = lt.tm_wday + 1          # tm_wday: 0=lun → 1-based: 1=lun, 7=dom
+    now_min = lt.tm_hour * 60 + lt.tm_min
+
+    for sched in schedules:
+        days_str = str(sched.get("days", "1-7")).strip()
+        if "-" in days_str:
+            lo, hi = days_str.split("-", 1)
+            in_days = int(lo) <= weekday <= int(hi)
+        elif "," in days_str:
+            in_days = weekday in {int(d) for d in days_str.split(",")}
+        else:
+            in_days = weekday == int(days_str)
+        if not in_days:
+            continue
+
+        from_h, from_m = map(int, sched.get("from", "00:00").split(":"))
+        to_h,   to_m   = map(int, sched.get("to",   "23:59").split(":"))
+        if (from_h * 60 + from_m) <= now_min <= (to_h * 60 + to_m):
+            return True
+    return False

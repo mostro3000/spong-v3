@@ -1,8 +1,8 @@
-# SPONG v3.4.2 — Network & Services Monitor
+# SPONG v3.5.0 — Network & Services Monitor
 
 **SPONG** (Simple Preventive Operations Network Guardian) is a network and services monitoring system originally written in Perl. v3 is a complete rewrite in Python 3, keeping full compatibility with the original database and configuration files.
 
-> **Features:** multi-group host matrix · RRD graphs (SmokePing-style ping) · ACK/acknowledgements · 7-language UI · dark mode · mobile-responsive UI · historical uptime % · on-demand service checks · cached graph API · .deb packages · migration script from Perl config
+> **Features:** multi-group host matrix · RRD graphs (SmokePing-style ping) · ACK/acknowledgements · 7-language UI · dark mode · mobile-responsive UI · historical uptime % · on-demand service checks · cached graph API · .deb packages · migration script from Perl config · web config UI · alert schedule suppression
 
 [![Build .deb](https://github.com/mostro3000/spong-v3/actions/workflows/build-deb.yml/badge.svg)](https://github.com/mostro3000/spong-v3/actions/workflows/build-deb.yml)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
@@ -49,10 +49,10 @@
 
 ```bash
 # 1. Descargar el .deb desde Releases
-wget https://github.com/mostro3000/spong-v3/releases/latest/download/spong-server_3.4.2-1_all.deb
+wget https://github.com/mostro3000/spong-v3/releases/latest/download/spong-server_3.5.0-1_all.deb
 
 # 2. Instalar (el postinst configura dependencias y activa los 4 servicios systemd)
-dpkg -i spong-server_3.4.2-1_all.deb
+dpkg -i spong-server_3.5.0-1_all.deb
 
 # 3. Editar la configuración
 nano /usr/local/spong/etc/spong.yaml    # servidor, thresholds, checks
@@ -69,8 +69,8 @@ xdg-open http://localhost:8090/
 ### Cliente remoto (en otro host)
 
 ```bash
-wget https://github.com/mostro3000/spong-v3/releases/latest/download/spong-client_3.4.2-1_all.deb
-dpkg -i spong-client_3.4.2-1_all.deb   # instalación interactiva: pregunta servidor, hostname, checks
+wget https://github.com/mostro3000/spong-v3/releases/latest/download/spong-client_3.5.0-1_all.deb
+dpkg -i spong-client_3.5.0-1_all.deb   # instalación interactiva: pregunta servidor, hostname, checks
 ```
 
 > Si el asset `3.4.2-1` todavía no está publicado en GitHub Releases, construir localmente con `cd packaging && bash build-deb.sh` o crear el tag `v3.4.2` para que CI publique los `.deb`.
@@ -91,7 +91,7 @@ SPONG v3.4.2 está organizado como una aplicación Python 3 con cuatro procesos 
 El repositorio contiene el código Python en `spong/`, la UI en `web/`, wrappers ejecutables en `bin/`, configuración en `etc/`, empaquetado Debian en `packaging/` y capturas en `docs/screenshots/`. También conserva datos locales bajo `var/` y código histórico Perl en `lib/`, `cgi-bin/` y `www/`; esos árboles no son necesarios para entender la implementación Python nueva.
 
 Resumen operativo:
-- **Versión actual:** `spong.__version__ = 3.4.2`, `setup.py = 3.4.2`, paquetes `3.4.2-1`
+- **Versión actual:** `spong.__version__ = 3.5.0`, `setup.py = 3.5.0`, paquetes `3.5.0-1`
 - **Runtime:** Python 3.10+ para instalación por `setup.py`; los paquetes Debian declaran `python3 >= 3.9`
 - **Dependencias principales:** `pyyaml`, `flask`, `werkzeug`, `rrdtool`, `fping`, `snmp`, `rpcbind`; `tinytuya` solo para plugins Tuya
 - **Persistencia:** `/usr/local/spong/var/database`, `/usr/local/spong/var/rrd`, `/usr/local/spong/var/archives`
@@ -937,14 +937,14 @@ Los paquetes `.deb` permiten instalar SPONG en cualquier sistema Debian/Ubuntu s
 cd /usr/local/spong/packaging
 bash build-deb.sh
 # Genera:
-#   dist/spong-server_3.4.2-1_all.deb
-#   dist/spong-client_3.4.2-1_all.deb
+#   dist/spong-server_3.5.0-1_all.deb
+#   dist/spong-client_3.5.0-1_all.deb
 ```
 
 ### Instalar el servidor
 
 ```bash
-dpkg -i spong-server_3.4.2-1_all.deb
+dpkg -i spong-server_3.5.0-1_all.deb
 # Depends: python3, python3-flask, python3-werkzeug, python3-yaml,
 #          rrdtool, fping, iputils-ping, snmp, rpcbind
 # Recommends: apache2
@@ -960,7 +960,7 @@ dpkg -i spong-server_3.4.2-1_all.deb
 ### Instalar solo el agente cliente
 
 ```bash
-dpkg -i spong-client_3.4.2-1_all.deb
+dpkg -i spong-client_3.5.0-1_all.deb
 # Depends: python3
 # Recommends: smartmontools, lm-sensors
 # El postinst es interactivo — pregunta:
@@ -1018,8 +1018,8 @@ El archivo `.github/workflows/build-deb.yml` automatiza la construcción de los 
 ### Crear una release oficial
 
 ```bash
-git tag v3.4.2
-git push origin v3.4.2
+git tag v3.5.0
+git push origin v3.5.0
 # GitHub Actions construye y publica la release automáticamente
 ```
 
@@ -1030,6 +1030,35 @@ En GitHub → pestaña **Actions** → seleccionar el workflow → sección **Ar
 ---
 
 ## 16. Historial de cambios
+
+### v3.5.0 — 2026-04
+
+**Feat: panel de configuración web (`/config/`)**
+- Nueva UI de administración accesible en `/config/` con credenciales separadas (`web.config_user` / `web.config_password` en `spong.yaml`)
+- Página de hosts: listar, agregar, editar y eliminar hosts con formulario guiado (nombre, IPs, contacto, servicios por categoría, horarios de supresión)
+- Página de grupos: listar, agregar, editar y eliminar grupos; selector de miembros con búsqueda en tiempo real
+- Opciones por grupo: nombre para mostrar, descripción, vista compacta, visibilidad en dashboard
+- Guarda cambios en `hosts.yaml` y `groups.yaml` de forma atómica (write → rename) y recarga la config en memoria sin reiniciar
+- Blueprint Flask en `web/config_admin.py`; no requiere dependencias externas
+
+**Feat: supresión de alertas por horario**
+- Nueva clave `schedules` por servicio dentro de cada host en `hosts.yaml`
+- Formato: lista de ventanas `{days: "1-5", from: "HH:MM", to: "HH:MM"}` (días 1=lunes … 7=domingo)
+- Durante el horario configurado, el estado rojo/amarillo se muestra como blanco (`clear`) en dashboard, vista de host, lista de problemas y API
+- El historial almacena siempre el estado real; la supresión es solo de presentación
+- Nueva función `config.is_suppressed(hostname, service)` en `spong/config.py`
+
+**Feat: plugin RTSP mejorado para cámaras Tapo**
+- `rtsp.py` ahora envía `DESCRIBE rtsp://<ip>:554/stream1` antes del OPTIONS genérico
+- `200 OK` y `401/403 Unauthorized` (auth requerida) se consideran stream activo → verde
+- Fallback progresivo: DESCRIBE → OPTIONS → TCP/2020 (puerto propietario Tapo C-series)
+- Solo rojo si los tres métodos fallan
+
+**Mejora: recarga de config en spong-network**
+- `network_agent.py` llama `config.load_all()` al inicio de cada ciclo
+- Cambios en `hosts.yaml` (nuevos hosts, servicios, IPs) se toman sin reiniciar el agente; tiempo máximo de propagación = duración de un ciclo (default 300 s)
+
+---
 
 ### v3.4.2 — 2026-04
 

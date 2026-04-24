@@ -1,0 +1,96 @@
+{% extends "config_base.html" %}
+{% block title %}{{ 'Editar grupo' if group_key else 'Nuevo grupo' }} — SPONG Config{% endblock %}
+{% block content %}
+<div class="list-header">
+  <h1 style="margin:0;">{{ 'Editar grupo: ' + group_key if group_key else 'Agregar grupo' }}</h1>
+  <a href="{{ url_for('config_admin.groups') }}" class="btn btn-secondary">← Volver</a>
+</div>
+
+{% if error %}
+  <div class="alert alert-error">{{ error }}</div>
+{% endif %}
+
+<form method="post">
+  <div class="card">
+    <h2>Datos del grupo</h2>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="field-label" for="group_key">Clave interna</label>
+        <input type="text" id="group_key" name="group_key"
+               value="{{ group_key or '' }}" placeholder="ej: camaras"
+               {% if group_key %}readonly style="opacity:.6;"{% endif %} required>
+        <div class="field-hint">Identificador único, sin espacios ni caracteres especiales.</div>
+      </div>
+      <div class="form-group">
+        <label class="field-label" for="name">Nombre para mostrar</label>
+        <input type="text" id="name" name="name"
+               value="{{ group.get('name', group_key or '') }}" placeholder="ej: Cámaras" required>
+      </div>
+    </div>
+    <div class="form-group" style="max-width:400px;">
+      <label class="field-label" for="summary">Descripción <span style="font-weight:400; text-transform:none;">(opcional)</span></label>
+      <input type="text" id="summary" name="summary"
+             value="{{ group.get('summary', '') }}" placeholder="ej: Cámaras IP de seguridad">
+    </div>
+    <div style="display:flex; gap:20px; flex-wrap:wrap;">
+      <label class="ping-stop" style="cursor:pointer;">
+        <input type="checkbox" name="display" id="display"
+               {{ 'checked' if group.get('display', True) }}>
+        <span><strong style="color:var(--text);">Visible en el dashboard</strong>
+          <span style="font-size:11px; color:var(--text-m);"> — desmarcar para ocultar el grupo</span></span>
+      </label>
+      <label class="ping-stop" style="cursor:pointer;">
+        <input type="checkbox" name="compress" id="compress"
+               {{ 'checked' if group.get('compress') }}>
+        <span><strong style="color:var(--text);">Vista compacta</strong>
+          <span style="font-size:11px; color:var(--text-m);"> — muestra solo el color de cada host, sin columnas de servicios</span></span>
+      </label>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Hosts en este grupo <span style="font-size:12px; color:var(--text-m); font-weight:400;" id="selected-count"></span></h2>
+    <p style="color:var(--text-m); font-size:13px; margin-bottom:12px;">
+      Marcá los hosts que pertenecen a este grupo.
+    </p>
+    <input type="text" class="search-input" placeholder="Buscar host…" id="host-search"
+           style="max-width:300px;" oninput="filterHosts(this.value)">
+    <div class="member-grid" id="member-grid">
+      {% set current_members = group.get('members', []) %}
+      {% for host in all_hosts %}
+        {% set is_member = host in current_members %}
+        <label class="member-item {{ 'checked' if is_member }}" data-host="{{ host }}">
+          <input type="checkbox" name="members" value="{{ host }}" {{ 'checked' if is_member }}>
+          <span>{{ host }}</span>
+        </label>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div style="display:flex; gap:10px;">
+    <button type="submit" class="btn btn-primary" style="min-width:120px;">Guardar</button>
+    <a href="{{ url_for('config_admin.groups') }}" class="btn btn-secondary">Cancelar</a>
+  </div>
+</form>
+
+<script>
+function filterHosts(query) {
+  query = query.toLowerCase().trim();
+  document.querySelectorAll('.member-item').forEach(function(item) {
+    const host = item.dataset.host || '';
+    item.style.display = (!query || host.includes(query)) ? '' : 'none';
+  });
+}
+
+function updateCount() {
+  const total   = document.querySelectorAll('.member-item input:checked').length;
+  const counter = document.getElementById('selected-count');
+  if (counter) counter.textContent = total ? `(${total} seleccionados)` : '';
+}
+
+document.querySelectorAll('.member-item input').forEach(function(cb) {
+  cb.addEventListener('change', updateCount);
+});
+updateCount();
+</script>
+{% endblock %}

@@ -1,0 +1,57 @@
+{% extends "config_base.html" %}
+{% block title %}Hosts — SPONG Config{% endblock %}
+{% block content %}
+<div class="list-header">
+  <h1 style="margin:0;">Hosts <span style="font-size:14px; color:var(--text-m); font-weight:400;">({{ hosts|length }})</span></h1>
+  <a href="{{ url_for('config_admin.host_edit') }}" class="btn btn-primary">+ Agregar host</a>
+</div>
+
+<div class="card" style="padding:0; overflow:hidden;">
+  <table>
+    <thead>
+      <tr>
+        <th>Nombre</th>
+        <th>IP / Dirección</th>
+        <th>Servicios</th>
+        <th>Contacto</th>
+        <th style="width:120px;"></th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for name, host in hosts.items() | sort %}
+      <tr>
+        <td>
+          <a href="{{ url_for('config_admin.host_edit', hostname=name) }}"
+             style="color:var(--link); text-decoration:none; font-weight:500;">{{ name }}</a>
+          {% if host.get('schedules') %}
+            <span title="Tiene horarios de supresión" style="color:var(--yellow); font-size:11px; margin-left:5px;">⏱</span>
+          {% endif %}
+        </td>
+        <td>
+          {% for ip in (host.get('ip_addr') or []) %}
+            <span class="tag">{{ ip }}</span>{% if not loop.last %} {% endif %}
+          {% endfor %}
+        </td>
+        <td>
+          <span class="mono">{{ host.get('services','') | truncate(60, True, '…') }}</span>
+        </td>
+        <td style="color:var(--text-m);">{{ host.get('contact','') }}</td>
+        <td>
+          <div class="actions">
+            <a href="{{ url_for('config_admin.host_edit', hostname=name) }}" class="btn btn-secondary btn-sm">Editar</a>
+            <form method="post" action="{{ url_for('config_admin.host_delete', hostname=name) }}"
+                  onsubmit="return confirm('¿Eliminar el host «{{ name }}»?');" style="display:inline;">
+              <button type="submit" class="btn btn-danger btn-sm">Borrar</button>
+            </form>
+          </div>
+        </td>
+      </tr>
+    {% else %}
+      <tr><td colspan="5" style="text-align:center; color:var(--text-m); padding:30px;">
+        No hay hosts configurados. <a href="{{ url_for('config_admin.host_edit') }}" style="color:var(--link);">Agregar el primero</a>.
+      </td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

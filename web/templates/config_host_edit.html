@@ -1,0 +1,242 @@
+{% extends "config_base.html" %}
+{% block title %}{{ 'Editar' if hostname else 'Nuevo host' }} — SPONG Config{% endblock %}
+{% block content %}
+<div class="list-header">
+  <h1 style="margin:0;">{{ 'Editar host: ' + hostname if hostname else 'Agregar host' }}</h1>
+  <a href="{{ url_for('config_admin.hosts') }}" class="btn btn-secondary">← Volver</a>
+</div>
+
+{% if error %}
+  <div class="alert alert-error">{{ error }}</div>
+{% endif %}
+
+<form method="post">
+
+  <!-- Datos básicos -->
+  <div class="card">
+    <h2>Datos del host</h2>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="field-label" for="hostname">Nombre del host</label>
+        <input type="text" id="hostname" name="hostname"
+               value="{{ hostname or '' }}" placeholder="ej: camara-jardin" required
+               {% if hostname %}readonly style="opacity:.6;"{% endif %}>
+        {% if hostname %}
+          <div class="field-hint">El nombre no se puede cambiar. Para renombrar, eliminá y volvé a crear.</div>
+        {% endif %}
+      </div>
+      <div class="form-group">
+        <label class="field-label" for="ip_addr">Dirección IP</label>
+        <input type="text" id="ip_addr" name="ip_addr"
+               value="{{ (host.get('ip_addr') or []) | join(', ') }}"
+               placeholder="ej: 192.168.0.50">
+        <div class="field-hint">Una o más IPs separadas por coma. Si se deja vacío se usa el nombre.</div>
+      </div>
+    </div>
+    <div class="form-group" style="max-width:300px;">
+      <label class="field-label" for="contact">Contacto</label>
+      {% if contacts %}
+        <select id="contact" name="contact">
+          {% for c in contacts %}
+            <option value="{{ c }}" {{ 'selected' if host.get('contact') == c }}>{{ c }}</option>
+          {% endfor %}
+        </select>
+      {% else %}
+        <input type="text" id="contact" name="contact" value="{{ host.get('contact','mt') }}">
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Servicios -->
+  <div class="card">
+    <h2>Servicios a monitorear</h2>
+    <p style="color:var(--text-m); font-size:13px; margin-bottom:16px;">
+      Marcá los servicios que querés verificar en este host.
+    </p>
+
+    <!-- Ping especial -->
+    {% set ping_checked = 'ping' in svcs_set %}
+    <div class="svc-cat">
+      <div class="svc-cat-title">Básico</div>
+      <label class="check-item {{ 'checked' if ping_checked }}">
+        <input type="checkbox" name="services" value="ping" {{ 'checked' if ping_checked }}>
+        ping
+      </label>
+      <div class="ping-stop" style="margin-top:8px; margin-left:4px;">
+        <input type="checkbox" id="ping_stop" name="ping_stop"
+               {{ 'checked' if 'ping' in stops_set }}>
+        <label for="ping_stop" style="cursor:pointer; color:var(--text-m);">
+          Si ping falla, <strong style="color:var(--text);">no verificar el resto de los servicios</strong>
+          <span style="font-size:11px;">(recomendado para equipos en red local)</span>
+        </label>
+      </div>
+    </div>
+
+    <hr class="divider">
+
+    {% for cat_name, cat_svcs in categories %}
+      {% if cat_svcs and cat_svcs != ['ping'] %}
+        <div class="svc-cat">
+          <div class="svc-cat-title">{{ cat_name }}</div>
+          <div class="check-group">
+            {% for svc in cat_svcs %}
+              {% if svc != 'ping' %}
+                {% set is_checked = svc in svcs_set %}
+                <label class="check-item {{ 'checked' if is_checked }}">
+                  <input type="checkbox" name="services" value="{{ svc }}" {{ 'checked' if is_checked }}>
+                  {{ svc }}
+                </label>
+              {% endif %}
+            {% endfor %}
+          </div>
+        </div>
+      {% endif %}
+    {% endfor %}
+
+    <hr class="divider">
+    <div class="form-group" style="max-width:500px;">
+      <label class="field-label" for="custom_services">Servicios adicionales</label>
+      <input type="text" id="custom_services" name="custom_services"
+             value="{{ custom_list | join(' ') }}"
+             placeholder="ej: camara1 dvrcam3 ups_snmp">
+      <div class="field-hint">Plugins que no aparecen arriba, separados por espacio.</div>
+    </div>
+  </div>
+
+  <!-- Horarios de supresión -->
+  <div class="card">
+    <h2>Horarios de supresión de alertas <span style="font-size:12px; color:var(--text-m); font-weight:400;">(opcional)</span></h2>
+    <p style="color:var(--text-m); font-size:13px; margin-bottom:16px;">
+      Durante estos horarios, si el servicio está en rojo, <strong style="color:var(--text);">se mostrará en blanco</strong> en el dashboard (no dispara alerta).
+      El historial siempre guarda el estado real.
+    </p>
+
+    <table class="sched-table" id="sched-table">
+      <thead>
+        <tr>
+          <th>Servicio</th>
+          <th>Días</th>
+          <th>Desde</th>
+          <th>Hasta</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="sched-body">
+        {% set schedules = host.get('schedules', {}) %}
+        {% for svc_name, svc_scheds in schedules.items() %}
+          {% for sched in svc_scheds %}
+            <tr class="sched-row" data-days="{{ sched.get('days','') }}">
+              <td><input type="text" name="sched_service" value="{{ svc_name }}" placeholder="cpu" style="width:110px;"></td>
+              <td>
+                <div class="day-grid">
+                  {% for d, label in [('1','L'),('2','M'),('3','X'),('4','J'),('5','V'),('6','S'),('7','D')] %}
+                    <label class="day-cb">
+                      <input type="checkbox" class="day-check" value="{{ d }}"> {{ label }}
+                    </label>
+                  {% endfor %}
+                </div>
+                <input type="hidden" name="sched_days" class="days-val" value="{{ sched.get('days','') }}">
+              </td>
+              <td><input type="time" name="sched_from" value="{{ sched.get('from','07:00') }}"></td>
+              <td><input type="time" name="sched_to"   value="{{ sched.get('to','18:00') }}"></td>
+              <td><button type="button" class="btn btn-danger btn-sm" onclick="removeSchedRow(this)">✕</button></td>
+            </tr>
+          {% endfor %}
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <button type="button" class="btn btn-secondary" style="margin-top:12px;" onclick="addSchedRow()">
+      + Agregar horario
+    </button>
+  </div>
+
+  <!-- Actions -->
+  <div style="display:flex; gap:10px;">
+    <button type="submit" class="btn btn-primary" style="min-width:120px;">Guardar</button>
+    <a href="{{ url_for('config_admin.hosts') }}" class="btn btn-secondary">Cancelar</a>
+  </div>
+
+</form>
+
+<script>
+const DAY_LABELS = ['L','M','X','J','V','S','D'];
+
+function parseDaysStr(str) {
+  const days = new Set();
+  str = (str || '').trim();
+  if (str.includes('-')) {
+    const [lo, hi] = str.split('-').map(Number);
+    for (let i = lo; i <= hi; i++) days.add(i);
+  } else if (str.includes(',')) {
+    str.split(',').forEach(d => { const n = parseInt(d); if (n) days.add(n); });
+  } else if (str) {
+    const n = parseInt(str); if (n) days.add(n);
+  }
+  return days;
+}
+
+function daysToStr(checked) {
+  checked = [...checked].sort((a,b) => a-b);
+  if (!checked.length) return '';
+  // compact to range if consecutive
+  const consec = checked.every((v,i) => i === 0 || v === checked[i-1] + 1);
+  if (consec && checked.length > 1) return `${checked[0]}-${checked[checked.length-1]}`;
+  if (checked.length === 1) return `${checked[0]}`;
+  return checked.join(',');
+}
+
+function initSchedRow(row) {
+  const daysStr = row.dataset.days || row.querySelector('.days-val').value || '';
+  const activeDays = parseDaysStr(daysStr);
+  row.querySelectorAll('.day-check').forEach(cb => {
+    cb.checked = activeDays.has(parseInt(cb.value));
+    const label = cb.closest('.day-cb');
+    if (label) label.classList.toggle('checked', cb.checked);
+  });
+  row.querySelectorAll('.day-check').forEach(cb => {
+    cb.addEventListener('change', function() {
+      const label = this.closest('.day-cb');
+      if (label) label.classList.toggle('checked', this.checked);
+    });
+  });
+}
+
+function addSchedRow() {
+  const tbody = document.getElementById('sched-body');
+  const tr = document.createElement('tr');
+  tr.className = 'sched-row';
+  tr.dataset.days = '1-5';
+  tr.innerHTML = `
+    <td><input type="text" name="sched_service" placeholder="ej: cpu" style="width:110px;"></td>
+    <td>
+      <div class="day-grid">
+        ${DAY_LABELS.map((l,i) => `<label class="day-cb"><input type="checkbox" class="day-check" value="${i+1}"> ${l}</label>`).join('')}
+      </div>
+      <input type="hidden" name="sched_days" class="days-val" value="1-5">
+    </td>
+    <td><input type="time" name="sched_from" value="07:00"></td>
+    <td><input type="time" name="sched_to"   value="18:00"></td>
+    <td><button type="button" class="btn btn-danger btn-sm" onclick="removeSchedRow(this)">✕</button></td>
+  `;
+  tbody.appendChild(tr);
+  initSchedRow(tr);
+}
+
+function removeSchedRow(btn) {
+  btn.closest('tr').remove();
+}
+
+// On form submit: collect day checkboxes → hidden field
+document.querySelector('form').addEventListener('submit', function() {
+  document.querySelectorAll('.sched-row').forEach(row => {
+    const cbs = row.querySelectorAll('.day-check');
+    const checked = [...cbs].filter(c => c.checked).map(c => parseInt(c.value));
+    row.querySelector('.days-val').value = daysToStr(checked);
+  });
+});
+
+// Init existing rows
+document.querySelectorAll('.sched-row').forEach(initSchedRow);
+</script>
+{% endblock %}

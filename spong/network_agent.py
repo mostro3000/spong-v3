@@ -144,6 +144,7 @@ class NetworkAgent:
         last_check = time.time()
 
         while self._running:
+            config.load_all()   # recarga hosts/groups/config en cada ciclo
             hosts = config.get_hosts()
             active_hosts = [h for h, d in hosts.items() if not d.get("skip_network_checks")]
 

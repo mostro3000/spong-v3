@@ -1,9 +1,10 @@
 + Unificar s3vz con mi spong
-- Camara tapo, un plugin qu verifique que responde el streaming
++ Camara tapo, un plugin qu verifique que responde el streaming   [DONE v3.5.0]
 + s3 graficos rrd disco para todas las particiones, ahora al parecer hacer los graficos de cada particion por separado por eso no se ven, que las junte en un solo grafico
  + Ver de Sacar Max/Min/Avg/etc...
 + historial reves y filtros para servicio y estado
  + en Historial (http://s.unsl.edu.ar/spong/history) Ver de poder hacer multi seleccion del estado filtro, por ejemplo Red+Green
 + cpu graficos agregar carga y no jobs
-- Ver de poner horario a eventos que marque con rojo, por ejemplo carga cpu eco1 por la manana que lo vea pero no ponga en rojo de lunes 1 viernes de 7:30hs a 16:00hs
++ Ver de poner horario a eventos que marque con rojo, por ejemplo carga cpu eco1 por la manana que lo vea pero no ponga en rojo de lunes 1 viernes de 7:30hs a 16:00hs   [DONE v3.5.0]
++ Front-end configuracion hosts.yaml / groups.yaml para gente con poco conocimiento   [DONE v3.5.0]
 
