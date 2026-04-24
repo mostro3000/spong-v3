@@ -167,7 +167,7 @@ def hosts():
 def host_edit(hostname=None):
     data       = _load_yaml(ETC_DIR / 'hosts.yaml')
     hosts_dict = data.setdefault('hosts', {})
-    contacts   = list(data.get('contacts', {}).keys())
+    contacts   = list((data.get('contacts') or {}).keys())
     available  = _available_services()
     categories = _categorize_services(available)
     avail_set  = set(available)
