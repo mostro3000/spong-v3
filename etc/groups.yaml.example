@@ -1,0 +1,60 @@
+# SPONG group definitions — example / template
+# Copy to groups.yaml and edit before running.
+# This file is safe to commit; groups.yaml (with real hostnames) is gitignored.
+#
+# Groups control how hosts are displayed in the dashboard.
+# A host can belong to multiple groups.
+
+groups:
+
+  servers:
+    name: "Servers"
+    summary: "Production servers"
+    members:
+      - myserver
+      - myserver-with-schedule
+    display: true             # show this group in the dashboard
+    compress: false           # false = full service matrix; true = compact (color only)
+
+  network:
+    name: "Network"
+    summary: "Network equipment"
+    members:
+      - router
+      - switch
+    display: true
+    compress: true
+
+  cameras:
+    name: "Cameras"
+    summary: "IP cameras"
+    members:
+      - camara-entrada
+      - camara-jardin
+    display: true
+    compress: true
+
+  iot:
+    name: "IoT"
+    summary: "Smart devices and sensors"
+    members:
+      - smart-plug-1
+      - sensor-living
+    display: true
+    compress: true
+
+  internet:
+    name: "Internet"
+    summary: "External connectivity checks"
+    members:
+      - google-dns
+    display: true
+    compress: true
+
+  # Example: hidden group (display: false) — monitored but not shown on dashboard
+  internal:
+    name: "Internal"
+    summary: "Internal checks"
+    members: []
+    display: false
+    compress: false

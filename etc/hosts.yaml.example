@@ -1,0 +1,84 @@
+# SPONG host definitions — example / template
+# Copy to hosts.yaml and edit before running.
+# This file is safe to commit; hosts.yaml (with real IPs) is gitignored.
+
+contacts:
+  admin:
+    name: "Administrator"
+    email: "admin@example.com"
+
+hosts:
+
+  # ---- Servers ----
+
+  myserver:
+    services: "ping: http https ssh disk diski cpu memory uptime"
+    contact: "admin"
+    ip_addr: ["192.168.0.10"]
+
+  # ---- Network equipment ----
+
+  router:
+    services: "ping: http https ssh dns snmp iftraffic"
+    contact: "admin"
+    ip_addr: ["192.168.0.1"]
+
+  switch:
+    services: "ping: http telnet snmp macs iftraffic"
+    contact: "admin"
+    ip_addr: ["192.168.0.2"]
+
+  # ---- External / internet checks ----
+
+  google-dns:
+    services: "ping: dns"
+    contact: "admin"
+    ip_addr: ["8.8.8.8"]
+
+  # ---- IP cameras (Tapo) ----
+
+  # ping: stops subsequent checks if ping fails (recommended for LAN devices)
+  camara-entrada:
+    services: "ping: rtsp"
+    contact: "admin"
+    ip_addr: ["192.168.0.50"]
+
+  camara-jardin:
+    services: "ping: rtsp"
+    contact: "admin"
+    ip_addr: ["192.168.0.51"]
+
+  # ---- IoT / smart devices ----
+
+  smart-plug-1:
+    services: "ping"
+    contact: "admin"
+    ip_addr: ["192.168.0.100"]
+
+  # ---- Sensors (temperature, humidity, etc.) ----
+
+  sensor-living:
+    services: "temp hum"
+    contact: "admin"
+    ip_addr: ["sensor-living.local"]
+
+  # ---- Example: alert schedule suppression ----
+  # During the configured windows, a red/yellow state is shown as white
+  # (clear) in the dashboard. Real state is always stored in history.
+  #
+  # days: "1-5" = Mon–Fri, "1-7" = every day, "6,7" = Sat+Sun
+  # from/to: local time HH:MM
+
+  myserver-with-schedule:
+    services: "ping: http https ssh cpu memory disk"
+    contact: "admin"
+    ip_addr: ["192.168.0.11"]
+    schedules:
+      cpu:
+        - days: "1-5"       # Mon–Fri
+          from: "07:30"
+          to: "16:00"
+      disk:
+        - days: "1-7"       # every day
+          from: "02:00"
+          to: "03:30"
