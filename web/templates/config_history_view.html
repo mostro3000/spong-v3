@@ -1,0 +1,53 @@
+{% extends "config_base.html" %}
+{% block title %}Ver historial — SPONG Config{% endblock %}
+{% block content %}
+
+<div style="display:flex; align-items:center; gap:12px; margin-bottom:20px; flex-wrap:wrap;">
+  <a href="{{ url_for('config_admin.history') }}" class="btn btn-secondary btn-sm">&#8592; Volver al historial</a>
+  <h1 style="margin:0; font-size:17px;">
+    <span class="tag">{{ config_name }}.yaml</span>
+    &nbsp;&mdash;&nbsp;
+    <span style="font-weight:400; color:var(--text-m);">{{ meta.get('ts','') | replace('T',' ') }}</span>
+  </h1>
+</div>
+
+<div class="card" style="padding:14px 20px; margin-bottom:16px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;">
+  <div style="font-size:13px;">
+    <span style="color:var(--text-m); font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.04em;">Acción</span>
+    <span style="margin-left:8px; font-weight:600;">{{ action_labels.get(meta.get('action',''), meta.get('action','')) }}</span>
+    {% if meta.get('detail') %}
+      <span style="color:var(--text-m); margin-left:8px;">&mdash; {{ meta.get('detail') }}</span>
+    {% endif %}
+  </div>
+  <form method="post"
+        action="{{ url_for('config_admin.history_restore', config_name=config_name, ts_key=ts_key) }}"
+        onsubmit="return confirm('¿Restaurar esta versión de {{ config_name }}.yaml?\n\nEl estado actual se guardará como backup automático antes de restaurar.');">
+    <button type="submit" class="btn btn-primary">&#8629; Restaurar esta versión</button>
+  </form>
+</div>
+
+{% if identical %}
+<div class="card" style="background:#0d2218; border-color:#1e5030; color:#70c090; margin-bottom:16px; text-align:center; padding:18px;">
+  El historial es idéntico al estado actual &mdash; no hay diferencias.
+</div>
+{% else %}
+<div class="card" style="margin-bottom:16px;">
+  <h2 style="margin-bottom:8px;">Diferencias respecto al estado actual</h2>
+  <p style="font-size:12px; color:var(--text-m); margin-bottom:12px;">
+    <span style="color:#70c090; font-weight:600;">+ verde</span>: se agregará al restaurar &nbsp;&nbsp;
+    <span style="color:#f08080; font-weight:600;">- rojo</span>: se eliminará al restaurar
+  </p>
+  <div style="overflow-x:auto; border:1px solid var(--border); border-radius:5px; background:var(--inp-bg);">
+    <pre style="margin:0; padding:14px; font-size:12px; font-family:monospace; line-height:1.6;">{% for line in diff_lines %}{% if line.startswith('+++') or line.startswith('---') %}<span style="color:var(--text-m); display:block;">{{ line | e }}</span>{% elif line.startswith('+') %}<span style="background:#0a2015; color:#70c090; display:block;">{{ line | e }}</span>{% elif line.startswith('-') %}<span style="background:#200a0a; color:#f08080; display:block;">{{ line | e }}</span>{% elif line.startswith('@@') %}<span style="color:var(--link); display:block;">{{ line | e }}</span>{% else %}<span style="color:var(--text-m); display:block;">{{ line | e }}</span>{% endif %}{% endfor %}</pre>
+  </div>
+</div>
+{% endif %}
+
+<div class="card">
+  <h2 style="margin-bottom:12px;">Contenido completo del historial</h2>
+  <div style="overflow-x:auto; border:1px solid var(--border); border-radius:5px; background:var(--inp-bg);">
+    <pre style="margin:0; padding:14px; font-size:12px; font-family:monospace; line-height:1.6; color:var(--text);">{{ snapshot_yaml | e }}</pre>
+  </div>
+</div>
+
+{% endblock %}

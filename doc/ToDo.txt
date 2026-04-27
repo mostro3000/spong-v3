@@ -7,4 +7,8 @@
 + cpu graficos agregar carga y no jobs
 + Ver de poner horario a eventos que marque con rojo, por ejemplo carga cpu eco1 por la manana que lo vea pero no ponga en rojo de lunes 1 viernes de 7:30hs a 16:00hs   [DONE v3.5.0]
 + Front-end configuracion hosts.yaml / groups.yaml para gente con poco conocimiento   [DONE v3.5.0]
-
+- actualizar version a v3.5.1 , generar .deb v3.5.1, actualizar documentacion y subir a github
+- revision de que este en todos lo idiomas completos y que incluyan le edicion de config
+- ver de poder tener la clave encriptada en la config
+- hacer que tenga niveles de usuarios para config, por ejemplo uno que solo pueda agregar sin poder editar/borrar
+- tener muchos usuarios para config, y que se registre cuando modifican algo lo que modifican

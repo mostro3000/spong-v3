@@ -1,9 +1,12 @@
 """Web UI Blueprint for editing SPONG YAML configuration files."""
 from __future__ import annotations
 
+import difflib
+import json
 import os
 import re
 import yaml
+from datetime import datetime
 from pathlib import Path
 from functools import wraps
 from flask import Blueprint, render_template, request, redirect, url_for, Response
@@ -12,10 +15,26 @@ from spong import config as spong_config
 
 config_bp = Blueprint('config_admin', __name__, url_prefix='/config')
 
-ETC_DIR = Path('/usr/local/spong/etc')
-PLUGIN_DIR = Path('/usr/local/spong/spong/plugins/network')
+ETC_DIR     = Path('/usr/local/spong/etc')
+PLUGIN_DIR  = Path('/usr/local/spong/spong/plugins/network')
+HISTORY_DIR = Path('/usr/local/spong/var/config_history')
 
 _NUMBERED_RE = re.compile(r'^(.+?)\d+$')
+_MAX_HISTORY = 100
+
+_CONFIG_FILES = {
+    'hosts':  ETC_DIR / 'hosts.yaml',
+    'groups': ETC_DIR / 'groups.yaml',
+}
+
+_ACTION_LABELS = {
+    'new':         'Nuevo',
+    'edit':        'Editado',
+    'delete':      'Eliminado',
+    'restore':     'Restaurado',
+    'pre-restore': 'Backup previo',
+}
+
 
 # ---------------------------------------------------------------------------
 # Auth
@@ -60,6 +79,68 @@ def _save_yaml(path: Path, data: dict) -> None:
     with open(tmp, 'w') as f:
         yaml.dump(data, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
     os.replace(tmp, path)
+
+
+# ---------------------------------------------------------------------------
+# History helpers
+# ---------------------------------------------------------------------------
+
+def _save_config_snapshot(config_name: str, data: dict, action: str, detail: str) -> None:
+    """Save a YAML snapshot of the config state after a change."""
+    HISTORY_DIR.mkdir(parents=True, exist_ok=True)
+    config_dir = HISTORY_DIR / config_name
+    config_dir.mkdir(exist_ok=True)
+
+    ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+    snapshot_path = config_dir / f'{ts}.yaml'
+    counter = 0
+    while snapshot_path.exists():
+        counter += 1
+        snapshot_path = config_dir / f'{ts}_{counter}.yaml'
+    ts_key = snapshot_path.stem
+
+    with open(snapshot_path, 'w') as f:
+        yaml.dump(data, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+
+    log_path = HISTORY_DIR / 'log.json'
+    try:
+        log = json.loads(log_path.read_text())
+    except (FileNotFoundError, ValueError):
+        log = []
+
+    log.append({
+        'ts':     datetime.now().isoformat(timespec='seconds'),
+        'ts_key': ts_key,
+        'config': config_name,
+        'action': action,
+        'detail': detail,
+    })
+
+    if len(log) > _MAX_HISTORY:
+        for entry in log[:-_MAX_HISTORY]:
+            p = HISTORY_DIR / entry['config'] / f"{entry['ts_key']}.yaml"
+            if p.exists():
+                p.unlink()
+        log = log[-_MAX_HISTORY:]
+
+    log_path.write_text(json.dumps(log, ensure_ascii=False, indent=2))
+
+
+def _load_history_log() -> list:
+    log_path = HISTORY_DIR / 'log.json'
+    try:
+        return json.loads(log_path.read_text())
+    except (FileNotFoundError, ValueError):
+        return []
+
+
+def _get_snapshot_yaml(config_name: str, ts_key: str) -> str | None:
+    if config_name not in _CONFIG_FILES:
+        return None
+    if not re.match(r'^\d{8}_\d{6}(_\d+)?$', ts_key):
+        return None
+    p = HISTORY_DIR / config_name / f'{ts_key}.yaml'
+    return p.read_text() if p.exists() else None
 
 
 # ---------------------------------------------------------------------------
@@ -147,6 +228,7 @@ def index():
         'config_index.html',
         host_count=len(hosts_data.get('hosts', {})),
         group_count=len(groups_data.get('groups', {})),
+        history_count=len(_load_history_log()),
     )
 
 
@@ -232,7 +314,10 @@ def host_edit(hostname=None):
                 del hosts_dict[hostname]
             hosts_dict[new_name] = entry
 
+            action = 'edit' if hostname else 'new'
+            detail = f"{'Editó' if hostname else 'Nuevo'} host: {new_name}"
             _save_yaml(ETC_DIR / 'hosts.yaml', data)
+            _save_config_snapshot('hosts', data, action, detail)
             spong_config.load_all()
             return redirect(url_for('config_admin.hosts'))
 
@@ -263,6 +348,7 @@ def host_delete(hostname):
     data = _load_yaml(ETC_DIR / 'hosts.yaml')
     data.get('hosts', {}).pop(hostname, None)
     _save_yaml(ETC_DIR / 'hosts.yaml', data)
+    _save_config_snapshot('hosts', data, 'delete', f'Eliminó host: {hostname}')
     spong_config.load_all()
     return redirect(url_for('config_admin.hosts'))
 
@@ -303,7 +389,11 @@ def group_edit(group_key=None):
             if group_key and group_key != new_key and group_key in gdict:
                 del gdict[group_key]
             gdict[new_key] = entry
+
+            action = 'edit' if group_key else 'new'
+            detail = f"{'Editó' if group_key else 'Nuevo'} grupo: {new_key}"
             _save_yaml(ETC_DIR / 'groups.yaml', gdata)
+            _save_config_snapshot('groups', gdata, action, detail)
             spong_config.load_all()
             return redirect(url_for('config_admin.groups'))
 
@@ -323,5 +413,79 @@ def group_delete(group_key):
     data = _load_yaml(ETC_DIR / 'groups.yaml')
     data.get('groups', {}).pop(group_key, None)
     _save_yaml(ETC_DIR / 'groups.yaml', data)
+    _save_config_snapshot('groups', data, 'delete', f'Eliminó grupo: {group_key}')
     spong_config.load_all()
     return redirect(url_for('config_admin.groups'))
+
+
+# ---------------------------------------------------------------------------
+# Routes — History
+# ---------------------------------------------------------------------------
+
+@config_bp.route('/history')
+@_require_config_auth
+def history():
+    log = sorted(_load_history_log(), key=lambda e: e.get('ts', ''), reverse=True)
+    return render_template('config_history.html', entries=log, action_labels=_ACTION_LABELS)
+
+
+@config_bp.route('/history/<config_name>/<ts_key>')
+@_require_config_auth
+def history_view(config_name, ts_key):
+    if config_name not in _CONFIG_FILES:
+        return Response('Config no válida', 400)
+
+    snapshot_yaml = _get_snapshot_yaml(config_name, ts_key)
+    if snapshot_yaml is None:
+        return Response('Snapshot no encontrado', 404)
+
+    current_path = _CONFIG_FILES[config_name]
+    current_yaml = current_path.read_text() if current_path.exists() else ''
+
+    # diff: current → snapshot  (+: will be added, -: will be removed on restore)
+    diff_lines = list(difflib.unified_diff(
+        current_yaml.splitlines(),
+        snapshot_yaml.splitlines(),
+        fromfile='actual',
+        tofile='historial',
+        lineterm='',
+    ))
+
+    log = _load_history_log()
+    meta = next(
+        (e for e in log if e.get('ts_key') == ts_key and e.get('config') == config_name),
+        {},
+    )
+
+    return render_template(
+        'config_history_view.html',
+        config_name=config_name,
+        ts_key=ts_key,
+        meta=meta,
+        snapshot_yaml=snapshot_yaml,
+        diff_lines=diff_lines,
+        action_labels=_ACTION_LABELS,
+        identical=(len(diff_lines) == 0),
+    )
+
+
+@config_bp.route('/history/<config_name>/<ts_key>/restore', methods=['POST'])
+@_require_config_auth
+def history_restore(config_name, ts_key):
+    if config_name not in _CONFIG_FILES:
+        return Response('Config no válida', 400)
+
+    snapshot_yaml = _get_snapshot_yaml(config_name, ts_key)
+    if snapshot_yaml is None:
+        return Response('Snapshot no encontrado', 404)
+
+    # Auto-backup current state before overwriting
+    current_data = _load_yaml(_CONFIG_FILES[config_name])
+    _save_config_snapshot(config_name, current_data, 'pre-restore',
+                          f'Backup automático antes de restaurar ({ts_key})')
+
+    snapshot_data = yaml.safe_load(snapshot_yaml) or {}
+    _save_yaml(_CONFIG_FILES[config_name], snapshot_data)
+    spong_config.load_all()
+
+    return redirect(url_for('config_admin.history'))

@@ -159,6 +159,8 @@
      {% if request.endpoint and 'host' in request.endpoint %}class="active"{% endif %}>Hosts</a>
   <a href="{{ url_for('config_admin.groups') }}"
      {% if request.endpoint and 'group' in request.endpoint %}class="active"{% endif %}>Grupos</a>
+  <a href="{{ url_for('config_admin.history') }}"
+     {% if request.endpoint and 'history' in request.endpoint %}class="active"{% endif %}>Historial</a>
   <div class="spacer"></div>
   <a href="/" style="font-size:12px; color: var(--text-m);">← Volver al monitor</a>
 </nav>
