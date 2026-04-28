@@ -7,7 +7,6 @@
 + cpu graficos agregar carga y no jobs
 + Ver de poner horario a eventos que marque con rojo, por ejemplo carga cpu eco1 por la manana que lo vea pero no ponga en rojo de lunes 1 viernes de 7:30hs a 16:00hs   [DONE v3.5.0]
 + Front-end configuracion hosts.yaml / groups.yaml para gente con poco conocimiento   [DONE v3.5.0]
-- actualizar version a v3.5.1 , generar .deb v3.5.1, actualizar documentacion y subir a github
 + ver pq no anda graficos de cpu
 + revision de que este en todos lo idiomas completos y que incluyan le edicion de config y tambien modo claro/oscuro en config
 + modifica para poder tener la clave encriptada en la config
@@ -18,9 +17,10 @@
 + tener muchos usuarios para config, y que se registre cuando modifican algo lo que modifican
 + el user admin tambien tiene que poder config los usuarios/claves/roles
 - agragear opcion de salir de user en config
-- En los graficos de temperaturas, cuando es por dia, mes y año, hacer graficos de maximo y minimo de cada hora/dia/mes, como se ve en /usr/local/spong/tmp/temp.png
-- desde el host del spong poder ir a modificar directamenta la config si se tiene los permisos necesarios
-- si tengo un servicio en rojo, y lo borro con el config, este sigue apareciendo como rojo
-- en config/Hosts pode oredenar por Host/IP  de Menor a Mayor o viceversa
+- modificar para en spong sobre "Grupos de Hosts" poder apretar para minimizar/ampliar todos los grupos
+- en config/Hosts poder oredenar por Host/IP  de Menor a Mayor o viceversa
 - en config/Grupos poder oredenar por Clave/Nombre de Menor a Mayor o viceversa
+- En los graficos de temperaturas, cuando es por dia, mes y año, hacer graficos de maximo y minimo de cada hora/dia/mes, como se ve en /usr/local/spong/tmp/temp.png
+- desde el host del spong poder ir a modificar los servicios directamenta de la config si el usuario se tiene los permisos necesarios
+- hay un bug, si tengo un servicio en rojo, y lo borro con el config, este sigue apareciendo como rojo
 - actualizar version a v3.5.1 , generar .deb v3.5.1, actualizar documentacion y subir a github
