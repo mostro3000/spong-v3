@@ -1,83 +1,158 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="{{ current_lang }}" class="{{ current_theme }}">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{% block title %}SPONG — Configuración{% endblock %}</title>
+  <title>{% block title %}SPONG - {{ _('Configuración') }}{% endblock %}</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --bg:       #0d1b2a;
-      --surface:  #132232;
-      --surface2: #192d3e;
-      --border:   #2a4258;
-      --text:     #cdd8e3;
-      --text-h:   #e0eaf4;
-      --text-m:   #8bafc7;
-      --link:     #7aabdb;
-      --link-h:   #a8ccee;
-      --accent:   #1e5f8a;
-      --accent-h: #2575a8;
-      --red:      #cc3333;
-      --green:    #2d8a3e;
-      --yellow:   #b8a020;
-      --inp-bg:   #0d1b2a;
-      --inp-brd:  #2a4258;
+      --bg:          #f0f2f5;
+      --surface:     #ffffff;
+      --surface2:    #f8f9fb;
+      --surface3:    #eef3f8;
+      --border:      #d9e1ea;
+      --hover:       #f3f7fb;
+      --text:        #263545;
+      --text-h:      #142536;
+      --text-m:      #607385;
+      --link:        #315f8f;
+      --link-h:      #24486d;
+      --accent:      #2f6f9f;
+      --accent-h:    #255b84;
+      --red:         #c43b3b;
+      --green:       #2d8a3e;
+      --yellow:      #a88713;
+      --inp-bg:      #ffffff;
+      --inp-brd:     #cfd9e4;
+      --checked-bg:  #e8f2fb;
+      --danger-bg:   #fff2f2;
+      --danger-brd:  #efb5b5;
+      --danger-text: #b32626;
+      --alert-bg:    #fff4f4;
+      --alert-brd:   #e59a9a;
+      --alert-text:  #a51f1f;
+      --ok-bg:       #f0faf3;
+      --ok-brd:      #a9d8b4;
+      --ok-text:     #28783a;
+      --diff-add-bg: #eaf7ee;
+      --diff-add-tx: #21733a;
+      --diff-del-bg: #faeaea;
+      --diff-del-tx: #b32d2d;
+      --restore-bg:  #f3edfb;
+      --restore-brd: #c4a8e8;
+      --restore-tx:  #6b3aa0;
+    }
+
+    html.dark {
+      --bg:          #0d1b2a;
+      --surface:     #132232;
+      --surface2:    #192d3e;
+      --surface3:    #1e3448;
+      --border:      #2a4258;
+      --hover:       #192d3e;
+      --text:        #cdd8e3;
+      --text-h:      #e0eaf4;
+      --text-m:      #8bafc7;
+      --link:        #7aabdb;
+      --link-h:      #a8ccee;
+      --accent:      #1e5f8a;
+      --accent-h:    #2575a8;
+      --red:         #cc3333;
+      --green:       #2d8a3e;
+      --yellow:      #b8a020;
+      --inp-bg:      #0d1b2a;
+      --inp-brd:     #2a4258;
+      --checked-bg:  #152838;
+      --danger-bg:   #4a1515;
+      --danger-brd:  #6a2020;
+      --danger-text: #f08080;
+      --alert-bg:    #2a1515;
+      --alert-brd:   #7a2020;
+      --alert-text:  #f08080;
+      --ok-bg:       #0d2218;
+      --ok-brd:      #1e5030;
+      --ok-text:     #70c090;
+      --diff-add-bg: #0a2015;
+      --diff-add-tx: #70c090;
+      --diff-del-bg: #200a0a;
+      --diff-del-tx: #f08080;
+      --restore-bg:  #1e1030;
+      --restore-brd: #5a3a80;
+      --restore-tx:  #c090f0;
     }
 
     body { background: var(--bg); color: var(--text); font-family: system-ui, sans-serif;
            font-size: 14px; line-height: 1.5; min-height: 100vh; }
 
-    /* Nav */
     nav { background: var(--surface); border-bottom: 1px solid var(--border);
-          padding: 0 20px; display: flex; align-items: center; gap: 4px; height: 48px; }
+          padding: 0 20px; display: flex; align-items: center; gap: 4px; min-height: 48px; }
     nav .brand { font-weight: 700; font-size: 16px; color: var(--text-h);
-                 text-decoration: none; margin-right: 20px; }
+                 text-decoration: none; margin-right: 20px; white-space: nowrap;
+                 position: relative; }
+    nav .brand .tip {
+      display: none; position: absolute; top: 100%; left: 0; margin-top: 6px;
+      background: var(--surface); color: var(--text); font-size: 11px; font-weight: 400;
+      white-space: nowrap; padding: 5px 10px; border-radius: 4px;
+      border: 1px solid var(--border); z-index: 30;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+    }
+    nav .brand:hover .tip { display: block; }
     nav a { color: var(--text-m); text-decoration: none; padding: 6px 12px;
             border-radius: 4px; font-size: 13px; transition: background .15s; }
-    nav a:hover, nav a.active { background: var(--surface2); color: var(--text-h); }
+    nav a:hover, nav a.active { background: var(--surface2); color: var(--text-h); text-decoration: none; }
     nav .spacer { flex: 1; }
-    nav .badge { background: var(--accent); color: #fff; font-size: 11px;
-                 padding: 2px 7px; border-radius: 10px; }
 
-    /* Main layout */
+    .theme-btn, .lang-btn {
+      background: var(--surface2); border: 1px solid var(--border); color: var(--text-m);
+      border-radius: 4px; font-size: 12px; cursor: pointer; text-decoration: none;
+      display: inline-flex; align-items: center; gap: 5px; min-height: 28px;
+    }
+    .theme-btn { padding: 4px 9px; line-height: 1; }
+    .lang-btn { padding: 4px 9px; font-family: inherit; }
+    .theme-btn:hover, .lang-btn:hover { background: var(--surface3); color: var(--text-h); text-decoration: none; }
+    .lang-menu { position: relative; }
+    .lang-dropdown {
+      display: none; position: absolute; top: calc(100% + 5px); right: 0; z-index: 20;
+      background: var(--surface); border: 1px solid var(--border); border-radius: 5px;
+      box-shadow: 0 8px 22px rgba(0,0,0,0.25); min-width: 145px; padding: 4px 0;
+    }
+    .lang-menu.open .lang-dropdown { display: block; }
+    .lang-dropdown a { display: flex; align-items: center; gap: 8px; padding: 7px 12px; white-space: nowrap; }
+    .lang-dropdown a.lang-active { color: var(--text-h); font-weight: 600; background: var(--surface2); }
+    .lang-dropdown a.lang-active::after { content: "✓"; margin-left: auto; color: var(--accent); font-size: 11px; }
+
     main { max-width: 1100px; margin: 0 auto; padding: 24px 20px; }
-
     h1 { font-size: 20px; color: var(--text-h); margin-bottom: 20px; font-weight: 600; }
     h2 { font-size: 16px; color: var(--text-h); margin-bottom: 12px; font-weight: 600; }
 
-    /* Cards */
     .card { background: var(--surface); border: 1px solid var(--border);
             border-radius: 8px; padding: 20px; margin-bottom: 20px; }
-
-    /* Alerts */
     .alert { padding: 10px 14px; border-radius: 6px; margin-bottom: 16px; font-size: 13px; }
-    .alert-error { background: #2a1515; border: 1px solid #7a2020; color: #f08080; }
+    .alert-error { background: var(--alert-bg); border: 1px solid var(--alert-brd); color: var(--alert-text); }
 
-    /* Table */
     table { width: 100%; border-collapse: collapse; font-size: 13px; }
     th { text-align: left; padding: 8px 10px; color: var(--text-m);
          border-bottom: 1px solid var(--border); font-weight: 600; font-size: 12px;
          text-transform: uppercase; letter-spacing: .04em; }
     td { padding: 9px 10px; border-bottom: 1px solid var(--border); vertical-align: middle; }
     tr:last-child td { border-bottom: none; }
-    tr:hover td { background: #192d3e; }
+    tr:hover td { background: var(--hover); }
     .mono { font-family: monospace; font-size: 12px; color: var(--text-m); }
 
-    /* Buttons */
     .btn { display: inline-flex; align-items: center; gap: 5px; padding: 6px 14px;
            border-radius: 5px; font-size: 13px; font-weight: 500; cursor: pointer;
            border: none; text-decoration: none; transition: background .15s; }
     .btn-primary   { background: var(--accent); color: #fff; }
-    .btn-primary:hover { background: var(--accent-h); }
+    .btn-primary:hover { background: var(--accent-h); color: #fff; text-decoration: none; }
     .btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
-    .btn-secondary:hover { background: #223244; color: var(--text-h); }
-    .btn-danger    { background: #4a1515; color: #f08080; border: 1px solid #6a2020; }
-    .btn-danger:hover { background: #5a1a1a; }
+    .btn-secondary:hover { background: var(--surface3); color: var(--text-h); text-decoration: none; }
+    .btn-danger    { background: var(--danger-bg); color: var(--danger-text); border: 1px solid var(--danger-brd); }
+    .btn-danger:hover { filter: brightness(0.96); text-decoration: none; }
+    html.dark .btn-danger:hover { filter: brightness(1.14); }
     .btn-sm { padding: 4px 10px; font-size: 12px; }
 
-    /* Forms */
     .form-group { margin-bottom: 18px; }
     .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
     label.field-label { display: block; font-size: 12px; font-weight: 600; color: var(--text-m);
@@ -91,21 +166,18 @@
       outline: none; border-color: var(--accent); }
     textarea { resize: vertical; min-height: 70px; }
 
-    /* Checkbox group */
     .check-group { display: flex; flex-wrap: wrap; gap: 8px; }
     .check-item { display: flex; align-items: center; gap: 5px; background: var(--surface2);
                   border: 1px solid var(--border); border-radius: 5px; padding: 5px 10px;
-                  cursor: pointer; font-size: 13px; transition: border-color .15s; }
+                  cursor: pointer; font-size: 13px; transition: border-color .15s, background .15s; }
     .check-item:hover { border-color: var(--accent); }
     .check-item input { cursor: pointer; accent-color: var(--accent); }
-    .check-item.checked { border-color: var(--accent); background: #152838; }
+    .check-item.checked { border-color: var(--accent); background: var(--checked-bg); }
 
-    /* Service category */
     .svc-cat { margin-bottom: 14px; }
     .svc-cat-title { font-size: 11px; font-weight: 700; color: var(--text-m);
                      text-transform: uppercase; letter-spacing: .05em; margin-bottom: 7px; }
 
-    /* Schedules table */
     .sched-table { width: 100%; border-collapse: collapse; font-size: 13px; }
     .sched-table th { padding: 6px 8px; font-size: 11px; color: var(--text-m);
                       border-bottom: 1px solid var(--border); text-transform: uppercase; }
@@ -114,73 +186,103 @@
     .day-grid { display: flex; gap: 4px; flex-wrap: wrap; }
     .day-cb   { display: flex; align-items: center; gap: 2px; background: var(--surface2);
                 border: 1px solid var(--border); border-radius: 4px; padding: 3px 6px;
-                font-size: 11px; cursor: pointer; }
+                font-size: 11px; cursor: pointer; transition: border-color .15s, background .15s; }
     .day-cb input { accent-color: var(--accent); }
-    .day-cb.on { border-color: var(--accent); background: #152838; }
+    .day-cb.checked { border-color: var(--accent); background: var(--checked-bg); }
     .sched-table input[type=text] { width: 90px; padding: 4px 7px; }
     .sched-table input[type=time] { width: 90px; padding: 4px 7px; }
 
-    /* Member list (groups) */
     .member-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 6px; max-height: 400px; overflow-y: auto; padding: 4px; }
     .member-item { display: flex; align-items: center; gap: 6px; background: var(--surface2);
                    border: 1px solid var(--border); border-radius: 5px; padding: 6px 10px;
-                   font-size: 13px; cursor: pointer; }
+                   font-size: 13px; cursor: pointer; transition: border-color .15s, background .15s; }
     .member-item:hover { border-color: var(--accent); }
     .member-item input { accent-color: var(--accent); }
-    .member-item.checked { border-color: var(--accent); background: #152838; }
+    .member-item.checked { border-color: var(--accent); background: var(--checked-bg); }
     .search-input { margin-bottom: 10px; }
 
-    /* Ping stop option */
     .ping-stop { display: flex; align-items: center; gap: 8px; background: var(--surface2);
                  border: 1px solid var(--border); border-radius: 5px; padding: 8px 12px;
                  font-size: 13px; margin-top: 8px; }
     .ping-stop input { accent-color: var(--accent); }
 
-    /* Top bar for list pages */
     .list-header { display: flex; align-items: center; justify-content: space-between;
-                   margin-bottom: 16px; }
+                   gap: 12px; margin-bottom: 16px; }
     .tag { display: inline-block; background: var(--surface2); border: 1px solid var(--border);
            border-radius: 4px; padding: 2px 7px; font-size: 11px; color: var(--text-m);
            font-family: monospace; }
 
     .actions { display: flex; gap: 6px; }
     .divider { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
+    .restore-btn { background: var(--restore-bg); color: var(--restore-tx); border: 1px solid var(--restore-brd); }
+    .state-ok { background: var(--ok-bg); border-color: var(--ok-brd); color: var(--ok-text); }
+    .diff-add { background: var(--diff-add-bg); color: var(--diff-add-tx); display: block; }
+    .diff-del { background: var(--diff-del-bg); color: var(--diff-del-tx); display: block; }
 
-    @media (max-width: 640px) {
+    @media (max-width: 720px) {
+      nav { flex-wrap: wrap; padding: 8px 12px; }
+      nav .brand { flex-basis: 100%; margin-right: 0; }
+      nav .spacer { display: none; }
+      main { padding: 16px 10px; }
       .form-row { grid-template-columns: 1fr; }
       .member-grid { grid-template-columns: 1fr 1fr; }
+      .list-header { align-items: flex-start; flex-direction: column; }
     }
   </style>
 </head>
 <body>
 <nav>
-  <a class="brand" href="{{ url_for('config_admin.index') }}">⚙ SPONG Config</a>
+  <a class="brand" href="{{ url_for('config_admin.index') }}">⚙ SPONG {{ _('Configuración') }}<span class="tip">SPONG v{{ spong_version }} - {{ _('creado por mt') }}</span></a>
   <a href="{{ url_for('config_admin.hosts') }}"
-     {% if request.endpoint and 'host' in request.endpoint %}class="active"{% endif %}>Hosts</a>
+     {% if request.endpoint and 'host' in request.endpoint %}class="active"{% endif %}>{{ _('Hosts') }}</a>
   <a href="{{ url_for('config_admin.groups') }}"
-     {% if request.endpoint and 'group' in request.endpoint %}class="active"{% endif %}>Grupos</a>
+     {% if request.endpoint and 'group' in request.endpoint %}class="active"{% endif %}>{{ _('Grupos') }}</a>
   <a href="{{ url_for('config_admin.history') }}"
-     {% if request.endpoint and 'history' in request.endpoint %}class="active"{% endif %}>Historial</a>
+     {% if request.endpoint and 'history' in request.endpoint %}class="active"{% endif %}>{{ _('Historial') }}</a>
+  {% if config_can('users') %}
+    <a href="{{ url_for('config_admin.users') }}"
+       {% if request.endpoint and 'user' in request.endpoint %}class="active"{% endif %}>{{ _('Usuarios') }}</a>
+  {% endif %}
   <div class="spacer"></div>
-  <a href="/" style="font-size:12px; color: var(--text-m);">← Volver al monitor</a>
+  <a href="{{ url_for('config_admin.set_theme', theme='light' if current_theme == 'dark' else 'dark') }}"
+     class="theme-btn" title="{{ _('Modo claro') if current_theme == 'dark' else _('Modo oscuro') }}">
+    {{ '☀' if current_theme == 'dark' else '🌙' }}
+  </a>
+  <div class="lang-menu" id="config-lang-menu">
+    <button type="button" class="lang-btn" onclick="document.getElementById('config-lang-menu').classList.toggle('open')">
+      {{ lang_meta[current_lang][0] }} {{ current_lang|upper }} <span style="font-size:9px;">▾</span>
+    </button>
+    <div class="lang-dropdown">
+      {% for code, (flag, name) in lang_meta.items() %}
+      <a href="{{ url_for('config_admin.set_lang', lang=code) }}" class="{{ 'lang-active' if current_lang == code else '' }}">
+        {{ flag }} {{ name }}
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+  <a href="{{ url_for('index') }}" style="font-size:12px; color: var(--text-m);">← {{ _('Volver al monitor') }}</a>
 </nav>
 <main>
   {% block content %}{% endblock %}
 </main>
 <script>
-// Toggle checked class on check-item / member-item / day-cb on checkbox change
 document.addEventListener('change', function(e) {
   const cb = e.target;
   if (cb.type !== 'checkbox') return;
   const item = cb.closest('.check-item, .member-item, .day-cb');
   if (item) item.classList.toggle('checked', cb.checked);
 });
-// Init checked class on load
+
 document.addEventListener('DOMContentLoaded', function() {
   document.querySelectorAll('.check-item input[type=checkbox], .member-item input[type=checkbox], .day-cb input[type=checkbox]').forEach(function(cb) {
     const item = cb.closest('.check-item, .member-item, .day-cb');
     if (item) item.classList.toggle('checked', cb.checked);
   });
+});
+
+document.addEventListener('click', function(e) {
+  const menu = document.getElementById('config-lang-menu');
+  if (menu && !menu.contains(e.target)) menu.classList.remove('open');
 });
 </script>
 </body>

@@ -1,20 +1,22 @@
 {% extends "config_base.html" %}
-{% block title %}Grupos — SPONG Config{% endblock %}
+{% block title %}{{ _('Grupos') }} - SPONG {{ _('Configuración') }}{% endblock %}
 {% block content %}
 <div class="list-header">
-  <h1 style="margin:0;">Grupos <span style="font-size:14px; color:var(--text-m); font-weight:400;">({{ groups|length }})</span></h1>
-  <a href="{{ url_for('config_admin.group_edit') }}" class="btn btn-primary">+ Agregar grupo</a>
+  <h1 style="margin:0;">{{ _('Grupos') }} <span style="font-size:14px; color:var(--text-m); font-weight:400;">({{ groups|length }})</span></h1>
+  {% if config_can('add') %}
+    <a href="{{ url_for('config_admin.group_edit') }}" class="btn btn-primary">+ {{ _('Agregar grupo') }}</a>
+  {% endif %}
 </div>
 
 <div class="card" style="padding:0; overflow:hidden;">
   <table>
     <thead>
       <tr>
-        <th>Clave</th>
-        <th>Nombre</th>
-        <th>Miembros</th>
-        <th>Opciones</th>
-        <th style="width:120px;"></th>
+        <th>{{ _('Clave') }}</th>
+        <th>{{ _('Nombre') }}</th>
+        <th>{{ _('Miembros') }}</th>
+        <th>{{ _('Opciones') }}</th>
+        {% if config_can('edit') or config_can('delete') %}<th style="width:120px;"></th>{% endif %}
       </tr>
     </thead>
     <tbody>
@@ -23,33 +25,39 @@
         <td><span class="mono">{{ key }}</span></td>
         <td style="font-weight:500; color:var(--text-h);">{{ group.get('name', key) }}</td>
         <td>
-          <span style="color:var(--text-m);">{{ (group.get('members') or []) | length }} hosts</span>
+          <span style="color:var(--text-m);">{{ (group.get('members') or []) | length }} {{ _('hosts') }}</span>
           <div style="margin-top:4px; display:flex; flex-wrap:wrap; gap:4px;">
             {% for m in (group.get('members') or [])[:6] %}
               <span class="tag">{{ m }}</span>
             {% endfor %}
             {% if (group.get('members') or []) | length > 6 %}
-              <span style="color:var(--text-m); font-size:11px;">+{{ (group.get('members')|length) - 6 }} más</span>
+              <span style="color:var(--text-m); font-size:11px;">+{{ (group.get('members')|length) - 6 }} {{ _('más') }}</span>
             {% endif %}
           </div>
         </td>
         <td style="font-size:12px; color:var(--text-m);">
-          {% if group.get('compress') %}<span class="tag">compacto</span>{% endif %}
-          {% if not group.get('display', True) %}<span class="tag">oculto</span>{% endif %}
+          {% if group.get('compress') %}<span class="tag">{{ _('compacto') }}</span>{% endif %}
+          {% if not group.get('display', True) %}<span class="tag">{{ _('oculto') }}</span>{% endif %}
         </td>
-        <td>
-          <div class="actions">
-            <a href="{{ url_for('config_admin.group_edit', group_key=key) }}" class="btn btn-secondary btn-sm">Editar</a>
-            <form method="post" action="{{ url_for('config_admin.group_delete', group_key=key) }}"
-                  onsubmit="return confirm('¿Eliminar el grupo «{{ group.get('name', key) }}»?');" style="display:inline;">
-              <button type="submit" class="btn btn-danger btn-sm">Borrar</button>
-            </form>
-          </div>
-        </td>
+        {% if config_can('edit') or config_can('delete') %}
+          <td>
+            <div class="actions">
+              {% if config_can('edit') %}
+                <a href="{{ url_for('config_admin.group_edit', group_key=key) }}" class="btn btn-secondary btn-sm">{{ _('Editar') }}</a>
+              {% endif %}
+              {% if config_can('delete') %}
+                <form method="post" action="{{ url_for('config_admin.group_delete', group_key=key) }}"
+                      onsubmit='return confirm({{ (_('¿Eliminar el grupo') ~ ' «' ~ group.get('name', key) ~ '»?') | tojson }});' style="display:inline;">
+                  <button type="submit" class="btn btn-danger btn-sm">{{ _('Borrar') }}</button>
+                </form>
+              {% endif %}
+            </div>
+          </td>
+        {% endif %}
       </tr>
     {% else %}
-      <tr><td colspan="5" style="text-align:center; color:var(--text-m); padding:30px;">
-        No hay grupos configurados. <a href="{{ url_for('config_admin.group_edit') }}" style="color:var(--link);">Agregar el primero</a>.
+      <tr><td colspan="{{ 5 if config_can('edit') or config_can('delete') else 4 }}" style="text-align:center; color:var(--text-m); padding:30px;">
+        {{ _('No hay grupos configurados.') }}{% if config_can('add') %} <a href="{{ url_for('config_admin.group_edit') }}" style="color:var(--link);">{{ _('Agregar el primero') }}</a>.{% endif %}
       </td></tr>
     {% endfor %}
     </tbody>

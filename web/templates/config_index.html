@@ -1,37 +1,62 @@
 {% extends "config_base.html" %}
-{% block title %}SPONG — Configuración{% endblock %}
+{% block title %}SPONG - {{ _('Configuración') }}{% endblock %}
 {% block content %}
-<h1>Configuración</h1>
+<h1>{{ _('Configuración') }}</h1>
 <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(260px,1fr)); gap:16px;">
 
   <div class="card" style="text-align:center;">
     <div style="font-size:36px; margin-bottom:8px;">🖥</div>
     <div style="font-size:28px; font-weight:700; color:var(--text-h); margin-bottom:4px;">{{ host_count }}</div>
-    <div style="color:var(--text-m); margin-bottom:16px;">hosts configurados</div>
-    <a href="{{ url_for('config_admin.hosts') }}" class="btn btn-primary" style="width:100%; justify-content:center;">Gestionar hosts</a>
+    <div style="color:var(--text-m); margin-bottom:16px;">{{ _('hosts configurados') }}</div>
+    <a href="{{ url_for('config_admin.hosts') }}" class="btn btn-primary" style="width:100%; justify-content:center;">{{ _('Gestionar hosts') }}</a>
   </div>
 
   <div class="card" style="text-align:center;">
     <div style="font-size:36px; margin-bottom:8px;">📂</div>
     <div style="font-size:28px; font-weight:700; color:var(--text-h); margin-bottom:4px;">{{ group_count }}</div>
-    <div style="color:var(--text-m); margin-bottom:16px;">grupos configurados</div>
-    <a href="{{ url_for('config_admin.groups') }}" class="btn btn-primary" style="width:100%; justify-content:center;">Gestionar grupos</a>
+    <div style="color:var(--text-m); margin-bottom:16px;">{{ _('grupos configurados') }}</div>
+    <a href="{{ url_for('config_admin.groups') }}" class="btn btn-primary" style="width:100%; justify-content:center;">{{ _('Gestionar grupos') }}</a>
   </div>
 
   <div class="card" style="text-align:center;">
     <div style="font-size:36px; margin-bottom:8px;">📋</div>
     <div style="font-size:28px; font-weight:700; color:var(--text-h); margin-bottom:4px;">{{ history_count }}</div>
-    <div style="color:var(--text-m); margin-bottom:16px;">cambios registrados</div>
-    <a href="{{ url_for('config_admin.history') }}" class="btn btn-secondary" style="width:100%; justify-content:center;">Ver historial</a>
+    <div style="color:var(--text-m); margin-bottom:16px;">{{ _('cambios registrados') }}</div>
+    <a href="{{ url_for('config_admin.history') }}" class="btn btn-secondary" style="width:100%; justify-content:center;">{{ _('Ver historial') }}</a>
   </div>
+
+  {% if config_can('users') %}
+  <div class="card" style="text-align:center;">
+    <div style="font-size:36px; margin-bottom:8px;">👤</div>
+    <div style="font-size:28px; font-weight:700; color:var(--text-h); margin-bottom:4px;">{{ users_count }}</div>
+    <div style="color:var(--text-m); margin-bottom:16px;">{{ _('usuarios configurados') }}</div>
+    <a href="{{ url_for('config_admin.users') }}" class="btn btn-primary" style="width:100%; justify-content:center;">{{ _('Gestionar usuarios') }}</a>
+  </div>
+  {% endif %}
 
 </div>
 
 <div class="card" style="margin-top:8px;">
-  <h2>¿Qué puedo hacer aquí?</h2>
+  <h2>{{ _('¿Qué puedo hacer aquí?') }}</h2>
   <ul style="margin-top:10px; padding-left:18px; color:var(--text-m); line-height:2;">
-    <li><strong style="color:var(--text);">Hosts</strong> — agregar, editar o eliminar equipos monitoreados: dirección IP, servicios a verificar y horarios de supresión de alertas.</li>
-    <li><strong style="color:var(--text);">Grupos</strong> — organizar los hosts en grupos para la vista del dashboard.</li>
+    <li><strong style="color:var(--text);">{{ _('Hosts') }}</strong> -
+      {% if config_can('edit') or config_can('delete') %}
+        {{ _('agregar, editar o eliminar equipos monitoreados: dirección IP, servicios a verificar y horarios de supresión de alertas.') }}
+      {% elif config_can('add') %}
+        {{ _('agregar equipos monitoreados: dirección IP, servicios a verificar y horarios de supresión de alertas.') }}
+      {% else %}
+        {{ _('consultar equipos monitoreados: dirección IP, servicios a verificar y horarios de supresión de alertas.') }}
+      {% endif %}
+    </li>
+    <li><strong style="color:var(--text);">{{ _('Grupos') }}</strong> -
+      {% if config_can('edit') or config_can('delete') %}
+        {{ _('organizar los hosts en grupos para la vista del dashboard.') }}
+      {% elif config_can('add') %}
+        {{ _('agregar grupos para la vista del dashboard.') }}
+      {% else %}
+        {{ _('consultar los grupos de la vista del dashboard.') }}
+      {% endif %}
+    </li>
   </ul>
 </div>
 {% endblock %}

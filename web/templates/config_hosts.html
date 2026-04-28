@@ -1,30 +1,36 @@
 {% extends "config_base.html" %}
-{% block title %}Hosts — SPONG Config{% endblock %}
+{% block title %}{{ _('Hosts') }} - SPONG {{ _('Configuración') }}{% endblock %}
 {% block content %}
 <div class="list-header">
-  <h1 style="margin:0;">Hosts <span style="font-size:14px; color:var(--text-m); font-weight:400;">({{ hosts|length }})</span></h1>
-  <a href="{{ url_for('config_admin.host_edit') }}" class="btn btn-primary">+ Agregar host</a>
+  <h1 style="margin:0;">{{ _('Hosts') }} <span style="font-size:14px; color:var(--text-m); font-weight:400;">({{ hosts|length }})</span></h1>
+  {% if config_can('add') %}
+    <a href="{{ url_for('config_admin.host_edit') }}" class="btn btn-primary">+ {{ _('Agregar host') }}</a>
+  {% endif %}
 </div>
 
 <div class="card" style="padding:0; overflow:hidden;">
   <table>
     <thead>
       <tr>
-        <th>Nombre</th>
-        <th>IP / Dirección</th>
-        <th>Servicios</th>
-        <th>Contacto</th>
-        <th style="width:120px;"></th>
+        <th>{{ _('Nombre') }}</th>
+        <th>{{ _('IP / Dirección') }}</th>
+        <th>{{ _('Servicios') }}</th>
+        <th>{{ _('Contacto') }}</th>
+        {% if config_can('edit') or config_can('delete') %}<th style="width:120px;"></th>{% endif %}
       </tr>
     </thead>
     <tbody>
     {% for name, host in hosts.items() | sort %}
       <tr>
         <td>
-          <a href="{{ url_for('config_admin.host_edit', hostname=name) }}"
-             style="color:var(--link); text-decoration:none; font-weight:500;">{{ name }}</a>
+          {% if config_can('edit') %}
+            <a href="{{ url_for('config_admin.host_edit', hostname=name) }}"
+               style="color:var(--link); text-decoration:none; font-weight:500;">{{ name }}</a>
+          {% else %}
+            <span style="font-weight:500; color:var(--text-h);">{{ name }}</span>
+          {% endif %}
           {% if host.get('schedules') %}
-            <span title="Tiene horarios de supresión" style="color:var(--yellow); font-size:11px; margin-left:5px;">⏱</span>
+            <span title="{{ _('Tiene horarios de supresión') }}" style="color:var(--yellow); font-size:11px; margin-left:5px;">⏱</span>
           {% endif %}
         </td>
         <td>
@@ -36,19 +42,25 @@
           <span class="mono">{{ host.get('services','') | truncate(60, True, '…') }}</span>
         </td>
         <td style="color:var(--text-m);">{{ host.get('contact','') }}</td>
-        <td>
-          <div class="actions">
-            <a href="{{ url_for('config_admin.host_edit', hostname=name) }}" class="btn btn-secondary btn-sm">Editar</a>
-            <form method="post" action="{{ url_for('config_admin.host_delete', hostname=name) }}"
-                  onsubmit="return confirm('¿Eliminar el host «{{ name }}»?');" style="display:inline;">
-              <button type="submit" class="btn btn-danger btn-sm">Borrar</button>
-            </form>
-          </div>
-        </td>
+        {% if config_can('edit') or config_can('delete') %}
+          <td>
+            <div class="actions">
+              {% if config_can('edit') %}
+                <a href="{{ url_for('config_admin.host_edit', hostname=name) }}" class="btn btn-secondary btn-sm">{{ _('Editar') }}</a>
+              {% endif %}
+              {% if config_can('delete') %}
+                <form method="post" action="{{ url_for('config_admin.host_delete', hostname=name) }}"
+                      onsubmit='return confirm({{ (_('¿Eliminar el host') ~ ' «' ~ name ~ '»?') | tojson }});' style="display:inline;">
+                  <button type="submit" class="btn btn-danger btn-sm">{{ _('Borrar') }}</button>
+                </form>
+              {% endif %}
+            </div>
+          </td>
+        {% endif %}
       </tr>
     {% else %}
-      <tr><td colspan="5" style="text-align:center; color:var(--text-m); padding:30px;">
-        No hay hosts configurados. <a href="{{ url_for('config_admin.host_edit') }}" style="color:var(--link);">Agregar el primero</a>.
+      <tr><td colspan="{{ 5 if config_can('edit') or config_can('delete') else 4 }}" style="text-align:center; color:var(--text-m); padding:30px;">
+        {{ _('No hay hosts configurados.') }}{% if config_can('add') %} <a href="{{ url_for('config_admin.host_edit') }}" style="color:var(--link);">{{ _('Agregar el primero') }}</a>.{% endif %}
       </td></tr>
     {% endfor %}
     </tbody>

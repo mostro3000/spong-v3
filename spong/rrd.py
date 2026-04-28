@@ -1125,6 +1125,8 @@ def update_from_status(host, service, summary, message, timestamp):
         elif svc == "diski":
             _update_diski(rrd_dir, host, message or "", timestamp)
 
+        elif svc == "cpu":
+            _update_cpu(rrd_dir, host, summary or "", timestamp)
         elif svc == "memory":
             _update_memory(rrd_dir, host, summary or "", message or "", timestamp)
         elif svc == "processes":

@@ -1,40 +1,40 @@
 {% extends "config_base.html" %}
-{% block title %}{{ 'Editar' if hostname else 'Nuevo host' }} — SPONG Config{% endblock %}
+{% block title %}{{ _('Editar') if hostname else _('Nuevo host') }} - SPONG {{ _('Configuración') }}{% endblock %}
 {% block content %}
 <div class="list-header">
-  <h1 style="margin:0;">{{ 'Editar host: ' + hostname if hostname else 'Agregar host' }}</h1>
-  <a href="{{ url_for('config_admin.hosts') }}" class="btn btn-secondary">← Volver</a>
+  <h1 style="margin:0;">{% if hostname %}{{ _('Editar host:') }} {{ hostname }}{% else %}{{ _('Agregar host') }}{% endif %}</h1>
+  <a href="{{ url_for('config_admin.hosts') }}" class="btn btn-secondary">← {{ _('Volver') }}</a>
 </div>
 
 {% if error %}
-  <div class="alert alert-error">{{ error }}</div>
+  <div class="alert alert-error">{{ _(error) }}</div>
 {% endif %}
 
 <form method="post">
 
   <!-- Datos básicos -->
   <div class="card">
-    <h2>Datos del host</h2>
+    <h2>{{ _('Datos del host') }}</h2>
     <div class="form-row">
       <div class="form-group">
-        <label class="field-label" for="hostname">Nombre del host</label>
+        <label class="field-label" for="hostname">{{ _('Nombre del host') }}</label>
         <input type="text" id="hostname" name="hostname"
-               value="{{ hostname or '' }}" placeholder="ej: camara-jardin" required
+               value="{{ hostname or '' }}" placeholder="{{ _('ej: camara-jardin') }}" required
                {% if hostname %}readonly style="opacity:.6;"{% endif %}>
         {% if hostname %}
-          <div class="field-hint">El nombre no se puede cambiar. Para renombrar, eliminá y volvé a crear.</div>
+          <div class="field-hint">{{ _('El nombre no se puede cambiar. Para renombrar, eliminá y volvé a crear.') }}</div>
         {% endif %}
       </div>
       <div class="form-group">
-        <label class="field-label" for="ip_addr">Dirección IP</label>
+        <label class="field-label" for="ip_addr">{{ _('Dirección IP') }}</label>
         <input type="text" id="ip_addr" name="ip_addr"
                value="{{ (host.get('ip_addr') or []) | join(', ') }}"
-               placeholder="ej: 192.168.0.50">
-        <div class="field-hint">Una o más IPs separadas por coma. Si se deja vacío se usa el nombre.</div>
+               placeholder="{{ _('ej: 192.168.0.50') }}">
+        <div class="field-hint">{{ _('Una o más IPs separadas por coma. Si se deja vacío se usa el nombre.') }}</div>
       </div>
     </div>
     <div class="form-group" style="max-width:300px;">
-      <label class="field-label" for="contact">Contacto</label>
+      <label class="field-label" for="contact">{{ _('Contacto') }}</label>
       {% if contacts %}
         <select id="contact" name="contact">
           {% for c in contacts %}
@@ -49,15 +49,15 @@
 
   <!-- Servicios -->
   <div class="card">
-    <h2>Servicios a monitorear</h2>
+    <h2>{{ _('Servicios a monitorear') }}</h2>
     <p style="color:var(--text-m); font-size:13px; margin-bottom:16px;">
-      Marcá los servicios que querés verificar en este host.
+      {{ _('Marcá los servicios que querés verificar en este host.') }}
     </p>
 
     <!-- Ping especial -->
     {% set ping_checked = 'ping' in svcs_set %}
     <div class="svc-cat">
-      <div class="svc-cat-title">Básico</div>
+      <div class="svc-cat-title">{{ _('Básico') }}</div>
       <label class="check-item {{ 'checked' if ping_checked }}">
         <input type="checkbox" name="services" value="ping" {{ 'checked' if ping_checked }}>
         ping
@@ -66,8 +66,8 @@
         <input type="checkbox" id="ping_stop" name="ping_stop"
                {{ 'checked' if 'ping' in stops_set }}>
         <label for="ping_stop" style="cursor:pointer; color:var(--text-m);">
-          Si ping falla, <strong style="color:var(--text);">no verificar el resto de los servicios</strong>
-          <span style="font-size:11px;">(recomendado para equipos en red local)</span>
+          {{ _('Si ping falla,') }} <strong style="color:var(--text);">{{ _('no verificar el resto de los servicios') }}</strong>
+          <span style="font-size:11px;">({{ _('recomendado para equipos en red local') }})</span>
         </label>
       </div>
     </div>
@@ -77,7 +77,7 @@
     {% for cat_name, cat_svcs in categories %}
       {% if cat_svcs and cat_svcs != ['ping'] %}
         <div class="svc-cat">
-          <div class="svc-cat-title">{{ cat_name }}</div>
+          <div class="svc-cat-title">{{ _(cat_name) }}</div>
           <div class="check-group">
             {% for svc in cat_svcs %}
               {% if svc != 'ping' %}
@@ -95,29 +95,29 @@
 
     <hr class="divider">
     <div class="form-group" style="max-width:500px;">
-      <label class="field-label" for="custom_services">Servicios adicionales</label>
+      <label class="field-label" for="custom_services">{{ _('Servicios adicionales') }}</label>
       <input type="text" id="custom_services" name="custom_services"
              value="{{ custom_list | join(' ') }}"
-             placeholder="ej: camara1 dvrcam3 ups_snmp">
-      <div class="field-hint">Plugins que no aparecen arriba, separados por espacio.</div>
+             placeholder="{{ _('ej: camara1 dvrcam3 ups_snmp') }}">
+      <div class="field-hint">{{ _('Plugins que no aparecen arriba, separados por espacio.') }}</div>
     </div>
   </div>
 
   <!-- Horarios de supresión -->
   <div class="card">
-    <h2>Horarios de supresión de alertas <span style="font-size:12px; color:var(--text-m); font-weight:400;">(opcional)</span></h2>
+    <h2>{{ _('Horarios de supresión de alertas') }} <span style="font-size:12px; color:var(--text-m); font-weight:400;">({{ _('opcional') }})</span></h2>
     <p style="color:var(--text-m); font-size:13px; margin-bottom:16px;">
-      Durante estos horarios, si el servicio está en rojo, <strong style="color:var(--text);">se mostrará en blanco</strong> en el dashboard (no dispara alerta).
-      El historial siempre guarda el estado real.
+      {{ _('Durante estos horarios, si el servicio está en rojo, se mostrará en blanco en el dashboard (no dispara alerta).') }}
+      {{ _('El historial siempre guarda el estado real.') }}
     </p>
 
     <table class="sched-table" id="sched-table">
       <thead>
         <tr>
-          <th>Servicio</th>
-          <th>Días</th>
-          <th>Desde</th>
-          <th>Hasta</th>
+          <th>{{ _('Servicio') }}</th>
+          <th>{{ _('Días') }}</th>
+          <th>{{ _('Desde') }}</th>
+          <th>{{ _('Hasta') }}</th>
           <th></th>
         </tr>
       </thead>
@@ -129,7 +129,7 @@
               <td><input type="text" name="sched_service" value="{{ svc_name }}" placeholder="cpu" style="width:110px;"></td>
               <td>
                 <div class="day-grid">
-                  {% for d, label in [('1','L'),('2','M'),('3','X'),('4','J'),('5','V'),('6','S'),('7','D')] %}
+                  {% for d, label in [('1',_('L')),('2',_('M')),('3',_('X')),('4',_('J')),('5',_('V')),('6',_('S')),('7',_('D'))] %}
                     <label class="day-cb">
                       <input type="checkbox" class="day-check" value="{{ d }}"> {{ label }}
                     </label>
@@ -147,20 +147,21 @@
     </table>
 
     <button type="button" class="btn btn-secondary" style="margin-top:12px;" onclick="addSchedRow()">
-      + Agregar horario
+      + {{ _('Agregar horario') }}
     </button>
   </div>
 
   <!-- Actions -->
   <div style="display:flex; gap:10px;">
-    <button type="submit" class="btn btn-primary" style="min-width:120px;">Guardar</button>
-    <a href="{{ url_for('config_admin.hosts') }}" class="btn btn-secondary">Cancelar</a>
+    <button type="submit" class="btn btn-primary" style="min-width:120px;">{{ _('Guardar') }}</button>
+    <a href="{{ url_for('config_admin.hosts') }}" class="btn btn-secondary">{{ _('Cancelar') }}</a>
   </div>
 
 </form>
 
 <script>
-const DAY_LABELS = ['L','M','X','J','V','S','D'];
+const DAY_LABELS = {{ [_('L'), _('M'), _('X'), _('J'), _('V'), _('S'), _('D')] | tojson }};
+const SCHED_SERVICE_PLACEHOLDER = {{ _('ej: cpu') | tojson }};
 
 function parseDaysStr(str) {
   const days = new Set();
@@ -208,7 +209,7 @@ function addSchedRow() {
   tr.className = 'sched-row';
   tr.dataset.days = '1-5';
   tr.innerHTML = `
-    <td><input type="text" name="sched_service" placeholder="ej: cpu" style="width:110px;"></td>
+    <td><input type="text" name="sched_service" placeholder="${SCHED_SERVICE_PLACEHOLDER}" style="width:110px;"></td>
     <td>
       <div class="day-grid">
         ${DAY_LABELS.map((l,i) => `<label class="day-cb"><input type="checkbox" class="day-check" value="${i+1}"> ${l}</label>`).join('')}

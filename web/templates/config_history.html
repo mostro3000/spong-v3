@@ -1,25 +1,26 @@
 {% extends "config_base.html" %}
-{% block title %}Historial — SPONG Config{% endblock %}
+{% block title %}{{ _('Historial') }} - SPONG {{ _('Configuración') }}{% endblock %}
 {% block content %}
 <div class="list-header">
-  <h1 style="margin:0;">Historial de cambios</h1>
+  <h1 style="margin:0;">{{ _('Historial de cambios') }}</h1>
 </div>
 
 {% if not entries %}
 <div class="card" style="text-align:center; color:var(--text-m); padding:48px 20px;">
   <div style="font-size:42px; margin-bottom:12px;">📋</div>
-  <div style="font-size:15px; color:var(--text);">No hay cambios registrados aún.</div>
-  <div style="font-size:12px; margin-top:6px;">Los próximos cambios que hagas desde aquí quedarán registrados automáticamente.</div>
+  <div style="font-size:15px; color:var(--text);">{{ _('No hay cambios registrados aún.') }}</div>
+  <div style="font-size:12px; margin-top:6px;">{{ _('Los próximos cambios que hagas desde aquí quedarán registrados automáticamente.') }}</div>
 </div>
 {% else %}
 <div class="card" style="padding:0; overflow:hidden;">
   <table>
     <thead>
       <tr>
-        <th>Fecha y hora</th>
-        <th>Archivo</th>
-        <th>Acción</th>
-        <th>Detalle</th>
+        <th>{{ _('Fecha y hora') }}</th>
+        <th>{{ _('Usuario') }}</th>
+        <th>{{ _('Archivo') }}</th>
+        <th>{{ _('Acción') }}</th>
+        <th>{{ _('Detalle') }}</th>
         <th style="width:170px;"></th>
       </tr>
     </thead>
@@ -30,18 +31,24 @@
         <td style="color:var(--text-m); font-size:12px; white-space:nowrap; font-family:monospace;">
           {{ entry.get('ts','') | replace('T',' ') }}
         </td>
+        <td>
+          <span class="tag">{{ entry.get('user') or '-' }}</span>
+          {% if entry.get('role') %}
+            <span style="color:var(--text-m); font-size:11px;">{{ entry.get('role') }}</span>
+          {% endif %}
+        </td>
         <td><span class="tag">{{ entry.get('config','') }}.yaml</span></td>
         <td>
           {% if action == 'new' %}
-            <span style="color:#3daa50; font-weight:600; font-size:12px;">&#9679; Nuevo</span>
+            <span style="color:#3daa50; font-weight:600; font-size:12px;">&#9679; {{ _('Nuevo') }}</span>
           {% elif action == 'edit' %}
-            <span style="color:var(--link); font-weight:600; font-size:12px;">&#9679; Editado</span>
+            <span style="color:var(--link); font-weight:600; font-size:12px;">&#9679; {{ _('Editado') }}</span>
           {% elif action == 'delete' %}
-            <span style="color:var(--red); font-weight:600; font-size:12px;">&#9679; Eliminado</span>
+            <span style="color:var(--red); font-weight:600; font-size:12px;">&#9679; {{ _('Eliminado') }}</span>
           {% elif action == 'restore' %}
-            <span style="color:#a070d8; font-weight:600; font-size:12px;">&#9679; Restaurado</span>
+            <span style="color:#a070d8; font-weight:600; font-size:12px;">&#9679; {{ _('Restaurado') }}</span>
           {% elif action == 'pre-restore' %}
-            <span style="color:var(--yellow); font-weight:600; font-size:12px;">&#9679; Backup</span>
+            <span style="color:var(--yellow); font-weight:600; font-size:12px;">&#9679; {{ _('Backup') }}</span>
           {% else %}
             <span style="color:var(--text-m); font-size:12px;">{{ action }}</span>
           {% endif %}
@@ -50,16 +57,17 @@
         <td>
           <div class="actions">
             <a href="{{ url_for('config_admin.history_view', config_name=entry.get('config',''), ts_key=entry.get('ts_key','')) }}"
-               class="btn btn-secondary btn-sm">Ver</a>
-            <form method="post"
-                  action="{{ url_for('config_admin.history_restore', config_name=entry.get('config',''), ts_key=entry.get('ts_key','')) }}"
-                  onsubmit="return confirm('¿Restaurar esta versión de {{ entry.get('config','') }}.yaml?\n\nEl estado actual se guardará como backup automático antes de restaurar.');"
-                  style="display:inline;">
-              <button type="submit" class="btn btn-sm"
-                      style="background:#1e1030; color:#c090f0; border:1px solid #5a3a80;">
-                &#8629; Restaurar
-              </button>
-            </form>
+               class="btn btn-secondary btn-sm">{{ _('Ver') }}</a>
+            {% if config_can('restore') %}
+              <form method="post"
+                    action="{{ url_for('config_admin.history_restore', config_name=entry.get('config',''), ts_key=entry.get('ts_key','')) }}"
+                    onsubmit='return confirm({{ (_('¿Restaurar esta versión de') ~ ' ' ~ entry.get('config','') ~ '.yaml?\n\n' ~ _('El estado actual se guardará como backup automático antes de restaurar.')) | tojson }});'
+                    style="display:inline;">
+                <button type="submit" class="btn btn-sm restore-btn">
+                  &#8629; {{ _('Restaurar') }}
+                </button>
+              </form>
+            {% endif %}
           </div>
         </td>
       </tr>

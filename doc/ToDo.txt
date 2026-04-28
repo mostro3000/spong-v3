@@ -8,16 +8,19 @@
 + Ver de poner horario a eventos que marque con rojo, por ejemplo carga cpu eco1 por la manana que lo vea pero no ponga en rojo de lunes 1 viernes de 7:30hs a 16:00hs   [DONE v3.5.0]
 + Front-end configuracion hosts.yaml / groups.yaml para gente con poco conocimiento   [DONE v3.5.0]
 - actualizar version a v3.5.1 , generar .deb v3.5.1, actualizar documentacion y subir a github
-- ver pq no anda graficos de cpu
-- revision de que este en todos lo idiomas completos y que incluyan le edicion de config y tambien modo claro/oscuro en config
-- ver de poder tener la clave encriptada en la config
-- hacer que tenga niveles de usuarios para config, por ejemplo uno que solo pueda agregar sin poder editar/borrar
-- tener muchos usuarios para config, y que se registre cuando modifican algo lo que modifican
++ ver pq no anda graficos de cpu
++ revision de que este en todos lo idiomas completos y que incluyan le edicion de config y tambien modo claro/oscuro en config
++ modifica para poder tener la clave encriptada en la config
++ cuando en config se apunta a "SPONG Configuracion", hacer que se muestre SPONG vx.x.x - creado por mt (igual que en spong)
++ hacer que tenga niveles de usuarios para config, por ejemplo uno que solo pueda agregar sin poder editar/borrar
++ en config -> Host, sale un servicion ".py" , no tiene que estar
++ en el spong, si presiono sobre el nombre del grupo poder minimizar/ampliar la vista de todo el grupo y que por defecto el grupo esta como minimizado si esta en verde, pero si esta en rojo/amarillo/violeta este ampliado
++ tener muchos usuarios para config, y que se registre cuando modifican algo lo que modifican
++ el user admin tambien tiene que poder config los usuarios/claves/roles
+- agragear opcion de salir de user en config
 - En los graficos de temperaturas, cuando es por dia, mes y año, hacer graficos de maximo y minimo de cada hora/dia/mes, como se ve en /usr/local/spong/tmp/temp.png
 - desde el host del spong poder ir a modificar directamenta la config si se tiene los permisos necesarios
-- en config -> Host, sale un servicion ".py" , no tiene que estar
 - si tengo un servicio en rojo, y lo borro con el config, este sigue apareciendo como rojo
-- en config/Hosts pode oredenar por Host/IP  de Menor a Mayor  o viceversa
+- en config/Hosts pode oredenar por Host/IP  de Menor a Mayor o viceversa
 - en config/Grupos poder oredenar por Clave/Nombre de Menor a Mayor o viceversa
-- en el spong, si presiono sobre el nombre del grupo poder minimizar/ampliar la vista de todo el grupo y que por defecto el grupo esta como minimizado si esta en verde, pero si esta en rojo/amarillo este ampliado
-
+- actualizar version a v3.5.1 , generar .deb v3.5.1, actualizar documentacion y subir a github

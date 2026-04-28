@@ -123,12 +123,27 @@ cleanup:
 web:
   # Basic Auth for the monitor dashboard — leave empty to disable
   auth_user: "admin"
+  # Plain text is supported for compatibility. Prefer auth_password_hash.
   auth_password: "changeme"
+  auth_password_hash: ""  # generate with: python3 -c 'from werkzeug.security import generate_password_hash; print(generate_password_hash("changeme"))'
 
   # Basic Auth for the config UI (/config/) — separate credentials
   # Set to empty string to disable the config UI entirely
   config_user: "config"
+  # Plain text is supported for compatibility. Prefer config_password_hash.
   config_password: "changeme2"
+  config_password_hash: ""
+  # Optional multiple users for /config/. If omitted, config_user remains an admin.
+  # Roles: admin = all, editor = add/edit, add = add only, read = view only.
+  # config_users:
+  #   config:
+  #     password: "changeme2"
+  #     password_hash: ""
+  #     role: "admin"
+  #   altas:
+  #     password: "changeme3"
+  #     password_hash: ""
+  #     role: "add"
 
   general_history_days: 7     # days shown in /history
   auto_refresh_seconds: 300   # dashboard auto-refresh interval (0 = off)

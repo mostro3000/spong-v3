@@ -348,6 +348,16 @@ processes:
 web:
   auth_user: "spong"        # Basic Auth (vacío = sin auth)
   auth_password: "spong123"
+  auth_password_hash: ""    # preferido: hash Werkzeug scrypt/pbkdf2
+  # Usuarios opcionales para /config/. Roles: admin, editor, add, read.
+  # add permite agregar sin editar, borrar ni restaurar.
+  config_users:
+    config:
+      password_hash: "scrypt:..."
+      role: "admin"
+    altas:
+      password_hash: "scrypt:..."
+      role: "add"
   general_history_days: 7   # días a mostrar en /history
   auto_refresh_seconds: 300 # refresh automático en vistas generales; 0 deshabilita
   graph_cache_seconds: 60   # TTL de caché para /rrd/*.png
@@ -612,7 +622,13 @@ presence:
 - Directo (Flask): `http://s2:8090`
 - Vía Apache: `http://s2/spong` (o cualquier hostname que apunte al servidor)
 
-**Autenticación:** Basic Auth HTTP. Configurar en `spong.yaml` → `web.auth_user` / `web.auth_password`. Dejar `auth_user` vacío para deshabilitar.
+**Autenticación:** Basic Auth HTTP. Configurar en `spong.yaml` → `web.auth_user` / `web.auth_password` o, preferentemente, `web.auth_password_hash`. El panel `/config/` puede usar el usuario legacy `web.config_user` / `web.config_password_hash` como administrador, o `web.config_users` para varios usuarios con roles. Roles disponibles: `admin` (todo), `editor` (agregar/editar), `add` (solo agregar) y `read` (solo lectura). Dejar `auth_user` vacío deshabilita el auth del monitor; dejar `config_user` vacío y no definir `config_users` deshabilita el panel de configuración.
+
+Para generar un hash:
+
+```bash
+python3 -c 'from werkzeug.security import generate_password_hash; print(generate_password_hash("tu-clave"))'
+```
 
 ### Páginas
 

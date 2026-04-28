@@ -281,6 +281,18 @@
     .group-title.has-green { border-left-color: #43a047; }
     .group-title .badge { font-size: 10px; min-width: 38px; }
     .group-title .host-count { font-size: 11px; font-weight: 400; color: var(--text-d); margin-left: auto; }
+    .group-toggle {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: transparent; border: 0; padding: 2px 4px;
+      color: inherit; font: inherit; font-weight: 700; cursor: pointer;
+      border-radius: 4px;
+    }
+    .group-toggle:hover { background: var(--hover2); }
+    .group-toggle:hover .group-name { text-decoration: underline; }
+    .group-caret::before { content: "▾"; display: inline-block; width: 10px; color: var(--text-d); }
+    .group-section.collapsed .group-caret::before { content: "▸"; }
+    .group-section.collapsed .group-body { display: none; }
+    .group-section.collapsed .group-title { border-radius: 6px; border-bottom: 1px solid var(--border); }
 
     /* ---- Matrix ---- */
     .matrix-wrap { background: var(--surface); border: 1px solid var(--border); border-top: none; border-radius: 0 0 6px 6px; overflow-x: auto; }

@@ -8,15 +8,23 @@
 </div>
 
 {% for group in groups %}
-<div class="group-section" id="group-{{ group.key }}">
+{% set starts_collapsed = group.color not in ('red', 'yellow', 'purple') %}
+<div class="group-section {{ 'collapsed' if starts_collapsed }}" id="group-{{ group.key }}">
   <div class="group-title has-{{ group.color }}">
     <span style="display:inline-block; width:12px; height:12px; border-radius:50%; flex-shrink:0;
                  box-shadow:0 1px 3px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.2);"
           class="color-{{ group.color }}"></span>
-    {{ group.name }}
+    <button type="button" class="group-toggle"
+            aria-expanded="{{ 'false' if starts_collapsed else 'true' }}"
+            aria-controls="group-body-{{ group.key }}"
+            title="{{ _('Ampliar grupo') if starts_collapsed else _('Minimizar grupo') }}">
+      <span class="group-caret" aria-hidden="true"></span>
+      <span class="group-name">{{ group.name }}</span>
+    </button>
     <span class="host-count">{{ group.hosts|length }} hosts</span>
   </div>
 
+  <div class="group-body" id="group-body-{{ group.key }}">
   {% if group.service_cols %}
   <div class="matrix-wrap">
   <table class="matrix-table">
@@ -52,9 +60,26 @@
   </table>
   </div>
   {% else %}
-  <div style="padding:10px 14px; color:#90a4ae; background:#fff; border:1px solid #e0e4ea; border-top:none; border-radius:0 0 6px 6px;">{{ _('Sin datos.') }}</div>
+  <div style="padding:10px 14px; color:#90a4ae; background:var(--surface); border:1px solid var(--border); border-top:none; border-radius:0 0 6px 6px;">{{ _('Sin datos.') }}</div>
   {% endif %}
+  </div>
 </div>
 {% endfor %}
+
+<script>
+(function() {
+  var expandLabel = {{ _('Ampliar grupo') | tojson }};
+  var collapseLabel = {{ _('Minimizar grupo') | tojson }};
+  document.querySelectorAll('.group-toggle').forEach(function(button) {
+    button.addEventListener('click', function() {
+      var section = button.closest('.group-section');
+      if (!section) return;
+      var collapsed = section.classList.toggle('collapsed');
+      button.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+      button.title = collapsed ? expandLabel : collapseLabel;
+    });
+  });
+})();
+</script>
 
 {% endblock %}

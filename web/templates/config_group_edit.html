@@ -1,59 +1,59 @@
 {% extends "config_base.html" %}
-{% block title %}{{ 'Editar grupo' if group_key else 'Nuevo grupo' }} — SPONG Config{% endblock %}
+{% block title %}{{ _('Editar grupo') if group_key else _('Nuevo grupo') }} - SPONG {{ _('Configuración') }}{% endblock %}
 {% block content %}
 <div class="list-header">
-  <h1 style="margin:0;">{{ 'Editar grupo: ' + group_key if group_key else 'Agregar grupo' }}</h1>
-  <a href="{{ url_for('config_admin.groups') }}" class="btn btn-secondary">← Volver</a>
+  <h1 style="margin:0;">{% if group_key %}{{ _('Editar grupo:') }} {{ group_key }}{% else %}{{ _('Agregar grupo') }}{% endif %}</h1>
+  <a href="{{ url_for('config_admin.groups') }}" class="btn btn-secondary">← {{ _('Volver') }}</a>
 </div>
 
 {% if error %}
-  <div class="alert alert-error">{{ error }}</div>
+  <div class="alert alert-error">{{ _(error) }}</div>
 {% endif %}
 
 <form method="post">
   <div class="card">
-    <h2>Datos del grupo</h2>
+    <h2>{{ _('Datos del grupo') }}</h2>
     <div class="form-row">
       <div class="form-group">
-        <label class="field-label" for="group_key">Clave interna</label>
+        <label class="field-label" for="group_key">{{ _('Clave interna') }}</label>
         <input type="text" id="group_key" name="group_key"
-               value="{{ group_key or '' }}" placeholder="ej: camaras"
+               value="{{ group_key or '' }}" placeholder="{{ _('ej: camaras') }}"
                {% if group_key %}readonly style="opacity:.6;"{% endif %} required>
-        <div class="field-hint">Identificador único, sin espacios ni caracteres especiales.</div>
+        <div class="field-hint">{{ _('Identificador único, sin espacios ni caracteres especiales.') }}</div>
       </div>
       <div class="form-group">
-        <label class="field-label" for="name">Nombre para mostrar</label>
+        <label class="field-label" for="name">{{ _('Nombre para mostrar') }}</label>
         <input type="text" id="name" name="name"
-               value="{{ group.get('name', group_key or '') }}" placeholder="ej: Cámaras" required>
+               value="{{ group.get('name', group_key or '') }}" placeholder="{{ _('ej: Cámaras') }}" required>
       </div>
     </div>
     <div class="form-group" style="max-width:400px;">
-      <label class="field-label" for="summary">Descripción <span style="font-weight:400; text-transform:none;">(opcional)</span></label>
+      <label class="field-label" for="summary">{{ _('Descripción') }} <span style="font-weight:400; text-transform:none;">({{ _('opcional') }})</span></label>
       <input type="text" id="summary" name="summary"
-             value="{{ group.get('summary', '') }}" placeholder="ej: Cámaras IP de seguridad">
+             value="{{ group.get('summary', '') }}" placeholder="{{ _('ej: Cámaras IP de seguridad') }}">
     </div>
     <div style="display:flex; gap:20px; flex-wrap:wrap;">
       <label class="ping-stop" style="cursor:pointer;">
         <input type="checkbox" name="display" id="display"
                {{ 'checked' if group.get('display', True) }}>
-        <span><strong style="color:var(--text);">Visible en el dashboard</strong>
-          <span style="font-size:11px; color:var(--text-m);"> — desmarcar para ocultar el grupo</span></span>
+        <span><strong style="color:var(--text);">{{ _('Visible en el dashboard') }}</strong>
+          <span style="font-size:11px; color:var(--text-m);"> - {{ _('desmarcar para ocultar el grupo') }}</span></span>
       </label>
       <label class="ping-stop" style="cursor:pointer;">
         <input type="checkbox" name="compress" id="compress"
                {{ 'checked' if group.get('compress') }}>
-        <span><strong style="color:var(--text);">Vista compacta</strong>
-          <span style="font-size:11px; color:var(--text-m);"> — muestra solo el color de cada host, sin columnas de servicios</span></span>
+        <span><strong style="color:var(--text);">{{ _('Vista compacta') }}</strong>
+          <span style="font-size:11px; color:var(--text-m);"> - {{ _('muestra solo el color de cada host, sin columnas de servicios') }}</span></span>
       </label>
     </div>
   </div>
 
   <div class="card">
-    <h2>Hosts en este grupo <span style="font-size:12px; color:var(--text-m); font-weight:400;" id="selected-count"></span></h2>
+    <h2>{{ _('Hosts en este grupo') }} <span style="font-size:12px; color:var(--text-m); font-weight:400;" id="selected-count"></span></h2>
     <p style="color:var(--text-m); font-size:13px; margin-bottom:12px;">
-      Marcá los hosts que pertenecen a este grupo.
+      {{ _('Marcá los hosts que pertenecen a este grupo.') }}
     </p>
-    <input type="text" class="search-input" placeholder="Buscar host…" id="host-search"
+    <input type="text" class="search-input" placeholder="{{ _('Buscar host...') }}" id="host-search"
            style="max-width:300px;" oninput="filterHosts(this.value)">
     <div class="member-grid" id="member-grid">
       {% set current_members = group.get('members', []) %}
@@ -68,12 +68,14 @@
   </div>
 
   <div style="display:flex; gap:10px;">
-    <button type="submit" class="btn btn-primary" style="min-width:120px;">Guardar</button>
-    <a href="{{ url_for('config_admin.groups') }}" class="btn btn-secondary">Cancelar</a>
+    <button type="submit" class="btn btn-primary" style="min-width:120px;">{{ _('Guardar') }}</button>
+    <a href="{{ url_for('config_admin.groups') }}" class="btn btn-secondary">{{ _('Cancelar') }}</a>
   </div>
 </form>
 
 <script>
+const SELECTED_LABEL = {{ _('seleccionados') | tojson }};
+
 function filterHosts(query) {
   query = query.toLowerCase().trim();
   document.querySelectorAll('.member-item').forEach(function(item) {
@@ -85,7 +87,7 @@ function filterHosts(query) {
 function updateCount() {
   const total   = document.querySelectorAll('.member-item input:checked').length;
   const counter = document.getElementById('selected-count');
-  if (counter) counter.textContent = total ? `(${total} seleccionados)` : '';
+  if (counter) counter.textContent = total ? `(${total} ${SELECTED_LABEL})` : '';
 }
 
 document.querySelectorAll('.member-item input').forEach(function(cb) {

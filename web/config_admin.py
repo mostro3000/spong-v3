@@ -9,9 +9,11 @@ import yaml
 from datetime import datetime
 from pathlib import Path
 from functools import wraps
-from flask import Blueprint, render_template, request, redirect, url_for, Response
+from flask import Blueprint, render_template, request, redirect, url_for, Response, g, has_request_context
+from werkzeug.security import generate_password_hash
 
 from spong import config as spong_config
+from auth_utils import check_basic_auth
 
 config_bp = Blueprint('config_admin', __name__, url_prefix='/config')
 
@@ -20,12 +22,16 @@ PLUGIN_DIR  = Path('/usr/local/spong/spong/plugins/network')
 HISTORY_DIR = Path('/usr/local/spong/var/config_history')
 
 _NUMBERED_RE = re.compile(r'^(.+?)\d+$')
+_SERVICE_NAME_RE = re.compile(r'^[A-Za-z][A-Za-z0-9_]*$')
+_USER_NAME_RE = re.compile(r'^[A-Za-z0-9_.-]+$')
 _MAX_HISTORY = 100
 
 _CONFIG_FILES = {
     'hosts':  ETC_DIR / 'hosts.yaml',
     'groups': ETC_DIR / 'groups.yaml',
 }
+
+_SUPPORTED_CONFIG_LANGS = {'es', 'en', 'fr', 'de', 'pt', 'zh', 'ru'}
 
 _ACTION_LABELS = {
     'new':         'Nuevo',
@@ -35,31 +41,155 @@ _ACTION_LABELS = {
     'pre-restore': 'Backup previo',
 }
 
+_CONFIG_PERMISSIONS = {'view', 'add', 'edit', 'delete', 'restore', 'users'}
+_CONFIG_ROLES = {
+    'admin':  _CONFIG_PERMISSIONS,
+    'editor': {'view', 'add', 'edit'},
+    'add':    {'view', 'add'},
+    'read':   {'view'},
+}
+_CONFIG_ROLE_ALIASES = {
+    'owner':     'admin',
+    'write':     'editor',
+    'readonly':  'read',
+    'read-only': 'read',
+    'viewer':    'read',
+    'add-only':  'add',
+    'add_only':  'add',
+}
+
 
 # ---------------------------------------------------------------------------
 # Auth
 # ---------------------------------------------------------------------------
 
-def _check_config_auth(username: str, password: str) -> bool:
-    user   = spong_config.get('web.config_user', '')
-    passwd = spong_config.get('web.config_password', '')
-    return bool(user) and username == user and password == passwd
+def _normalize_config_role(role: str | None) -> str:
+    role = (role or 'read').strip().lower()
+    return _CONFIG_ROLE_ALIASES.get(role, role if role in _CONFIG_ROLES else 'read')
+
+
+def _normalize_permissions(raw_permissions, role: str) -> frozenset[str]:
+    if raw_permissions is None:
+        return frozenset(_CONFIG_ROLES[role])
+    if isinstance(raw_permissions, str):
+        values = re.split(r'[\s,]+', raw_permissions)
+    elif isinstance(raw_permissions, (list, tuple, set)):
+        values = raw_permissions
+    else:
+        values = []
+    permissions = {str(p).strip().lower() for p in values if str(p).strip()}
+    permissions = {p for p in permissions if p in _CONFIG_PERMISSIONS}
+    permissions.add('view')
+    return frozenset(permissions)
+
+
+def _config_user_entries() -> dict[str, dict]:
+    entries: dict[str, dict] = {}
+    users_cfg = spong_config.get('web.config_users', {})
+    if isinstance(users_cfg, dict):
+        for username, entry in users_cfg.items():
+            username = str(username or '').strip()
+            if not username or not isinstance(entry, dict):
+                continue
+            role = _normalize_config_role(entry.get('role'))
+            entries[username] = {
+                'password': entry.get('password', ''),
+                'password_hash': entry.get('password_hash', ''),
+                'role': role,
+                'permissions': _normalize_permissions(entry.get('permissions'), role),
+            }
+
+    legacy_user = spong_config.get('web.config_user', '')
+    if legacy_user and legacy_user not in entries:
+        entries[legacy_user] = {
+            'password': spong_config.get('web.config_password', ''),
+            'password_hash': spong_config.get('web.config_password_hash', ''),
+            'role': 'admin',
+            'permissions': frozenset(_CONFIG_ROLES['admin']),
+        }
+    return entries
+
+
+def _config_users_section() -> dict[str, dict]:
+    data = _load_yaml(ETC_DIR / 'spong.yaml')
+    web = data.get('web', {})
+    users_cfg = web.get('config_users', {})
+    return users_cfg if isinstance(users_cfg, dict) else {}
+
+
+def _dump_config_users_section(users_cfg: dict[str, dict]) -> None:
+    data = _load_yaml(ETC_DIR / 'spong.yaml')
+    web = data.setdefault('web', {})
+    web['config_users'] = users_cfg
+    _save_yaml(ETC_DIR / 'spong.yaml', data)
+
+
+def _config_users_snapshot_data() -> dict:
+    return {'config_users': _config_users_section()}
+
+
+def _current_config_users_yaml() -> str:
+    return yaml.dump(_config_users_snapshot_data(), default_flow_style=False, allow_unicode=True, sort_keys=False)
+
+
+def _legacy_config_user() -> str:
+    return spong_config.get('web.config_user', '') or ''
+
+
+def _config_users_count() -> int:
+    return len(_config_users_section()) + (1 if _legacy_config_user() else 0)
+
+
+def _has_admin_user(users_cfg: dict[str, dict], include_legacy: bool = True) -> bool:
+    if include_legacy and _legacy_config_user():
+        return True
+    for entry in users_cfg.values():
+        if isinstance(entry, dict) and _normalize_config_role(entry.get('role')) == 'admin':
+            return True
+    return False
+
+
+def _authenticate_config_user(username: str | None, password: str | None) -> tuple[str, str, frozenset[str]] | None:
+    for expected_user, entry in _config_user_entries().items():
+        if check_basic_auth(username, password, expected_user, entry['password'], entry['password_hash']):
+            return expected_user, entry['role'], entry['permissions']
+    return None
+
+
+def _config_can(permission: str) -> bool:
+    return permission in getattr(g, 'config_permissions', frozenset())
+
+
+def _permission_denied(permission: str) -> Response:
+    return Response('Permiso insuficiente para esta acción.', 403)
 
 
 def _require_config_auth(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        if not spong_config.get('web.config_user', ''):
-            return Response('Config UI no habilitado. Configurá web.config_user en spong.yaml.', 403)
+        if not _config_user_entries():
+            return Response('Config UI no habilitado. Configurá web.config_user o web.config_users en spong.yaml.', 403)
         auth = request.authorization
-        if not auth or not _check_config_auth(auth.username, auth.password):
+        identity = _authenticate_config_user(auth.username, auth.password) if auth else None
+        if not identity:
             return Response(
                 'Acceso restringido — ingresá usuario y contraseña de administración.',
                 401,
                 {'WWW-Authenticate': 'Basic realm="SPONG Config"'},
             )
+        g.config_user, g.config_role, g.config_permissions = identity
         return f(*args, **kwargs)
     return decorated
+
+
+@config_bp.context_processor
+def _config_auth_context():
+    permissions = getattr(g, 'config_permissions', frozenset())
+    return {
+        'config_user': getattr(g, 'config_user', ''),
+        'config_role': getattr(g, 'config_role', 'read'),
+        'config_can': lambda permission: permission in permissions,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -85,6 +215,16 @@ def _save_yaml(path: Path, data: dict) -> None:
 # History helpers
 # ---------------------------------------------------------------------------
 
+def _current_config_actor() -> tuple[str, str, str]:
+    if not has_request_context():
+        return 'system', 'system', ''
+    return (
+        getattr(g, 'config_user', '') or 'unknown',
+        getattr(g, 'config_role', '') or 'unknown',
+        request.headers.get('X-Forwarded-For', request.remote_addr or '').split(',')[0].strip(),
+    )
+
+
 def _save_config_snapshot(config_name: str, data: dict, action: str, detail: str) -> None:
     """Save a YAML snapshot of the config state after a change."""
     HISTORY_DIR.mkdir(parents=True, exist_ok=True)
@@ -108,12 +248,16 @@ def _save_config_snapshot(config_name: str, data: dict, action: str, detail: str
     except (FileNotFoundError, ValueError):
         log = []
 
+    actor, role, remote_addr = _current_config_actor()
     log.append({
         'ts':     datetime.now().isoformat(timespec='seconds'),
         'ts_key': ts_key,
         'config': config_name,
         'action': action,
         'detail': detail,
+        'user':   actor,
+        'role':   role,
+        'remote_addr': remote_addr,
     })
 
     if len(log) > _MAX_HISTORY:
@@ -135,6 +279,11 @@ def _load_history_log() -> list:
 
 
 def _get_snapshot_yaml(config_name: str, ts_key: str) -> str | None:
+    if config_name == 'users':
+        if not re.match(r'^\d{8}_\d{6}(_\d+)?$', ts_key):
+            return None
+        p = HISTORY_DIR / 'users' / f'{ts_key}.yaml'
+        return p.read_text() if p.exists() else None
     if config_name not in _CONFIG_FILES:
         return None
     if not re.match(r'^\d{8}_\d{6}(_\d+)?$', ts_key):
@@ -152,7 +301,11 @@ def _available_services() -> list[str]:
         return []
     all_svcs = sorted(
         p.stem for p in PLUGIN_DIR.glob('*.py')
-        if p.name != '__init__.py' and not p.name.startswith('_') and p.stem
+        if (
+            p.name != '__init__.py'
+            and not p.name.startswith(('_', '.'))
+            and _SERVICE_NAME_RE.match(p.stem)
+        )
     )
     base_set = set(all_svcs)
     filtered = []
@@ -219,6 +372,26 @@ def _build_services_str(services: list[str], stops: set[str]) -> str:
 # Routes — Index
 # ---------------------------------------------------------------------------
 
+@config_bp.route('/set-theme/<theme>')
+@_require_config_auth
+def set_theme(theme):
+    if theme not in ('light', 'dark'):
+        theme = 'light'
+    resp = redirect(request.referrer or url_for('config_admin.index'))
+    resp.set_cookie('theme', theme, max_age=10 * 365 * 86400, samesite='Lax')
+    return resp
+
+
+@config_bp.route('/set-lang/<lang>')
+@_require_config_auth
+def set_lang(lang):
+    if lang not in _SUPPORTED_CONFIG_LANGS:
+        lang = 'es'
+    resp = redirect(request.referrer or url_for('config_admin.index'))
+    resp.set_cookie('lang', lang, max_age=10 * 365 * 86400, samesite='Lax')
+    return resp
+
+
 @config_bp.route('/')
 @_require_config_auth
 def index():
@@ -229,7 +402,148 @@ def index():
         host_count=len(hosts_data.get('hosts', {})),
         group_count=len(groups_data.get('groups', {})),
         history_count=len(_load_history_log()),
+        users_count=_config_users_count(),
     )
+
+
+# ---------------------------------------------------------------------------
+# Routes — Users
+# ---------------------------------------------------------------------------
+
+def _normalize_user_entry(username: str, entry: dict) -> dict:
+    role = _normalize_config_role(entry.get('role'))
+    return {
+        'username': username,
+        'role': role,
+        'password': entry.get('password', ''),
+        'password_hash': entry.get('password_hash', ''),
+        'permissions': _normalize_permissions(entry.get('permissions'), role),
+    }
+
+
+def _sorted_config_users() -> list[dict]:
+    users = [
+        _normalize_user_entry(username, entry)
+        for username, entry in _config_users_section().items()
+        if isinstance(entry, dict)
+    ]
+    return sorted(users, key=lambda item: item['username'].lower())
+
+
+def _users_log_entries() -> list[dict]:
+    return [
+        entry for entry in sorted(_load_history_log(), key=lambda e: e.get('ts', ''), reverse=True)
+        if entry.get('config') == 'users'
+    ]
+
+
+@config_bp.route('/users')
+@_require_config_auth
+def users():
+    if not _config_can('users'):
+        return _permission_denied('users')
+    legacy_user = _legacy_config_user()
+    return render_template(
+        'config_users.html',
+        users=_sorted_config_users(),
+        legacy_user=legacy_user,
+        history_entries=_users_log_entries()[:10],
+        role_labels={
+            'admin': 'Administrador',
+            'editor': 'Editor',
+            'add': 'Solo agregar',
+            'read': 'Solo lectura',
+        },
+    )
+
+
+@config_bp.route('/user/new', methods=['GET', 'POST'])
+@config_bp.route('/user/<username>/edit', methods=['GET', 'POST'])
+@_require_config_auth
+def user_edit(username=None):
+    if not _config_can('users'):
+        return _permission_denied('users')
+
+    users_cfg = _config_users_section()
+    legacy_user = _legacy_config_user()
+    error = None
+    existing = users_cfg.get(username, {}) if username else {}
+    if username and username not in users_cfg:
+        return Response('Usuario no encontrado.', 404)
+
+    if request.method == 'POST':
+        new_username = request.form.get('username', '').strip()
+        role = _normalize_config_role(request.form.get('role', 'read'))
+        password = request.form.get('password', '')
+        password_hash = request.form.get('password_hash', '').strip()
+
+        if not new_username:
+            error = 'El nombre de usuario es obligatorio.'
+        elif not _USER_NAME_RE.match(new_username):
+            error = 'El nombre de usuario solo puede tener letras, números, puntos, guiones y guiones bajos.'
+        elif new_username == legacy_user:
+            error = 'Ese usuario es el administrador legacy y se administra desde spong.yaml.'
+        elif new_username != username and new_username in users_cfg:
+            error = 'Ya existe un usuario con ese nombre.'
+        else:
+            if password:
+                password_hash = generate_password_hash(password)
+            if not password_hash and not existing:
+                error = 'Tenés que cargar una contraseña o un hash de contraseña.'
+            else:
+                candidate_users = dict(users_cfg)
+                if new_username != username and username in candidate_users:
+                    del candidate_users[username]
+                if not password_hash:
+                    password_hash = existing.get('password_hash', '')
+                candidate_users[new_username] = {
+                    'password': '',
+                    'password_hash': password_hash,
+                    'role': role,
+                }
+                if not _has_admin_user(candidate_users):
+                    error = 'Tiene que quedar al menos un usuario administrador.'
+                else:
+                    _dump_config_users_section(candidate_users)
+                    action = 'edit' if username else 'new'
+                    detail = f"{'Editó' if username else 'Nuevo'} usuario: {new_username} ({role})"
+                    _save_config_snapshot('users', _config_users_snapshot_data(), action, detail)
+                    spong_config.load_all()
+                    return redirect(url_for('config_admin.users'))
+
+    return render_template(
+        'config_user_edit.html',
+        username=username,
+        user=existing,
+        error=error,
+        roles=[
+            ('admin', 'Administrador'),
+            ('editor', 'Editor'),
+            ('add', 'Solo agregar'),
+            ('read', 'Solo lectura'),
+        ],
+    )
+
+
+@config_bp.route('/user/<username>/delete', methods=['POST'])
+@_require_config_auth
+def user_delete(username):
+    if not _config_can('users'):
+        return _permission_denied('users')
+    legacy_user = _legacy_config_user()
+    if username == legacy_user:
+        return Response('El usuario legacy se administra desde spong.yaml.', 403)
+    users_cfg = _config_users_section()
+    if username not in users_cfg:
+        return Response('Usuario no encontrado.', 404)
+    candidate_users = dict(users_cfg)
+    del candidate_users[username]
+    if not _has_admin_user(candidate_users):
+        return Response('Tiene que quedar al menos un usuario administrador.', 403)
+    _dump_config_users_section(candidate_users)
+    _save_config_snapshot('users', _config_users_snapshot_data(), 'delete', f'Eliminó usuario: {username}')
+    spong_config.load_all()
+    return redirect(url_for('config_admin.users'))
 
 
 # ---------------------------------------------------------------------------
@@ -254,11 +568,16 @@ def host_edit(hostname=None):
     categories = _categorize_services(available)
     avail_set  = set(available)
     error      = None
+    required_permission = 'edit' if hostname else 'add'
+    if not _config_can(required_permission):
+        return _permission_denied(required_permission)
 
     if request.method == 'POST':
         new_name = request.form.get('hostname', '').strip()
         if not new_name:
             error = 'El nombre del host es obligatorio.'
+        elif not hostname and new_name in hosts_dict and not _config_can('edit'):
+            error = 'Ya existe un host con ese nombre.'
         else:
             # IPs
             ips_raw = request.form.get('ip_addr', '').strip()
@@ -345,6 +664,8 @@ def host_edit(hostname=None):
 @config_bp.route('/host/<hostname>/delete', methods=['POST'])
 @_require_config_auth
 def host_delete(hostname):
+    if not _config_can('delete'):
+        return _permission_denied('delete')
     data = _load_yaml(ETC_DIR / 'hosts.yaml')
     data.get('hosts', {}).pop(hostname, None)
     _save_yaml(ETC_DIR / 'hosts.yaml', data)
@@ -373,11 +694,16 @@ def group_edit(group_key=None):
     hdata     = _load_yaml(ETC_DIR / 'hosts.yaml')
     all_hosts = sorted(hdata.get('hosts', {}).keys())
     error     = None
+    required_permission = 'edit' if group_key else 'add'
+    if not _config_can(required_permission):
+        return _permission_denied(required_permission)
 
     if request.method == 'POST':
         new_key = request.form.get('group_key', '').strip()
         if not new_key:
             error = 'La clave del grupo es obligatoria.'
+        elif not group_key and new_key in gdict and not _config_can('edit'):
+            error = 'Ya existe un grupo con esa clave.'
         else:
             entry = {
                 'name':     request.form.get('name', new_key).strip(),
@@ -410,6 +736,8 @@ def group_edit(group_key=None):
 @config_bp.route('/group/<group_key>/delete', methods=['POST'])
 @_require_config_auth
 def group_delete(group_key):
+    if not _config_can('delete'):
+        return _permission_denied('delete')
     data = _load_yaml(ETC_DIR / 'groups.yaml')
     data.get('groups', {}).pop(group_key, None)
     _save_yaml(ETC_DIR / 'groups.yaml', data)
@@ -432,15 +760,18 @@ def history():
 @config_bp.route('/history/<config_name>/<ts_key>')
 @_require_config_auth
 def history_view(config_name, ts_key):
-    if config_name not in _CONFIG_FILES:
+    if config_name != 'users' and config_name not in _CONFIG_FILES:
         return Response('Config no válida', 400)
 
     snapshot_yaml = _get_snapshot_yaml(config_name, ts_key)
     if snapshot_yaml is None:
         return Response('Snapshot no encontrado', 404)
 
-    current_path = _CONFIG_FILES[config_name]
-    current_yaml = current_path.read_text() if current_path.exists() else ''
+    if config_name == 'users':
+        current_yaml = _current_config_users_yaml()
+    else:
+        current_path = _CONFIG_FILES[config_name]
+        current_yaml = current_path.read_text() if current_path.exists() else ''
 
     # diff: current → snapshot  (+: will be added, -: will be removed on restore)
     diff_lines = list(difflib.unified_diff(
@@ -472,20 +803,31 @@ def history_view(config_name, ts_key):
 @config_bp.route('/history/<config_name>/<ts_key>/restore', methods=['POST'])
 @_require_config_auth
 def history_restore(config_name, ts_key):
-    if config_name not in _CONFIG_FILES:
+    if not _config_can('restore'):
+        return _permission_denied('restore')
+    if config_name != 'users' and config_name not in _CONFIG_FILES:
         return Response('Config no válida', 400)
 
     snapshot_yaml = _get_snapshot_yaml(config_name, ts_key)
     if snapshot_yaml is None:
         return Response('Snapshot no encontrado', 404)
 
-    # Auto-backup current state before overwriting
-    current_data = _load_yaml(_CONFIG_FILES[config_name])
-    _save_config_snapshot(config_name, current_data, 'pre-restore',
-                          f'Backup automático antes de restaurar ({ts_key})')
-
     snapshot_data = yaml.safe_load(snapshot_yaml) or {}
-    _save_yaml(_CONFIG_FILES[config_name], snapshot_data)
+    if config_name == 'users':
+        current_data = _config_users_snapshot_data()
+        _save_config_snapshot('users', current_data, 'pre-restore',
+                              f'Backup automático antes de restaurar ({ts_key})')
+        _dump_config_users_section(snapshot_data.get('config_users', {}))
+        _save_config_snapshot('users', snapshot_data, 'restore',
+                              f'Restauró usuarios de configuración desde {ts_key}')
+    else:
+        # Auto-backup current state before overwriting
+        current_data = _load_yaml(_CONFIG_FILES[config_name])
+        _save_config_snapshot(config_name, current_data, 'pre-restore',
+                              f'Backup automático antes de restaurar ({ts_key})')
+        _save_yaml(_CONFIG_FILES[config_name], snapshot_data)
+        _save_config_snapshot(config_name, snapshot_data, 'restore',
+                              f'Restauró {config_name}.yaml desde {ts_key}')
     spong_config.load_all()
 
     return redirect(url_for('config_admin.history'))
