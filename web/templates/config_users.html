@@ -1,0 +1,74 @@
+{% extends "config_base.html" %}
+{% block title %}{{ _('Usuarios') }} - SPONG {{ _('Configuración') }}{% endblock %}
+{% block content %}
+<div class="list-header">
+  <h1 style="margin:0;">{{ _('Usuarios') }} <span style="font-size:14px; color:var(--text-m); font-weight:400;">({{ users|length }})</span></h1>
+  <a href="{{ url_for('config_admin.user_edit') }}" class="btn btn-primary">+ {{ _('Agregar usuario') }}</a>
+</div>
+
+{% if legacy_user %}
+<div class="alert" style="background:var(--surface2); border:1px solid var(--border); color:var(--text); margin-bottom:16px;">
+  {{ _('El usuario legacy de configuración sigue activo') }}: <span class="tag">{{ legacy_user }}</span>
+</div>
+{% endif %}
+
+<div class="card" style="padding:0; overflow:hidden;">
+  <table>
+    <thead>
+      <tr>
+        <th>{{ _('Nombre de usuario') }}</th>
+        <th>{{ _('Rol') }}</th>
+        <th>{{ _('Clave') }}</th>
+        <th style="width:160px;"></th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for user in users %}
+      <tr>
+        <td style="font-weight:500; color:var(--text-h);">{{ user.username }}</td>
+        <td><span class="tag">{{ _(role_labels[user.role]) }}</span></td>
+        <td style="color:var(--text-m); font-size:12px;">
+          {% if user.password_hash %}{{ _('Hash de contraseña') }}{% else %}-{% endif %}
+        </td>
+        <td>
+          <div class="actions">
+            <a href="{{ url_for('config_admin.user_edit', username=user.username) }}" class="btn btn-secondary btn-sm">{{ _('Editar') }}</a>
+            <form method="post" action="{{ url_for('config_admin.user_delete', username=user.username) }}"
+                  onsubmit='return confirm({{ (_('¿Eliminar el usuario') ~ ' «' ~ user.username ~ '»?') | tojson }});' style="display:inline;">
+              <button type="submit" class="btn btn-danger btn-sm">{{ _('Borrar') }}</button>
+            </form>
+          </div>
+        </td>
+      </tr>
+    {% else %}
+      <tr>
+        <td colspan="4" style="text-align:center; color:var(--text-m); padding:30px;">
+          {{ _('No hay usuarios adicionales configurados.') }}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="card" style="margin-top:16px;">
+  <h2 style="margin-bottom:12px;">{{ _('Cambios recientes de usuarios') }}</h2>
+  {% if history_entries %}
+    <div style="display:grid; gap:8px;">
+      {% for entry in history_entries %}
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; padding:8px 10px; border:1px solid var(--border); border-radius:6px; background:var(--surface2);">
+          <div>
+            <span class="tag">{{ entry.get('action','') }}</span>
+            <span style="margin-left:8px; color:var(--text-h); font-weight:500;">{{ entry.get('detail','') }}</span>
+          </div>
+          <div style="color:var(--text-m); font-size:12px; white-space:nowrap;">
+            {{ entry.get('ts','') | replace('T',' ') }} · {{ entry.get('user') or '-' }}
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div style="color:var(--text-m);">{{ _('No hay cambios registrados aún.') }}</div>
+  {% endif %}
+</div>
+{% endblock %}

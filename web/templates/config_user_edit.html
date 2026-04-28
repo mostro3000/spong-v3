@@ -1,0 +1,52 @@
+{% extends "config_base.html" %}
+{% block title %}{{ _('Editar usuario') if username else _('Nuevo usuario') }} - SPONG {{ _('Configuración') }}{% endblock %}
+{% block content %}
+<div class="list-header">
+  <h1 style="margin:0;">{% if username %}{{ _('Editar usuario:') }} {{ username }}{% else %}{{ _('Nuevo usuario') }}{% endif %}</h1>
+  <a href="{{ url_for('config_admin.users') }}" class="btn btn-secondary">← {{ _('Volver') }}</a>
+</div>
+
+{% if error %}
+  <div class="alert alert-error">{{ _(error) }}</div>
+{% endif %}
+
+<form method="post">
+  <div class="card">
+    <h2>{{ _('Datos del usuario') }}</h2>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="field-label" for="username">{{ _('Nombre de usuario') }}</label>
+        <input type="text" id="username" name="username" value="{{ username or '' }}"
+               placeholder="{{ _('ej: altas') }}" required {% if username %}readonly style="opacity:.6;"{% endif %}>
+        <div class="field-hint">{{ _('Usá letras, números, punto, guion y guion bajo.') }}</div>
+      </div>
+      <div class="form-group">
+        <label class="field-label" for="role">{{ _('Rol') }}</label>
+        <select id="role" name="role">
+          {% for value, label in roles %}
+            <option value="{{ value }}" {{ 'selected' if user.get('role', 'read') == value }}>{{ _(label) }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label class="field-label" for="password">{{ _('Contraseña') }}</label>
+        <input type="password" id="password" name="password" value="" autocomplete="new-password"
+               placeholder="{{ _('Dejar vacío para conservar la actual') }}">
+      </div>
+      <div class="form-group">
+        <label class="field-label" for="password_hash">{{ _('Hash de contraseña') }}</label>
+        <input type="text" id="password_hash" name="password_hash" value="" autocomplete="off"
+               placeholder="{{ _('Opcional, si querés pegar un hash ya generado') }}">
+      </div>
+    </div>
+  </div>
+
+  <div style="display:flex; gap:10px;">
+    <button type="submit" class="btn btn-primary" style="min-width:120px;">{{ _('Guardar') }}</button>
+    <a href="{{ url_for('config_admin.users') }}" class="btn btn-secondary">{{ _('Cancelar') }}</a>
+  </div>
+</form>
+{% endblock %}
