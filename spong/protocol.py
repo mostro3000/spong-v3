@@ -50,10 +50,11 @@ class AckMessage:
 
 @dataclass
 class AckDelMessage:
-    ack_id: str          # host-services-endtime
+    ack_id: str          # host-services-endtime or host-ackfileid
     host: str
     services: str
     end_time: int
+    ack_file_id: str | None = None
 
 
 @dataclass
@@ -100,8 +101,17 @@ def parse_update(header: str, body: str) -> Optional[StatusMessage | AckMessage 
             timestamp=ts, ttl=ttl, summary=summary, message=body,
         )
 
-    # ack-del
-    m = re.match(r"^ack-del\s+([a-zA-Z0-9_\-\.]+)-([a-zA-Z0-9_\-\.\,]+)-(\d+)\s*$", header)
+    # ack-del by exact on-disk ack id: host-rand-start-end
+    m = re.match(r"^ack-del\s+([a-zA-Z0-9_\-\.]+)-(\d+-\d+-\d+)\s*$", header)
+    if m:
+        host, ack_file_id = m.group(1), m.group(2)
+        return AckDelMessage(
+            ack_id=f"{host}-{ack_file_id}",
+            host=host, services="", end_time=0, ack_file_id=ack_file_id,
+        )
+
+    # Legacy ack-del by host-services-endtime. Keep it for CLI compatibility.
+    m = re.match(r"^ack-del\s+([a-zA-Z0-9_\-\.]+)-([^\s]+)-(\d+)\s*$", header)
     if m:
         host, services, end_time = m.group(1), m.group(2), int(m.group(3))
         return AckDelMessage(

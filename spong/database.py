@@ -228,6 +228,23 @@ def delete_ack(host: str, end_time: int) -> None:
                 pass
 
 
+def delete_ack_by_id(host: str, ack_id: str) -> bool:
+    """Delete one acknowledgment by its on-disk ack id."""
+    if not re.fullmatch(r"[A-Za-z0-9_.-]+", host or "") or host in (".", ".."):
+        return False
+    if not re.fullmatch(r"\d+-\d+-\d+", ack_id or ""):
+        return False
+    ack_file = _acks_dir(host) / ack_id
+    try:
+        ack_file.unlink()
+        return True
+    except FileNotFoundError:
+        return False
+    except OSError as e:
+        log.error("delete_ack_by_id %s/%s: %s", host, ack_id, e)
+        return False
+
+
 def load_acks(host: str) -> list[Acknowledgment]:
     """Load all active acknowledgments for a host."""
     acks_dir = _acks_dir(host)

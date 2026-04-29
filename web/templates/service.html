@@ -211,7 +211,7 @@
   {% if not is_acked %}
   <a class="btn" href="{{ url_for('ack', host=hostname, service=service) }}">&#10003; {{ _('Reconocer') }}</a>
   {% elif service_ack %}
-  <a class="btn" href="{{ url_for('ack_del', ack_id=service_ack.host ~ '-' ~ service_ack.services ~ '-' ~ (service_ack.end_time|int)) }}"
+  <a class="btn" href="{{ url_for('ack_del', hostname=service_ack.host, ack_file_id=service_ack.ack_id) }}"
      style="background:#c62828;"
      onclick="return confirm('{{ _('¿Borrar el reconocimiento de') }} {{ service }}?');">&#10007; {{ _('Borrar reconocimiento') }}</a>
   {% endif %}

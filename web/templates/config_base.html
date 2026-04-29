@@ -241,7 +241,7 @@
 </head>
 <body>
 <nav>
-  <a class="brand" href="{{ url_for('config_admin.index') }}">⚙ SPONG {{ _('Configuración') }}<span class="tip">SPONG v{{ spong_version }} - {{ _('creado por mt') }}</span></a>
+  <a class="brand" href="{{ url_for('config_admin.groups') }}">⚙ SPONG {{ _('Configuración') }}<span class="tip">SPONG v{{ spong_version }} - {{ _('creado por mt') }}</span></a>
   <a href="{{ url_for('config_admin.hosts') }}"
      {% if request.endpoint and 'host' in request.endpoint %}class="active"{% endif %}>{{ _('Hosts') }}</a>
   <a href="{{ url_for('config_admin.groups') }}"

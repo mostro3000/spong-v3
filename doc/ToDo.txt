@@ -24,5 +24,7 @@
 + En los graficos de temperaturas, cuando es por dia, mes y año, hacer graficos de maximo y minimo de cada hora/dia/mes, como se ve en /usr/local/spong/tmp/temp.png
 + desde el host del spong poder ir a modificar los servicios directamenta de la config si el usuario se tiene los permisos necesarios
 + hay un bug, si tengo un servicio en rojo, y lo borro con el config, este sigue apareciendo como rojo
-+ actualizar version a v3.5.1 , actualizar documentacion, generar .deb v3.5.1, y subir a github
-- no hay textos en español hardcored, es decir esta todo en multi-idioma?
++ actualizar version a v3.5.1 , actualizar documentacion, generar .deb v3.5.1, y subir a github  [DONE v3.5.1]
++ hacer click en "SPONG" (superior izquierda), sea lo mismo que persionar en "Grupos"  [DONE v3.5.2]
++ cuando borro un azul en reconocidos, en vista principal vuelve el estado (Verde/Rojo/Amarallo/Violeta), pero sigue estando en la lista de "Reconocidos"  [DONE v3.5.2]
++ actualizar version a v3.5.2, actualizar documentacion, generar .deb v3.5.2, y subir a github  [DONE v3.5.2]

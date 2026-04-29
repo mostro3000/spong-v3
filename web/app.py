@@ -48,6 +48,14 @@ _dashboard_cache_lock = threading.Lock()
 app.config["SPONG_DASHBOARD_CACHE"] = _dashboard_cache
 app.config["SPONG_DASHBOARD_CACHE_LOCK"] = _dashboard_cache_lock
 
+
+def _invalidate_dashboard_cache():
+    with _dashboard_cache_lock:
+        _dashboard_cache["ts"] = 0.0
+        _dashboard_cache["group_data"] = None
+        _dashboard_cache["sidebar"] = None
+
+
 _GRAPH_CACHE_TTL = max(5, int(config.get("web.graph_cache_seconds", 60) or 60))
 _GRAPH_CACHE_MAX_ENTRIES = max(64, int(config.get("web.graph_cache_entries", 512) or 512))
 _graph_cache = OrderedDict()
@@ -1618,6 +1626,7 @@ def ack():
         end_time = 0 if duration_secs == 0 else time.time() + duration_secs
         send_ack(host=host, services=services, end_time=end_time,
                  contact=contact, message=message)
+        _invalidate_dashboard_cache()
         return redirect(url_for("host_detail", hostname=host))
 
     host = request.args.get("host", "")
@@ -1656,9 +1665,15 @@ def set_lang(lang):
     return resp
 
 
-@app.route("/ack-del/<ack_id>")
-def ack_del(ack_id):
-    send_ack_del(ack_id)
+@app.route("/ack-del/<hostname>/<ack_file_id>")
+@app.route("/ack-del/<path:ack_id>")
+def ack_del(ack_id=None, hostname=None, ack_file_id=None):
+    if hostname and ack_file_id:
+        database.delete_ack_by_id(hostname, ack_file_id)
+        send_ack_del(f"{hostname}-{ack_file_id}")
+    elif ack_id:
+        send_ack_del(ack_id)
+    _invalidate_dashboard_cache()
     referrer = request.referrer or url_for("index")
     return redirect(referrer)
 

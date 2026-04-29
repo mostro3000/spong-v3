@@ -39,7 +39,7 @@
       {% endif %}
     </td>
     <td style="font-size:11px; color:#546e7a;">{{ ack.message }}</td>
-    <td><a class="btn btn-red btn-sm" href="{{ url_for('ack_del', ack_id=ack.host ~ '-' ~ ack.services ~ '-' ~ (ack.end_time|int)) }}">{{ _('Borrar') }}</a></td>
+    <td><a class="btn btn-red btn-sm" href="{{ url_for('ack_del', hostname=ack.host, ack_file_id=ack.ack_id) }}">{{ _('Borrar') }}</a></td>
   </tr>
   {% endfor %}
   </tbody>

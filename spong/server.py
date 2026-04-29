@@ -169,7 +169,10 @@ def _process_ack(msg: AckMessage) -> None:
 
 
 def _process_ack_del(msg: AckDelMessage) -> None:
-    database.delete_ack(msg.host, msg.end_time)
+    if msg.ack_file_id:
+        database.delete_ack_by_id(msg.host, msg.ack_file_id)
+    else:
+        database.delete_ack(msg.host, msg.end_time)
     log.info("ack deleted: %s", msg.ack_id)
 
 
