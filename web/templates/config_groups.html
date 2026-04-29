@@ -12,15 +12,27 @@
   <table>
     <thead>
       <tr>
-        <th>{{ _('Clave') }}</th>
-        <th>{{ _('Nombre') }}</th>
+        <th>
+          <a class="sort-link"
+             href="{{ url_for('config_admin.groups', sort='key', dir='desc' if sort_by == 'key' and sort_dir == 'asc' else 'asc') }}"
+             title="{{ _('Ordenar por clave') }}">
+            {{ _('Clave') }}{% if sort_by == 'key' %}<span class="sort-mark">{{ '▲' if sort_dir == 'asc' else '▼' }}</span>{% endif %}
+          </a>
+        </th>
+        <th>
+          <a class="sort-link"
+             href="{{ url_for('config_admin.groups', sort='name', dir='desc' if sort_by == 'name' and sort_dir == 'asc' else 'asc') }}"
+             title="{{ _('Ordenar por nombre') }}">
+            {{ _('Nombre') }}{% if sort_by == 'name' %}<span class="sort-mark">{{ '▲' if sort_dir == 'asc' else '▼' }}</span>{% endif %}
+          </a>
+        </th>
         <th>{{ _('Miembros') }}</th>
         <th>{{ _('Opciones') }}</th>
         {% if config_can('edit') or config_can('delete') %}<th style="width:120px;"></th>{% endif %}
       </tr>
     </thead>
     <tbody>
-    {% for key, group in groups.items() %}
+    {% for key, group in groups %}
       <tr>
         <td><span class="mono">{{ key }}</span></td>
         <td style="font-weight:500; color:var(--text-h);">{{ group.get('name', key) }}</td>

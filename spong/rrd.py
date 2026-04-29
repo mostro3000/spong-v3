@@ -6,6 +6,9 @@ import logging
 import os
 import re
 import subprocess
+import math
+import tempfile
+import time
 
 log = logging.getLogger(__name__)
 
@@ -281,6 +284,15 @@ _RRA_DEFS = [
     "RRA:AVERAGE:0.5:288:720",
 ]
 
+_RRA_DEFS_WITH_EXTREMES = _RRA_DEFS + [
+    "RRA:MIN:0.5:1:1440",
+    "RRA:MIN:0.5:12:2160",
+    "RRA:MIN:0.5:288:720",
+    "RRA:MAX:0.5:1:1440",
+    "RRA:MAX:0.5:12:2160",
+    "RRA:MAX:0.5:288:720",
+]
+
 
 # ---------------------------------------------------------------------------
 # Per-service update logic
@@ -498,18 +510,18 @@ def _extract_first_float(*texts):
     return None
 
 
-def _update_scalar_rrd(rrd_dir, summary, message, timestamp, filename, ds_name, ds_min="U", ds_max="U"):
+def _update_scalar_rrd(rrd_dir, summary, message, timestamp, filename, ds_name, ds_min="U", ds_max="U", rra_args=None):
     value = _extract_first_float(summary, message)
     if value is None:
         return
     path = os.path.join(rrd_dir, filename)
     if not _rrd_exists(path):
-        _create_rrd(path, 300, [f"DS:{ds_name}:GAUGE:600:{ds_min}:{ds_max}"], _RRA_DEFS, timestamp)
+        _create_rrd(path, 300, [f"DS:{ds_name}:GAUGE:600:{ds_min}:{ds_max}"], rra_args or _RRA_DEFS, timestamp)
     _update_rrd(path, timestamp, [value])
 
 
 def _update_temp(rrd_dir, summary, message, timestamp):
-    _update_scalar_rrd(rrd_dir, summary, message, timestamp, "temp.rrd", "temp", -40, 150)
+    _update_scalar_rrd(rrd_dir, summary, message, timestamp, "temp.rrd", "temp", -40, 150, _RRA_DEFS_WITH_EXTREMES)
 
 
 def _update_hum(rrd_dir, summary, message, timestamp):
@@ -1558,6 +1570,205 @@ def _graph_speedtest_compare(rrd_path, host, width, height):
     return buf.getvalue()
 
 
+_TEMP_RANGE_STEPS = {
+    "24h": 3600,       # max/min de cada hora
+    "7d": 86400,       # max/min de cada día
+    "30d": 86400,      # max/min de cada día
+    "1y": 2592000,     # max/min de cada mes aproximado de 30 días
+}
+
+_TEMP_RANGE_PERIOD_SECONDS = {
+    "24h": 24 * 3600,
+    "7d": 7 * 24 * 3600,
+    "30d": 30 * 24 * 3600,
+    "1y": 365 * 24 * 3600,
+}
+
+_TEMP_RANGE_FETCH_RESOLUTION = {
+    "24h": 300,
+    "7d": 3600,
+    "30d": 3600,
+    "1y": 86400,
+}
+
+
+def _rrd_has_rra_cf(rrd_path, cf):
+    info = _run(["rrdtool", "info", rrd_path])
+    if info is None or info.returncode != 0:
+        return False
+    pattern = rb'rra\[\d+\]\.cf\s*=\s*"' + cf.encode() + rb'"'
+    return re.search(pattern, info.stdout) is not None
+
+
+def _fetch_rrd_values(rrd_path, ds_name, start_ts, end_ts, resolution):
+    result = _run([
+        "rrdtool", "fetch", rrd_path, "AVERAGE",
+        "--start", str(int(start_ts)),
+        "--end", str(int(end_ts)),
+        "--resolution", str(int(resolution)),
+    ])
+    if result is None or result.returncode != 0:
+        return []
+
+    rows = result.stdout.decode(errors="replace").splitlines()
+    if not rows:
+        return []
+
+    ds_index = 0
+    header_seen = False
+    values = []
+    for line in rows:
+        line = line.strip()
+        if not line:
+            continue
+        if not header_seen and not line[0].isdigit():
+            columns = line.split()
+            if ds_name in columns:
+                ds_index = columns.index(ds_name)
+            header_seen = True
+            continue
+        if ":" not in line:
+            continue
+        ts_text, value_text = line.split(":", 1)
+        try:
+            ts = int(ts_text)
+        except ValueError:
+            continue
+        parts = value_text.split()
+        if ds_index >= len(parts):
+            continue
+        try:
+            value = float(parts[ds_index])
+        except ValueError:
+            continue
+        if math.isfinite(value):
+            values.append((ts, value))
+    return values
+
+
+def _bucket_start(ts, period, start_ts):
+    ts = int(ts)
+    if period == "24h":
+        return ts - (ts % 3600)
+    if period in ("7d", "30d"):
+        return ts - (ts % 86400)
+    step = _TEMP_RANGE_STEPS[period]
+    return int(start_ts) + (((ts - int(start_ts)) // step) * step)
+
+
+def _graph_temperature_range_from_fetch(rrd_path, ds_name, host, period, width, height):
+    step = _TEMP_RANGE_STEPS.get(period)
+    period_seconds = _TEMP_RANGE_PERIOD_SECONDS.get(period)
+    resolution = _TEMP_RANGE_FETCH_RESOLUTION.get(period)
+    if not step or not period_seconds or not resolution:
+        return None
+
+    end_ts = int(time.time())
+    start_ts = end_ts - period_seconds
+    buckets = {}
+    for ts, value in _fetch_rrd_values(rrd_path, ds_name, start_ts, end_ts, resolution):
+        bucket = _bucket_start(ts - 1, period, start_ts)
+        current = buckets.get(bucket)
+        if current is None:
+            buckets[bucket] = [value, value]
+        else:
+            current[0] = min(current[0], value)
+            current[1] = max(current[1], value)
+
+    if not buckets:
+        return None
+
+    fd, tmp_rrd = tempfile.mkstemp(prefix="spong-temp-range-", suffix=".rrd")
+    os.close(fd)
+    try:
+        bucket_rows = sorted(buckets.items())
+        first_update = bucket_rows[0][0] + step
+        create = [
+            "rrdtool", "create", tmp_rrd,
+            "--step", str(step),
+            "--start", str(first_update - step - 1),
+            "DS:mn:GAUGE:{}:-100:200".format(step * 2),
+            "DS:mx:GAUGE:{}:-100:200".format(step * 2),
+            "RRA:AVERAGE:0.5:1:{}".format(len(bucket_rows) + 2),
+        ]
+        created = _run(create)
+        if created is None or created.returncode != 0:
+            return None
+
+        for bucket, (mn, mx) in bucket_rows:
+            updated = _run([
+                "rrdtool", "update", tmp_rrd,
+                "{}:{:.6f}:{:.6f}".format(bucket + step, mn, mx),
+            ])
+            if updated is None or updated.returncode != 0:
+                return None
+
+        cmd = [
+            "rrdtool", "graph", "-",
+            "--start", str(start_ts), "--end", str(end_ts),
+            "--width", str(width), "--height", str(height),
+            "--vertical-label", "°C",
+            "--title", "Temperatura {}".format(host),
+        ]
+        cmd += GRAPH_COLORS
+        cmd += [
+            "DEF:mn={}:mn:AVERAGE".format(tmp_rrd),
+            "DEF:mx={}:mx:AVERAGE".format(tmp_rrd),
+            "CDEF:range=mx,mn,-",
+            "AREA:mn#ffffff00",
+            "AREA:range#ff8c3340::STACK",
+            "LINE2:mx#43a047:Máximo ",
+            "VDEF:mxmax=mx,MAXIMUM",
+            "VDEF:mxlast=mx,LAST",
+            "GPRINT:mxmax:%5.1lf °C",
+            "GPRINT:mxlast:  Últ\\:%5.1lf °C\\n",
+            "LINE2:mn#ff8c33:Mínimo ",
+            "VDEF:mnmin=mn,MINIMUM",
+            "VDEF:mnlast=mn,LAST",
+            "GPRINT:mnmin:%5.1lf °C",
+            "GPRINT:mnlast:  Últ\\:%5.1lf °C\\n",
+        ]
+        result = _run(cmd)
+        if result is None or result.returncode != 0:
+            return None
+        return result.stdout
+    finally:
+        try:
+            os.unlink(tmp_rrd)
+        except OSError:
+            pass
+
+
+def _temperature_range_graph_args(rrd_path, ds_name, host, period):
+    step = _TEMP_RANGE_STEPS.get(period)
+    if not step:
+        return None
+
+    has_extremes = _rrd_has_rra_cf(rrd_path, "MIN") and _rrd_has_rra_cf(rrd_path, "MAX")
+    max_cf = "MAX" if has_extremes else "AVERAGE"
+    min_cf = "MIN" if has_extremes else "AVERAGE"
+
+    return [
+        "--vertical-label", "°C",
+        "--title", "Temperatura {}".format(host),
+        "DEF:mx={}:{}:{}:step={}:reduce=MAX".format(rrd_path, ds_name, max_cf, step),
+        "DEF:mn={}:{}:{}:step={}:reduce=MIN".format(rrd_path, ds_name, min_cf, step),
+        "CDEF:range=mx,mn,-",
+        "AREA:mn#ffffff00",
+        "AREA:range#ff8c3340::STACK",
+        "LINE2:mx#43a047:Máximo ",
+        "VDEF:mxmax=mx,MAXIMUM",
+        "VDEF:mxlast=mx,LAST",
+        "GPRINT:mxmax:%5.1lf °C",
+        "GPRINT:mxlast:  Últ\\:%5.1lf °C\\n",
+        "LINE2:mn#ff8c33:Mínimo ",
+        "VDEF:mnmin=mn,MINIMUM",
+        "VDEF:mnlast=mn,LAST",
+        "GPRINT:mnmin:%5.1lf °C",
+        "GPRINT:mnlast:  Últ\\:%5.1lf °C\\n",
+    ]
+
+
 # ---------------------------------------------------------------------------
 # Public API: graph_png
 # ---------------------------------------------------------------------------
@@ -1864,12 +2075,20 @@ def graph_png(host, service, period="24h", width=500, height=150, mounts="filter
             rrd_path = os.path.join(rrd_dir, "temp.rrd")
             if not _rrd_exists(rrd_path):
                 return None
-            cmd += [
-                "--vertical-label", "°C",
-                "--title", "Temperatura {}".format(host),
-                "DEF:temp={}:temp:AVERAGE".format(rrd_path),
-                "LINE2:temp#ff6600:Temperatura",
-            ]
+            if period in _TEMP_RANGE_STEPS:
+                range_png = _graph_temperature_range_from_fetch(rrd_path, "temp", host, period, width, height)
+                if range_png:
+                    return range_png
+            range_args = _temperature_range_graph_args(rrd_path, "temp", host, period)
+            if range_args:
+                cmd += range_args
+            else:
+                cmd += [
+                    "--vertical-label", "°C",
+                    "--title", "Temperatura {}".format(host),
+                    "DEF:temp={}:temp:AVERAGE".format(rrd_path),
+                    "LINE2:temp#ff6600:Temperatura",
+                ]
 
         elif svc == "hum":
             rrd_path = os.path.join(rrd_dir, "hum.rrd")

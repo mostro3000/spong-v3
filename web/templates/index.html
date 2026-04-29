@@ -3,13 +3,16 @@
 {% block content %}
 
 <div class="page-title">
-  {{ _('Grupos de Hosts') }}
+  <button type="button" class="page-title-action" id="group-title-toggle"
+          title="{{ _('Minimizar / ampliar todos los grupos') }}">
+    {{ _('Grupos de Hosts') }}
+  </button>
   <span class="sub">{{ groups|length }} {{ _('grupos') }}</span>
 </div>
 
 {% for group in groups %}
 {% set starts_collapsed = group.color not in ('red', 'yellow', 'purple') %}
-<div class="group-section {{ 'collapsed' if starts_collapsed }}" id="group-{{ group.key }}">
+<div class="group-section {{ 'collapsed' if starts_collapsed }}" id="group-{{ group.key }}" data-color="{{ group.color }}">
   <div class="group-title has-{{ group.color }}">
     <span style="display:inline-block; width:12px; height:12px; border-radius:50%; flex-shrink:0;
                  box-shadow:0 1px 3px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.2);"
@@ -70,15 +73,42 @@
 (function() {
   var expandLabel = {{ _('Ampliar grupo') | tojson }};
   var collapseLabel = {{ _('Minimizar grupo') | tojson }};
+  var problemColors = {red: true, yellow: true, purple: true};
+  var titleToggle = document.getElementById('group-title-toggle');
+  var bulkMode = 'auto';
+
+  function setGroupCollapsed(section, collapsed) {
+    var button = section.querySelector('.group-toggle');
+    section.classList.toggle('collapsed', collapsed);
+    if (!button) return;
+    button.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+    button.title = collapsed ? expandLabel : collapseLabel;
+  }
+
+  function applyBulkMode(action) {
+    document.querySelectorAll('.group-section').forEach(function(section) {
+      var collapsed = action === 'collapse';
+      if (action === 'auto') {
+        collapsed = !problemColors[section.getAttribute('data-color')];
+      }
+      setGroupCollapsed(section, collapsed);
+    });
+  }
+
   document.querySelectorAll('.group-toggle').forEach(function(button) {
     button.addEventListener('click', function() {
       var section = button.closest('.group-section');
       if (!section) return;
-      var collapsed = section.classList.toggle('collapsed');
-      button.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
-      button.title = collapsed ? expandLabel : collapseLabel;
+      setGroupCollapsed(section, !section.classList.contains('collapsed'));
     });
   });
+
+  if (titleToggle) {
+    titleToggle.addEventListener('click', function() {
+      bulkMode = bulkMode === 'auto' ? 'expand' : (bulkMode === 'expand' ? 'collapse' : 'auto');
+      applyBulkMode(bulkMode);
+    });
+  }
 })();
 </script>
 

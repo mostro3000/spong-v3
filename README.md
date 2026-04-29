@@ -1,4 +1,4 @@
-# SPONG v3.5.0 — Network & Services Monitor
+# SPONG v3.5.1 — Network & Services Monitor
 
 **SPONG** (Simple Preventive Operations Network Guardian) is a network and services monitoring system originally written in Perl. v3 is a complete rewrite in Python 3, keeping full compatibility with the original database and configuration files.
 
@@ -49,10 +49,10 @@
 
 ```bash
 # 1. Descargar el .deb desde Releases
-wget https://github.com/mostro3000/spong-v3/releases/latest/download/spong-server_3.5.0-1_all.deb
+wget https://github.com/mostro3000/spong-v3/releases/latest/download/spong-server_3.5.1-1_all.deb
 
 # 2. Instalar (el postinst configura dependencias y activa los 4 servicios systemd)
-dpkg -i spong-server_3.5.0-1_all.deb
+dpkg -i spong-server_3.5.1-1_all.deb
 
 # 3. Editar la configuración
 nano /usr/local/spong/etc/spong.yaml    # servidor, thresholds, checks
@@ -69,11 +69,11 @@ xdg-open http://localhost:8090/
 ### Cliente remoto (en otro host)
 
 ```bash
-wget https://github.com/mostro3000/spong-v3/releases/latest/download/spong-client_3.5.0-1_all.deb
-dpkg -i spong-client_3.5.0-1_all.deb   # instalación interactiva: pregunta servidor, hostname, checks
+wget https://github.com/mostro3000/spong-v3/releases/latest/download/spong-client_3.5.1-1_all.deb
+dpkg -i spong-client_3.5.1-1_all.deb   # instalación interactiva: pregunta servidor, hostname, checks
 ```
 
-> Si el asset `3.4.2-1` todavía no está publicado en GitHub Releases, construir localmente con `cd packaging && bash build-deb.sh` o crear el tag `v3.4.2` para que CI publique los `.deb`.
+> Si el asset `3.5.1-1` todavía no está publicado en GitHub Releases, construir localmente con `cd packaging && bash build-deb.sh` o crear el tag `v3.5.1` para que CI publique los `.deb`.
 
 ### Migración desde SPONG Perl (spong.conf / spong.hosts / spong.groups)
 
@@ -86,12 +86,12 @@ python3 /usr/local/spong/bin/spong-migrate.py --all --outdir /usr/local/spong/et
 
 ## Estado actual del código
 
-SPONG v3.4.2 está organizado como una aplicación Python 3 con cuatro procesos principales: servidor TCP asyncio, agente de red, agente local y UI Flask. La base de datos sigue siendo de archivos para mantener compatibilidad con SPONG Perl; los RRD se actualizan desde el servidor cuando llegan estados nuevos.
+SPONG v3.5.1 está organizado como una aplicación Python 3 con cuatro procesos principales: servidor TCP asyncio, agente de red, agente local y UI Flask. La base de datos sigue siendo de archivos para mantener compatibilidad con SPONG Perl; los RRD se actualizan desde el servidor cuando llegan estados nuevos.
 
 El repositorio contiene el código Python en `spong/`, la UI en `web/`, wrappers ejecutables en `bin/`, configuración en `etc/`, empaquetado Debian en `packaging/` y capturas en `docs/screenshots/`. También conserva datos locales bajo `var/` y código histórico Perl en `lib/`, `cgi-bin/` y `www/`; esos árboles no son necesarios para entender la implementación Python nueva.
 
 Resumen operativo:
-- **Versión actual:** `spong.__version__ = 3.5.0`, `setup.py = 3.5.0`, paquetes `3.5.0-1`
+- **Versión actual:** `spong.__version__ = 3.5.1`, `setup.py = 3.5.1`, paquetes `3.5.1-1`
 - **Runtime:** Python 3.10+ para instalación por `setup.py`; los paquetes Debian declaran `python3 >= 3.9`
 - **Dependencias principales:** `pyyaml`, `flask`, `werkzeug`, `rrdtool`, `fping`, `snmp`, `rpcbind`; `tinytuya` solo para plugins Tuya
 - **Persistencia:** `/usr/local/spong/var/database`, `/usr/local/spong/var/rrd`, `/usr/local/spong/var/archives`
@@ -630,13 +630,16 @@ Para generar un hash:
 python3 -c 'from werkzeug.security import generate_password_hash; print(generate_password_hash("tu-clave"))'
 ```
 
+Desde `/config/users` la clave se carga en texto claro en el formulario, pero se guarda como hash en `spong.yaml`. El hash no se muestra ni se edita desde el frontend.
+
 ### Páginas
 
 | URL | Descripción |
 |-----|-------------|
 | `/` | Vista principal por grupos. Matriz host × servicio con círculos de colores. |
-| `/host/<hostname>` | Detalle de un host: todos sus servicios, estado, tiempo en estado actual, último reporte, gráficos RRD. |
+| `/host/<hostname>` | Detalle de un host: todos sus servicios, estado, tiempo en estado actual, último reporte, gráficos RRD y acceso directo a editar servicios en `/config` si el usuario tiene permiso. |
 | `/service/<hostname>/<servicio>` | Detalle de un servicio específico con historial y gráficos. |
+| `/config/` | Panel web de configuración para hosts, grupos, usuarios e historial de cambios. |
 | `/history` | Historial general de cambios de estado de todos los servicios. Muestra por default los últimos 7 días, configurable en `web.general_history_days`. |
 | `/problems` | Lista de todos los servicios con problemas (rojo, amarillo, violeta) ordenados por severidad. Incluye botón ACK directo. |
 | `/acks` | Lista de reconocimientos activos con estado actual de los servicios reconocidos. |
@@ -668,6 +671,7 @@ Módulos Apache requeridos: `proxy`, `proxy_http`, `headers` (habilitados con `a
 - **Reloj en vivo:** actualizado cada segundo
 - **Tooltips:** al pasar el mouse sobre un círculo de la matriz muestra el resumen del servicio
 - **Acceso rápido a ACK desde la matriz:** en `/`, si un servicio está en **rojo**, al hacer clic en el círculo se abre directamente el formulario de **Reconocer** con `host` y `service` precargados
+- **Grupos plegables:** al hacer clic en el título `Grupos de Hosts`, la vista alterna entre ampliar y minimizar todos los grupos. En modo automático, los grupos verdes quedan minimizados y los grupos con rojo/amarillo/violeta quedan ampliados
 - **Checks on-demand:** clic en el badge de estado ejecuta el plugin de red en tiempo real con timeout de 35 s y cooldown configurable por `web.check_cooldown_seconds`
 - **Gráficos toggle:** en la vista de host, el botón 📊 muestra/oculta los gráficos de cada servicio
 - **Caché de gráficos:** `/rrd/...png` usa caché en memoria con `web.graph_cache_seconds` y `web.graph_cache_entries`
@@ -676,12 +680,15 @@ Módulos Apache requeridos: `proxy`, `proxy_http`, `headers` (habilitados con `a
 - **Formulario ACK con memoria:** el contacto, duración y mensaje del último reconocimiento se recuerdan via `localStorage` y se pre-rellenan en el próximo
 - **Historial simplificado por host:** en `/host/<hostname>` la tabla de historial muestra solo **cambios de estado** de los servicios (transiciones de color), no cada corrida repetida ni los ACKs
 - **Historial general:** `/history` muestra los cambios de estado de todos los hosts y servicios en orden cronológico de ocurrencia. Soporta filtros multi-selección por servicio y color; el rango por default es **7 días** y se configura con `web.general_history_days`
+- **Config desde el host:** en `/host/<hostname>`, el botón `Editar servicios` abre el editor del host en `/config/host/<hostname>/edit#services`; `/config` vuelve a validar credenciales y permisos antes de permitir guardar
 
 ### Columnas de servicios en la matriz
 
 Los servicios se muestran en el orden definido en `hosts.yaml`. Pares relacionados se agrupan de forma adyacente:
 - `http` → `https` (siempre juntos)
 - `ssh` → `telnet` (siempre juntos)
+
+En `/config/hosts` se puede ordenar por host o IP en ambos sentidos. En `/config/groups` se puede ordenar por clave interna o nombre visible.
 
 ---
 
@@ -737,6 +744,8 @@ Los archivos RRD se guardan en `/usr/local/spong/var/rrd/<hostname>/`.
 | `ruptime` | `uptime.rrd` | Días de uptime (reutiliza el RRD y gráfico de `uptime`) |
 
 Los RRDs se actualizan cada vez que el servidor recibe una actualización de estado. Si el archivo RRD no existe, se crea automáticamente al primer dato.
+
+**`temp`** muestra líneas de máximo y mínimo para los períodos agregados: por hora en 24h, por día en 7d/30d y por mes aproximado en 1y. Los RRD nuevos se crean con RRAs `MIN`/`MAX`; para RRDs existentes, el gráfico calcula los buckets desde los datos disponibles.
 
 **`disk` / `diski`** crean un RRD por filesystem usando un name-map estable. El endpoint `/rrd/<host>/disk.png` o `/diski.png` genera un gráfico combinado de particiones; `mounts=filtered` oculta filesystems ruidosos (`/dev`, `/run`, etc.) y `mounts=full` muestra todos.
 
@@ -910,7 +919,7 @@ tail -f /var/log/spong-server.log
 
 ### Limpiar servicios stale manualmente
 
-El servidor limpia automáticamente al escanear. Para forzar limpieza de un host:
+El servidor limpia automáticamente al escanear. Además, si se quita un servicio desde `/config/host/<hostname>/edit`, la UI borra los archivos de estado de ese servicio y limpia la cache del dashboard para que no siga apareciendo como rojo. Para forzar limpieza manual de un host:
 
 ```bash
 ls /usr/local/spong/var/database/<hostname>/services/
@@ -953,14 +962,14 @@ Los paquetes `.deb` permiten instalar SPONG en cualquier sistema Debian/Ubuntu s
 cd /usr/local/spong/packaging
 bash build-deb.sh
 # Genera:
-#   dist/spong-server_3.5.0-1_all.deb
-#   dist/spong-client_3.5.0-1_all.deb
+#   dist/spong-server_3.5.1-1_all.deb
+#   dist/spong-client_3.5.1-1_all.deb
 ```
 
 ### Instalar el servidor
 
 ```bash
-dpkg -i spong-server_3.5.0-1_all.deb
+dpkg -i spong-server_3.5.1-1_all.deb
 # Depends: python3, python3-flask, python3-werkzeug, python3-yaml,
 #          rrdtool, fping, iputils-ping, snmp, rpcbind
 # Recommends: apache2
@@ -976,7 +985,7 @@ dpkg -i spong-server_3.5.0-1_all.deb
 ### Instalar solo el agente cliente
 
 ```bash
-dpkg -i spong-client_3.5.0-1_all.deb
+dpkg -i spong-client_3.5.1-1_all.deb
 # Depends: python3
 # Recommends: smartmontools, lm-sensors
 # El postinst es interactivo — pregunta:
@@ -1029,13 +1038,13 @@ El archivo `.github/workflows/build-deb.yml` automatiza la construcción de los 
 |--------|----------|
 | Push a `main` | Construye los `.deb` y los sube como artefacto del workflow (disponibles 30 días) |
 | Pull Request a `main` | Verifica que el build no se rompe |
-| Tag `v*` (ej: `v3.4.2`) | Build + crea un **GitHub Release** con los `.deb` adjuntos |
+| Tag `v*` (ej: `v3.5.1`) | Build + crea un **GitHub Release** con los `.deb` adjuntos |
 
 ### Crear una release oficial
 
 ```bash
-git tag v3.5.0
-git push origin v3.5.0
+git tag v3.5.1
+git push origin v3.5.1
 # GitHub Actions construye y publica la release automáticamente
 ```
 
@@ -1046,6 +1055,29 @@ En GitHub → pestaña **Actions** → seleccionar el workflow → sección **Ar
 ---
 
 ## 16. Historial de cambios
+
+### v3.5.1 — 2026-04
+
+**Config web y permisos**
+- `/config/logout` fuerza una nueva autenticación Basic Auth usando realm temporal y headers `no-store`
+- `/config/users` permite cargar o cambiar contraseñas en texto claro desde el formulario, pero guarda únicamente `password_hash` en `spong.yaml`
+- `/config/hosts` permite ordenar por host o IP en sentido ascendente/descendente
+- `/config/groups` permite ordenar por clave interna o nombre visible en sentido ascendente/descendente
+- En `/host/<hostname>` se agrega acceso directo `Editar servicios` hacia `/config/host/<hostname>/edit#services`; el panel de config valida credenciales y permisos antes de guardar
+
+**Dashboard y estados**
+- El título `Grupos de Hosts` actúa como control global para minimizar/ampliar grupos; en modo automático minimiza grupos verdes y amplía grupos con rojo/amarillo/violeta
+- La web deja de mostrar servicios de red que quedaron en la base de estados pero ya no están configurados para el host
+- Al quitar servicios desde config, se borran los archivos de estado correspondientes y se limpia la cache del dashboard
+
+**Gráficos**
+- Los gráficos `temp` muestran máximo y mínimo agregados por hora/día/mes para 24h, 7d, 30d y 1y
+- Los RRD nuevos de `temp` se crean con RRAs `MIN`/`MAX`; los RRD existentes usan cálculo por buckets desde los datos disponibles
+
+**Release**
+- `spong.__version__`: `3.5.1`
+- `setup.py`: `3.5.1`
+- Paquetes: `spong-server_3.5.1-1_all.deb`, `spong-client_3.5.1-1_all.deb`
 
 ### v3.5.0 — 2026-04
 

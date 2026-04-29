@@ -366,6 +366,11 @@
       margin-bottom: 14px; display: flex; align-items: center; gap: 10px;
     }
     .page-title .sub { font-size: 12px; font-weight: 400; color: var(--text-d); }
+    .page-title-action {
+      border: 0; background: transparent; color: inherit; font: inherit; font-weight: 700;
+      padding: 0; cursor: pointer; border-radius: 4px;
+    }
+    .page-title-action:hover { color: var(--link); text-decoration: underline; }
 
     h3 { font-size: 12px; font-weight: 700; text-transform: uppercase;
          letter-spacing: 0.4px; color: var(--text-d); margin: 16px 0 6px; }
@@ -425,7 +430,7 @@
       .matrix-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
       .matrix-table td.hostname { min-width: 90px; font-size: 11px; padding: 3px 6px; }
 
-      .page-title { font-size: 14px; }
+      .page-title { font-size: 14px; flex-wrap: wrap; }
 
       .card { margin-bottom: 12px; }
 

@@ -112,6 +112,12 @@
     .theme-btn { padding: 4px 9px; line-height: 1; }
     .lang-btn { padding: 4px 9px; font-family: inherit; }
     .theme-btn:hover, .lang-btn:hover { background: var(--surface3); color: var(--text-h); text-decoration: none; }
+    .user-pill {
+      display: inline-flex; align-items: center; gap: 6px; color: var(--text-m);
+      background: var(--surface2); border: 1px solid var(--border); border-radius: 4px;
+      min-height: 28px; padding: 4px 9px; font-size: 12px; white-space: nowrap;
+    }
+    .logout-btn { color: var(--danger-text); border-color: var(--danger-brd); }
     .lang-menu { position: relative; }
     .lang-dropdown {
       display: none; position: absolute; top: calc(100% + 5px); right: 0; z-index: 20;
@@ -136,6 +142,9 @@
     th { text-align: left; padding: 8px 10px; color: var(--text-m);
          border-bottom: 1px solid var(--border); font-weight: 600; font-size: 12px;
          text-transform: uppercase; letter-spacing: .04em; }
+    th .sort-link { color: inherit; display: inline-flex; align-items: center; gap: 5px; text-decoration: none; }
+    th .sort-link:hover { color: var(--text-h); text-decoration: underline; }
+    th .sort-mark { color: var(--accent); font-size: 10px; line-height: 1; }
     td { padding: 9px 10px; border-bottom: 1px solid var(--border); vertical-align: middle; }
     tr:last-child td { border-bottom: none; }
     tr:hover td { background: var(--hover); }
@@ -260,6 +269,10 @@
       {% endfor %}
     </div>
   </div>
+  {% if config_user %}
+    <span class="user-pill" title="{{ _('Usuario') }}">{{ config_user }}</span>
+    <a href="{{ url_for('config_admin.logout') }}" class="theme-btn logout-btn">{{ _('Salir') }}</a>
+  {% endif %}
   <a href="{{ url_for('index') }}" style="font-size:12px; color: var(--text-m);">← {{ _('Volver al monitor') }}</a>
 </nav>
 <main>

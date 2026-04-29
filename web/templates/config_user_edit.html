@@ -30,17 +30,12 @@
       </div>
     </div>
 
-    <div class="form-row">
-      <div class="form-group">
-        <label class="field-label" for="password">{{ _('Contraseña') }}</label>
-        <input type="password" id="password" name="password" value="" autocomplete="new-password"
-               placeholder="{{ _('Dejar vacío para conservar la actual') }}">
-      </div>
-      <div class="form-group">
-        <label class="field-label" for="password_hash">{{ _('Hash de contraseña') }}</label>
-        <input type="text" id="password_hash" name="password_hash" value="" autocomplete="off"
-               placeholder="{{ _('Opcional, si querés pegar un hash ya generado') }}">
-      </div>
+    <div class="form-group" style="max-width:420px;">
+      <label class="field-label" for="password">{{ _('Contraseña') }}</label>
+      <input type="password" id="password" name="password" value="" autocomplete="new-password"
+             placeholder="{{ _('Dejar vacío para conservar la actual') if username else _('Ingresá la contraseña') }}"
+             {% if not username %}required{% endif %}>
+      <div class="field-hint">{{ _('Se guardará como hash en spong.yaml.') }}</div>
     </div>
   </div>
 

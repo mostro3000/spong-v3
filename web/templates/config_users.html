@@ -28,7 +28,7 @@
         <td style="font-weight:500; color:var(--text-h);">{{ user.username }}</td>
         <td><span class="tag">{{ _(role_labels[user.role]) }}</span></td>
         <td style="color:var(--text-m); font-size:12px;">
-          {% if user.password_hash %}{{ _('Hash de contraseña') }}{% else %}-{% endif %}
+          {% if user.has_password %}{{ _('Configurada') }}{% else %}-{% endif %}
         </td>
         <td>
           <div class="actions">

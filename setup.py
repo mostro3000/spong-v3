@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="spong",
-    version="3.5.0",
+    version="3.5.1",
     description="SPONG - Simple System/Network Monitoring (Python 3 rewrite)",
     packages=find_packages(),
     python_requires=">=3.10",

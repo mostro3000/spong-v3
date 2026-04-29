@@ -12,15 +12,27 @@
   <table>
     <thead>
       <tr>
-        <th>{{ _('Nombre') }}</th>
-        <th>{{ _('IP / Dirección') }}</th>
+        <th>
+          <a class="sort-link"
+             href="{{ url_for('config_admin.hosts', sort='host', dir='desc' if sort_by == 'host' and sort_dir == 'asc' else 'asc') }}"
+             title="{{ _('Ordenar por host') }}">
+            {{ _('Nombre') }}{% if sort_by == 'host' %}<span class="sort-mark">{{ '▲' if sort_dir == 'asc' else '▼' }}</span>{% endif %}
+          </a>
+        </th>
+        <th>
+          <a class="sort-link"
+             href="{{ url_for('config_admin.hosts', sort='ip', dir='desc' if sort_by == 'ip' and sort_dir == 'asc' else 'asc') }}"
+             title="{{ _('Ordenar por IP') }}">
+            {{ _('IP / Dirección') }}{% if sort_by == 'ip' %}<span class="sort-mark">{{ '▲' if sort_dir == 'asc' else '▼' }}</span>{% endif %}
+          </a>
+        </th>
         <th>{{ _('Servicios') }}</th>
         <th>{{ _('Contacto') }}</th>
         {% if config_can('edit') or config_can('delete') %}<th style="width:120px;"></th>{% endif %}
       </tr>
     </thead>
     <tbody>
-    {% for name, host in hosts.items() | sort %}
+    {% for name, host in hosts %}
       <tr>
         <td>
           {% if config_can('edit') %}

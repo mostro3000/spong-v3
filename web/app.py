@@ -33,7 +33,7 @@ config.load_all()
 
 app = Flask(__name__, template_folder="templates")
 
-from config_admin import config_bp
+from config_admin import config_bp, config_permission_available
 app.register_blueprint(config_bp)
 
 # Support reverse-proxy with path prefix (e.g. Apache ProxyPass /spong → localhost:8090)
@@ -45,6 +45,8 @@ app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_host=1, x_prefix=1)
 _DASHBOARD_CACHE_TTL = 5.0
 _dashboard_cache = {"ts": 0.0, "group_data": None, "sidebar": None}
 _dashboard_cache_lock = threading.Lock()
+app.config["SPONG_DASHBOARD_CACHE"] = _dashboard_cache
+app.config["SPONG_DASHBOARD_CACHE_LOCK"] = _dashboard_cache_lock
 
 _GRAPH_CACHE_TTL = max(5, int(config.get("web.graph_cache_seconds", 60) or 60))
 _GRAPH_CACHE_MAX_ENTRIES = max(64, int(config.get("web.graph_cache_entries", 512) or 512))
@@ -54,6 +56,8 @@ _graph_cache_lock = threading.Lock()
 _CHECK_COOLDOWN_SECONDS = max(5, int(config.get("web.check_cooldown_seconds", 15) or 15))
 _check_state = {}
 _check_state_lock = threading.Lock()
+_CLIENT_PLUGIN_DIR = "/usr/local/spong/spong/plugins/client"
+_client_plugin_services_cache = None
 
 
 def _graph_cache_get(key):
@@ -150,7 +154,47 @@ def _disk_graph_targets(hostname, service, message=''):
     return targets
 
 
+def _client_plugin_services():
+    global _client_plugin_services_cache
+    if _client_plugin_services_cache is not None:
+        return _client_plugin_services_cache
+    names = set()
+    try:
+        for filename in os.listdir(_CLIENT_PLUGIN_DIR):
+            if not filename.endswith(".py"):
+                continue
+            name = filename[:-3]
+            if name == "__init__" or name.startswith(("_", ".")):
+                continue
+            names.add(name)
+    except OSError:
+        pass
+    _client_plugin_services_cache = names
+    return names
+
+
+def _visible_service_names(hostname):
+    configured = {svc_name for svc_name, _ in config.host_services(hostname)}
+    client_services = set(config.get_checks()) | _client_plugin_services()
+    return configured | client_services
+
+
+def _is_visible_service(hostname, service):
+    return service in _visible_service_names(hostname)
+
+
+def _load_visible_services(hostname):
+    allowed = _visible_service_names(hostname)
+    return {
+        svc_name: svc
+        for svc_name, svc in database.load_all_services(hostname).items()
+        if svc_name in allowed
+    }
+
+
 def _service_status_payload(hostname, service, svc=None):
+    if not _is_visible_service(hostname, service):
+        return None
     if svc is None:
         svc = database.load_service(hostname, service)
     if not svc:
@@ -217,7 +261,7 @@ def _build_dashboard_snapshot():
         host_statuses = {}
         red_items = []
         for host in members:
-            services = database.load_all_services(host)
+            services = _load_visible_services(host)
             acks = database.load_acks(host)
             _apply_ack_colors(services, acks)
             _apply_schedule_suppression(host, services)
@@ -544,7 +588,8 @@ _EXTRA_TRANSLATIONS = {
         "Buscar host...": "Search host...", "Básico": "Basic", "Clave": "Key",
         "Clave interna": "Internal key", "Clear": "Clear",
         "Clic para verificar ahora": "Click to check now", "Comparar períodos": "Compare periods",
-        "Configuración": "Configuration", "Contenido completo del historial": "Full history content",
+        "Configuración": "Configuration", "Configurada": "Configured",
+        "Contenido completo del historial": "Full history content",
         "D": "S", "Datos del grupo": "Group data", "Datos del host": "Host data",
         "Descripción": "Description", "Desde": "From",
         "Diferencias respecto al estado actual": "Differences from current state",
@@ -553,6 +598,7 @@ _EXTRA_TRANSLATIONS = {
             "During these schedules, if the service is red, it will be shown as white on the dashboard (no alert is triggered).",
         "Días": "Days", "Editado": "Edited", "Editar": "Edit", "Editar grupo": "Edit group",
         "Editar grupo:": "Edit group:", "Editar host:": "Edit host:",
+        "Editar servicios": "Edit services",
         "El estado actual se guardará como backup automático antes de restaurar.":
             "The current state will be saved as an automatic backup before restoring.",
         "El historial es idéntico al estado actual - no hay diferencias.":
@@ -574,18 +620,24 @@ _EXTRA_TRANSLATIONS = {
             "Select the hosts that belong to this group.",
         "Marcá los servicios que querés verificar en este host.":
             "Select the services you want to check on this host.",
-        "Menú": "Menu", "Miembros": "Members", "Minimizar grupo": "Collapse group", "Modo claro": "Light mode",
+        "Menú": "Menu", "Miembros": "Members",
+        "Minimizar / ampliar todos los grupos": "Collapse / expand all groups",
+        "Minimizar grupo": "Collapse group", "Modo claro": "Light mode",
         "Modo oscuro": "Dark mode", "No hay cambios registrados aún.": "No changes recorded yet.",
         "No hay grupos configurados.": "No groups configured.",
         "No hay hosts configurados.": "No hosts configured.",
         "Nombre": "Name", "Nombre del host": "Host name", "Nombre para mostrar": "Display name",
         "Nuevo": "New", "Nuevo grupo": "New group", "Nuevo host": "New host",
         "Ocultar gráficos": "Hide graphs", "Opciones": "Options",
+        "Ordenar por clave": "Sort by key",
+        "Ordenar por host": "Sort by host",
+        "Ordenar por IP": "Sort by IP",
+        "Ordenar por nombre": "Sort by name",
         "Plugins que no aparecen arriba, separados por espacio.":
             "Plugins not shown above, separated by spaces.",
         "Purple": "Purple", "Red": "Red", "Restaurado": "Restored",
         "Restaurar": "Restore", "Restaurar esta versión": "Restore this version",
-        "S": "S", "Servicios a monitorear": "Services to monitor",
+        "S": "S", "Salir": "Log out", "Servicios a monitorear": "Services to monitor",
         "Servicios adicionales": "Additional services", "Si ping falla,": "If ping fails,",
         "Sin datos de disponibilidad": "No availability data",
         "Tiene horarios de supresión": "Has suppression schedules",
@@ -646,13 +698,16 @@ _EXTRA_TRANSLATIONS = {
             "That user is the legacy administrator and is managed from spong.yaml.",
         "Gestionar usuarios": "Manage users",
         "Hash de contraseña": "Password hash",
+        "Ingresá la contraseña": "Enter the password",
         "No hay usuarios adicionales configurados.": "No additional users configured.",
         "Nombre de usuario": "Username",
         "Nuevo usuario": "New user",
         "Opcional, si querés pegar un hash ya generado": "Optional, if you want to paste an already generated hash",
         "Rol": "Role",
+        "Se guardará como hash en spong.yaml.": "It will be stored as a hash in spong.yaml.",
         "Solo agregar": "Add only",
         "Solo lectura": "Read only",
+        "Tenés que cargar una contraseña.": "You need to provide a password.",
         "Tenés que cargar una contraseña o un hash de contraseña.": "You need to provide a password or a password hash.",
         "Tiene que quedar al menos un usuario administrador.": "At least one administrator user must remain.",
         "Usá letras, números, punto, guion y guion bajo.": "Use letters, numbers, dots, hyphens, and underscores.",
@@ -1453,7 +1508,8 @@ def _apply_schedule_suppression(hostname: str, services: dict) -> None:
 @app.route("/host/<hostname>")
 def host_detail(hostname):
     host_cfg = config.get_host(hostname)
-    services = database.load_all_services(hostname)
+    config_host_edit_available = bool(host_cfg) and config_permission_available("edit")
+    services = _load_visible_services(hostname)
     acks = database.load_acks(hostname)
     _apply_ack_colors(services, acks)
     _apply_schedule_suppression(hostname, services)
@@ -1468,6 +1524,7 @@ def host_detail(hostname):
         "host.html",
         hostname=hostname,
         host_cfg=host_cfg,
+        config_host_edit_available=config_host_edit_available,
         services=sorted_services,
         acks=acks,
         history=sorted(history, key=lambda e: e.timestamp, reverse=True),
@@ -1476,7 +1533,7 @@ def host_detail(hostname):
 
 @app.route("/service/<hostname>/<service>")
 def service_detail(hostname, service):
-    svc = database.load_service(hostname, service)
+    svc = database.load_service(hostname, service) if _is_visible_service(hostname, service) else None
     acks = database.load_acks(hostname)
     is_acked = database.is_acknowledged(hostname, service)
     service_ack = next((a for a in acks if a.covers(service)), None)
@@ -1498,7 +1555,7 @@ def problems():
     hosts = config.get_hosts()
     issues = []
     for hostname in hosts:
-        services = database.load_all_services(hostname)
+        services = _load_visible_services(hostname)
         acks = database.load_acks(hostname)
         _apply_ack_colors(services, acks)
         _apply_schedule_suppression(hostname, services)
@@ -1523,7 +1580,7 @@ def acks_page():
     hosts = config.get_hosts()
     all_acks = []
     for hostname in hosts:
-        svcs = database.load_all_services(hostname)
+        svcs = _load_visible_services(hostname)
         for ack in database.load_acks(hostname):
             services_status = [(sn, sv) for sn, sv in svcs.items() if ack.covers(sn)]
             all_acks.append({
@@ -1612,7 +1669,7 @@ def api_status():
     hosts = config.get_hosts()
     result = {}
     for hostname in hosts:
-        services = database.load_all_services(hostname)
+        services = _load_visible_services(hostname)
         result[hostname] = {
             svc_name: {
                 "color": svc.color,
@@ -1642,6 +1699,8 @@ def api_check(hostname, service):
 
     if hostname not in config.get_hosts():
         return jsonify({"error": "unknown host"}), 404
+    if not _is_visible_service(hostname, service):
+        return jsonify({"error": "unknown service"}), 404
 
     # Cargar plugin de red
     try:
@@ -1889,7 +1948,7 @@ def api_problems():
     hosts = config.get_hosts()
     issues = []
     for hostname in hosts:
-        services = database.load_all_services(hostname)
+        services = _load_visible_services(hostname)
         for svc_name, svc in services.items():
             if svc.color in ("red", "yellow", "purple"):
                 issues.append({

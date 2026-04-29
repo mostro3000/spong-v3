@@ -2,17 +2,19 @@
 from __future__ import annotations
 
 import difflib
+import ipaddress
 import json
 import os
 import re
+import secrets
 import yaml
 from datetime import datetime
 from pathlib import Path
 from functools import wraps
-from flask import Blueprint, render_template, request, redirect, url_for, Response, g, has_request_context
+from flask import Blueprint, render_template, request, redirect, url_for, Response, g, has_request_context, make_response, current_app
 from werkzeug.security import generate_password_hash
 
-from spong import config as spong_config
+from spong import config as spong_config, database as spong_database
 from auth_utils import check_basic_auth
 
 config_bp = Blueprint('config_admin', __name__, url_prefix='/config')
@@ -32,6 +34,8 @@ _CONFIG_FILES = {
 }
 
 _SUPPORTED_CONFIG_LANGS = {'es', 'en', 'fr', 'de', 'pt', 'zh', 'ru'}
+_CONFIG_REALM = 'SPONG Config'
+_CONFIG_LOGGED_OUT_REALM = 'SPONG Config signed out'
 
 _ACTION_LABELS = {
     'new':         'Nuevo',
@@ -160,8 +164,19 @@ def _config_can(permission: str) -> bool:
     return permission in getattr(g, 'config_permissions', frozenset())
 
 
+def config_permission_available(permission: str) -> bool:
+    return any(permission in entry['permissions'] for entry in _config_user_entries().values())
+
+
 def _permission_denied(permission: str) -> Response:
     return Response('Permiso insuficiente para esta acción.', 403)
+
+
+def _config_no_store(response):
+    response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    return response
 
 
 def _require_config_auth(f):
@@ -169,16 +184,39 @@ def _require_config_auth(f):
     def decorated(*args, **kwargs):
         if not _config_user_entries():
             return Response('Config UI no habilitado. Configurá web.config_user o web.config_users en spong.yaml.', 403)
+        logged_out_token = request.cookies.get('spong_config_logged_out')
+        reauth_token = request.cookies.get('spong_config_reauth')
         auth = request.authorization
         identity = _authenticate_config_user(auth.username, auth.password) if auth else None
+        if logged_out_token:
+            realm = f'{_CONFIG_LOGGED_OUT_REALM} {logged_out_token}'
+            if reauth_token != logged_out_token:
+                resp = Response(
+                    'Sesión cerrada. Volvé a autenticarte para entrar a la configuración.',
+                    401,
+                    {'WWW-Authenticate': f'Basic realm="{realm}"'},
+                )
+                resp.set_cookie('spong_config_reauth', logged_out_token, max_age=5 * 60, samesite='Lax')
+                return _config_no_store(resp)
+            if not identity:
+                return _config_no_store(Response(
+                    'Sesión cerrada. Volvé a autenticarte para entrar a la configuración.',
+                    401,
+                    {'WWW-Authenticate': f'Basic realm="{realm}"'},
+                ))
+            g.config_user, g.config_role, g.config_permissions = identity
+            resp = make_response(f(*args, **kwargs))
+            resp.delete_cookie('spong_config_logged_out')
+            resp.delete_cookie('spong_config_reauth')
+            return _config_no_store(resp)
         if not identity:
-            return Response(
+            return _config_no_store(Response(
                 'Acceso restringido — ingresá usuario y contraseña de administración.',
                 401,
-                {'WWW-Authenticate': 'Basic realm="SPONG Config"'},
-            )
+                {'WWW-Authenticate': f'Basic realm="{_CONFIG_REALM}"'},
+            ))
         g.config_user, g.config_role, g.config_permissions = identity
-        return f(*args, **kwargs)
+        return _config_no_store(make_response(f(*args, **kwargs)))
     return decorated
 
 
@@ -368,6 +406,29 @@ def _build_services_str(services: list[str], stops: set[str]) -> str:
     return ' '.join(s + ':' if s in stops else s for s in services if s)
 
 
+def _service_set_from_entry(entry: dict | None) -> set[str]:
+    svcs, _ = _parse_services((entry or {}).get('services', ''))
+    return set(svcs)
+
+
+def _delete_service_statuses(hostnames, services: set[str]) -> None:
+    for host in sorted(set(h for h in hostnames if h)):
+        for service in sorted(services):
+            spong_database.delete_service(host, service)
+
+
+def _clear_dashboard_cache() -> None:
+    cache = current_app.config.get('SPONG_DASHBOARD_CACHE')
+    lock = current_app.config.get('SPONG_DASHBOARD_CACHE_LOCK')
+    if not isinstance(cache, dict):
+        return
+    if lock:
+        with lock:
+            cache.update({'ts': 0.0, 'group_data': None, 'sidebar': None})
+    else:
+        cache.update({'ts': 0.0, 'group_data': None, 'sidebar': None})
+
+
 # ---------------------------------------------------------------------------
 # Routes — Index
 # ---------------------------------------------------------------------------
@@ -389,6 +450,15 @@ def set_lang(lang):
         lang = 'es'
     resp = redirect(request.referrer or url_for('config_admin.index'))
     resp.set_cookie('lang', lang, max_age=10 * 365 * 86400, samesite='Lax')
+    return resp
+
+
+@config_bp.route('/logout')
+def logout():
+    logout_token = secrets.token_urlsafe(8)
+    resp = redirect(url_for('index'))
+    resp.set_cookie('spong_config_logged_out', logout_token, max_age=30 * 60, samesite='Lax')
+    resp.delete_cookie('spong_config_reauth')
     return resp
 
 
@@ -415,8 +485,7 @@ def _normalize_user_entry(username: str, entry: dict) -> dict:
     return {
         'username': username,
         'role': role,
-        'password': entry.get('password', ''),
-        'password_hash': entry.get('password_hash', ''),
+        'has_password': bool(entry.get('password_hash') or entry.get('password')),
         'permissions': _normalize_permissions(entry.get('permissions'), role),
     }
 
@@ -475,7 +544,6 @@ def user_edit(username=None):
         new_username = request.form.get('username', '').strip()
         role = _normalize_config_role(request.form.get('role', 'read'))
         password = request.form.get('password', '')
-        password_hash = request.form.get('password_hash', '').strip()
 
         if not new_username:
             error = 'El nombre de usuario es obligatorio.'
@@ -488,14 +556,18 @@ def user_edit(username=None):
         else:
             if password:
                 password_hash = generate_password_hash(password)
-            if not password_hash and not existing:
-                error = 'Tenés que cargar una contraseña o un hash de contraseña.'
+            elif existing.get('password_hash'):
+                password_hash = existing.get('password_hash', '')
+            elif existing.get('password'):
+                password_hash = generate_password_hash(existing.get('password', ''))
+            else:
+                password_hash = ''
+            if not password_hash:
+                error = 'Tenés que cargar una contraseña.'
             else:
                 candidate_users = dict(users_cfg)
                 if new_username != username and username in candidate_users:
                     del candidate_users[username]
-                if not password_hash:
-                    password_hash = existing.get('password_hash', '')
                 candidate_users[new_username] = {
                     'password': '',
                     'password_hash': password_hash,
@@ -550,11 +622,48 @@ def user_delete(username):
 # Routes — Hosts
 # ---------------------------------------------------------------------------
 
+def _first_host_ip(host: dict) -> str:
+    ips = host.get('ip_addr') or []
+    if isinstance(ips, str):
+        return ips.strip()
+    return str(ips[0]).strip() if ips else ''
+
+
+def _host_ip_sort_key(host: dict) -> tuple:
+    ip_value = _first_host_ip(host)
+    try:
+        parsed = ipaddress.ip_address(ip_value)
+        return (0, parsed.version, int(parsed), '')
+    except ValueError:
+        return (1, 0, 0, ip_value.lower())
+
+
 @config_bp.route('/hosts')
 @_require_config_auth
 def hosts():
     data = _load_yaml(ETC_DIR / 'hosts.yaml')
-    return render_template('config_hosts.html', hosts=data.get('hosts', {}))
+    hosts_dict = data.get('hosts', {})
+    sort_by = request.args.get('sort', 'host').strip().lower()
+    sort_dir = request.args.get('dir', 'asc').strip().lower()
+    if sort_by not in ('host', 'ip'):
+        sort_by = 'host'
+    if sort_dir not in ('asc', 'desc'):
+        sort_dir = 'asc'
+
+    host_rows = list(hosts_dict.items())
+    if sort_by == 'ip':
+        host_rows.sort(key=lambda item: (_host_ip_sort_key(item[1]), item[0].lower()))
+    else:
+        host_rows.sort(key=lambda item: item[0].lower())
+    if sort_dir == 'desc':
+        host_rows.reverse()
+
+    return render_template(
+        'config_hosts.html',
+        hosts=host_rows,
+        sort_by=sort_by,
+        sort_dir=sort_dir,
+    )
 
 
 @config_bp.route('/host/new', methods=['GET', 'POST'])
@@ -607,6 +716,9 @@ def host_edit(hostname=None):
                     ordered.append(s)
 
             services_str = _build_services_str(ordered, stops)
+            old_services = _service_set_from_entry(hosts_dict.get(hostname)) if hostname else set()
+            new_services = set(ordered)
+            removed_services = old_services - new_services
 
             # Schedules
             s_svcs = request.form.getlist('sched_service')
@@ -636,8 +748,11 @@ def host_edit(hostname=None):
             action = 'edit' if hostname else 'new'
             detail = f"{'Editó' if hostname else 'Nuevo'} host: {new_name}"
             _save_yaml(ETC_DIR / 'hosts.yaml', data)
+            if removed_services:
+                _delete_service_statuses({hostname, new_name}, removed_services)
             _save_config_snapshot('hosts', data, action, detail)
             spong_config.load_all()
+            _clear_dashboard_cache()
             return redirect(url_for('config_admin.hosts'))
 
     # GET — load existing data
@@ -671,6 +786,7 @@ def host_delete(hostname):
     _save_yaml(ETC_DIR / 'hosts.yaml', data)
     _save_config_snapshot('hosts', data, 'delete', f'Eliminó host: {hostname}')
     spong_config.load_all()
+    _clear_dashboard_cache()
     return redirect(url_for('config_admin.hosts'))
 
 
@@ -682,7 +798,28 @@ def host_delete(hostname):
 @_require_config_auth
 def groups():
     data = _load_yaml(ETC_DIR / 'groups.yaml')
-    return render_template('config_groups.html', groups=data.get('groups', {}))
+    groups_dict = data.get('groups', {})
+    sort_by = request.args.get('sort', 'key').strip().lower()
+    sort_dir = request.args.get('dir', 'asc').strip().lower()
+    if sort_by not in ('key', 'name'):
+        sort_by = 'key'
+    if sort_dir not in ('asc', 'desc'):
+        sort_dir = 'asc'
+
+    group_rows = list(groups_dict.items())
+    if sort_by == 'name':
+        group_rows.sort(key=lambda item: (str(item[1].get('name', item[0])).lower(), item[0].lower()))
+    else:
+        group_rows.sort(key=lambda item: item[0].lower())
+    if sort_dir == 'desc':
+        group_rows.reverse()
+
+    return render_template(
+        'config_groups.html',
+        groups=group_rows,
+        sort_by=sort_by,
+        sort_dir=sort_dir,
+    )
 
 
 @config_bp.route('/group/new', methods=['GET', 'POST'])

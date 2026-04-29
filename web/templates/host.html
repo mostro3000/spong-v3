@@ -14,6 +14,9 @@
 
 <div style="margin-bottom:14px; display:flex; gap:8px;">
   <a class="btn" href="{{ url_for('ack', host=hostname) }}">&#10003; {{ _('Reconocer') }}</a>
+  {% if config_host_edit_available %}
+  <a class="btn" href="{{ url_for('config_admin.host_edit', hostname=hostname) }}#services" style="background:#607d8b;">{{ _('Editar servicios') }}</a>
+  {% endif %}
   <a class="btn" href="{{ url_for('index') }}" style="background:#78909c;">&#8592; {{ _('Grupos') }}</a>
 </div>
 
