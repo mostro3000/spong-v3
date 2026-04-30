@@ -7,6 +7,7 @@ import json
 import os
 import re
 import secrets
+import shutil
 import yaml
 from datetime import datetime
 from pathlib import Path
@@ -22,16 +23,22 @@ config_bp = Blueprint('config_admin', __name__, url_prefix='/config')
 ETC_DIR     = Path('/usr/local/spong/etc')
 PLUGIN_DIR  = Path('/usr/local/spong/spong/plugins/network')
 HISTORY_DIR = Path('/usr/local/spong/var/config_history')
+RRD_DIR     = Path('/usr/local/spong/var/rrd')
 
 _NUMBERED_RE = re.compile(r'^(.+?)\d+$')
 _SERVICE_NAME_RE = re.compile(r'^[A-Za-z][A-Za-z0-9_]*$')
 _USER_NAME_RE = re.compile(r'^[A-Za-z0-9_.-]+$')
+_HOST_NAME_RE = re.compile(r'^[A-Za-z0-9_.-]+$')
 _MAX_HISTORY = 100
 
 _CONFIG_FILES = {
     'hosts':  ETC_DIR / 'hosts.yaml',
     'groups': ETC_DIR / 'groups.yaml',
 }
+_AUX_HOST_KEY_CONFIGS = [
+    (ETC_DIR / 'sensors.yaml', 'presence'),
+    (ETC_DIR / 'termicas.yaml', 'devices'),
+]
 
 _SUPPORTED_CONFIG_LANGS = {'es', 'en', 'fr', 'de', 'pt', 'zh', 'ru'}
 _CONFIG_REALM = 'SPONG Config'
@@ -417,6 +424,91 @@ def _delete_service_statuses(hostnames, services: set[str]) -> None:
             spong_database.delete_service(host, service)
 
 
+def _valid_host_name(name: str) -> bool:
+    return bool(_HOST_NAME_RE.match(name or '')) and name not in ('.', '..')
+
+
+def _safe_host_dir(base_dir: Path, hostname: str) -> Path:
+    base = base_dir.resolve(strict=False)
+    target = (base / hostname).resolve(strict=False)
+    if target == base or base not in target.parents:
+        raise ValueError('Nombre de host inválido.')
+    return target
+
+
+def _tree_conflicts(src: Path, dst: Path) -> list[Path]:
+    if not src.exists() or not dst.exists():
+        return []
+    if src.is_file() or dst.is_file():
+        return [dst]
+
+    conflicts: list[Path] = []
+    for child in src.iterdir():
+        target = dst / child.name
+        if not target.exists():
+            continue
+        if child.is_dir() and target.is_dir():
+            conflicts.extend(_tree_conflicts(child, target))
+        else:
+            conflicts.append(target)
+    return conflicts
+
+
+def _merge_tree(src: Path, dst: Path) -> None:
+    if not src.exists():
+        return
+    if not src.is_dir():
+        if dst.exists():
+            raise FileExistsError(f'Ya existe la ruta de destino: {dst}')
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(src), str(dst))
+        return
+    if not dst.exists():
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(src), str(dst))
+        return
+    if not dst.is_dir():
+        raise ValueError(f'La ruta de destino no es un directorio: {dst}')
+
+    dst.mkdir(parents=True, exist_ok=True)
+    for child in src.iterdir():
+        target = dst / child.name
+        if child.is_dir() and target.exists() and target.is_dir():
+            _merge_tree(child, target)
+        else:
+            shutil.move(str(child), str(target))
+    src.rmdir()
+
+
+def _rename_host_storage(old_name: str, new_name: str) -> None:
+    if not old_name or old_name == new_name:
+        return
+
+    roots = [
+        ('estado/historial', spong_config.db_path()),
+        ('RRD/gráficos', RRD_DIR),
+        ('historial archivado', spong_config.archive_path()),
+    ]
+    planned: list[tuple[str, Path, Path]] = []
+    conflicts: list[Path] = []
+
+    for label, root in roots:
+        src = _safe_host_dir(root, old_name)
+        dst = _safe_host_dir(root, new_name)
+        if not src.exists():
+            continue
+        conflicts.extend(_tree_conflicts(src, dst))
+        planned.append((label, src, dst))
+
+    if conflicts:
+        shown = ', '.join(str(p) for p in conflicts[:3])
+        more = f' (+{len(conflicts) - 3} más)' if len(conflicts) > 3 else ''
+        raise FileExistsError(f'Ya existen datos históricos en el nombre nuevo: {shown}{more}')
+
+    for _label, src, dst in planned:
+        _merge_tree(src, dst)
+
+
 def _clear_dashboard_cache() -> None:
     cache = current_app.config.get('SPONG_DASHBOARD_CACHE')
     lock = current_app.config.get('SPONG_DASHBOARD_CACHE_LOCK')
@@ -427,6 +519,18 @@ def _clear_dashboard_cache() -> None:
             cache.update({'ts': 0.0, 'group_data': None, 'sidebar': None})
     else:
         cache.update({'ts': 0.0, 'group_data': None, 'sidebar': None})
+
+
+def _clear_graph_cache() -> None:
+    cache = current_app.config.get('SPONG_GRAPH_CACHE')
+    lock = current_app.config.get('SPONG_GRAPH_CACHE_LOCK')
+    if cache is None:
+        return
+    if lock:
+        with lock:
+            cache.clear()
+    else:
+        cache.clear()
 
 
 # ---------------------------------------------------------------------------
@@ -638,6 +742,145 @@ def _host_ip_sort_key(host: dict) -> tuple:
         return (1, 0, 0, ip_value.lower())
 
 
+def _group_keys_for_host(hostname: str | None) -> list[str]:
+    if not hostname:
+        return []
+
+    data = _load_yaml(ETC_DIR / 'groups.yaml')
+    keys = []
+    for group_key, group in data.get('groups', {}).items():
+        members = group.get('members', [])
+        if isinstance(members, list) and hostname in members:
+            keys.append(group_key)
+    return keys
+
+
+def _replace_host_in_groups(old_name: str, new_name: str, group_keys: list[str] | None = None) -> bool:
+    if not old_name or old_name == new_name:
+        return False
+
+    data = _load_yaml(ETC_DIR / 'groups.yaml')
+    changed = False
+    groups_dict = data.get('groups', {})
+    expected_groups = set(group_keys or [])
+
+    for group_key, group in groups_dict.items():
+        members = group.get('members', [])
+        if not isinstance(members, list):
+            continue
+
+        updated = []
+        seen = set()
+        found_old = False
+        for member in members:
+            member_name = new_name if member == old_name else member
+            if member == old_name:
+                found_old = True
+            if member_name in seen:
+                changed = True
+                continue
+            updated.append(member_name)
+            seen.add(member_name)
+            if member_name != member:
+                changed = True
+        if group_key in expected_groups and not found_old and new_name not in seen:
+            updated.append(new_name)
+            changed = True
+        group['members'] = updated
+
+    if changed:
+        _save_yaml(ETC_DIR / 'groups.yaml', data)
+        _save_config_snapshot(
+            'groups',
+            data,
+            'edit',
+            f'Renombró host en grupos: {old_name} → {new_name}',
+        )
+    return changed
+
+
+def _replace_mapping_key(mapping: dict, old_name: str, new_name: str) -> bool:
+    if old_name not in mapping:
+        return False
+    if new_name in mapping:
+        raise FileExistsError(f'Ya existe una entrada auxiliar para el host nuevo: {new_name}')
+
+    updated = {}
+    for key, value in mapping.items():
+        updated[new_name if key == old_name else key] = value
+    mapping.clear()
+    mapping.update(updated)
+    return True
+
+
+def _replace_host_in_aux_configs(old_name: str, new_name: str) -> None:
+    if not old_name or old_name == new_name:
+        return
+
+    for path, section_name in _AUX_HOST_KEY_CONFIGS:
+        data = _load_yaml(path)
+        section = data.get(section_name)
+        if not isinstance(section, dict):
+            continue
+        if _replace_mapping_key(section, old_name, new_name):
+            _save_yaml(path, data)
+
+
+def _check_host_aux_config_conflicts(old_name: str, new_name: str) -> None:
+    if not old_name or old_name == new_name:
+        return
+
+    for path, section_name in _AUX_HOST_KEY_CONFIGS:
+        data = _load_yaml(path)
+        section = data.get(section_name)
+        if not isinstance(section, dict):
+            continue
+        if old_name in section and new_name in section:
+            raise FileExistsError(
+                f'Ya existe {new_name} en {path.name}:{section_name}.'
+            )
+
+
+def _replace_exact_host_patterns(values, old_name: str, new_name: str) -> tuple[object, bool]:
+    if isinstance(values, list):
+        changed = False
+        replaced = []
+        for value in values:
+            if value == old_name:
+                replaced.append(new_name)
+                changed = True
+            else:
+                replaced.append(value)
+        return replaced, changed
+    if values == old_name:
+        return new_name, True
+    return values, False
+
+
+def _replace_host_in_message_rules(old_name: str, new_name: str) -> None:
+    if not old_name or old_name == new_name:
+        return
+
+    path = ETC_DIR / 'message.yaml'
+    data = _load_yaml(path)
+    rules = data.get('rules', [])
+    if not isinstance(rules, list):
+        return
+
+    changed = False
+    for rule in rules:
+        if not isinstance(rule, dict):
+            continue
+        for key in ('hosts', 'exclude_hosts'):
+            replaced, key_changed = _replace_exact_host_patterns(rule.get(key), old_name, new_name)
+            if key_changed:
+                rule[key] = replaced
+                changed = True
+
+    if changed:
+        _save_yaml(path, data)
+
+
 @config_bp.route('/hosts')
 @_require_config_auth
 def hosts():
@@ -683,9 +926,13 @@ def host_edit(hostname=None):
 
     if request.method == 'POST':
         new_name = request.form.get('hostname', '').strip()
+        original_group_keys = request.form.getlist('original_groups')
+        old_entry = hosts_dict.get(hostname, {}) if hostname else {}
         if not new_name:
             error = 'El nombre del host es obligatorio.'
-        elif not hostname and new_name in hosts_dict and not _config_can('edit'):
+        elif not _valid_host_name(new_name):
+            error = 'El nombre del host solo puede tener letras, números, puntos, guiones y guiones bajos.'
+        elif new_name != hostname and new_name in hosts_dict:
             error = 'Ya existe un host con ese nombre.'
         else:
             # IPs
@@ -716,9 +963,15 @@ def host_edit(hostname=None):
                     ordered.append(s)
 
             services_str = _build_services_str(ordered, stops)
-            old_services = _service_set_from_entry(hosts_dict.get(hostname)) if hostname else set()
+            services_dirty = request.form.get('services_dirty') == '1'
+            renaming_only_services = bool(hostname and hostname != new_name and not services_dirty)
+            if renaming_only_services:
+                services_str = old_entry.get('services', services_str)
+                ordered, _ = _parse_services(services_str)
+
+            old_services = _service_set_from_entry(old_entry) if hostname else set()
             new_services = set(ordered)
-            removed_services = old_services - new_services
+            removed_services = set() if renaming_only_services else old_services - new_services
 
             # Schedules
             s_svcs = request.form.getlist('sched_service')
@@ -741,22 +994,37 @@ def host_edit(hostname=None):
             if schedules:
                 entry['schedules'] = schedules
 
-            if hostname and hostname != new_name and hostname in hosts_dict:
-                del hosts_dict[hostname]
-            hosts_dict[new_name] = entry
+            try:
+                _check_host_aux_config_conflicts(hostname, new_name)
+                _rename_host_storage(hostname, new_name)
+            except (OSError, ValueError) as exc:
+                error = str(exc)
+            else:
+                if hostname and hostname != new_name and hostname in hosts_dict:
+                    del hosts_dict[hostname]
+                hosts_dict[new_name] = entry
 
-            action = 'edit' if hostname else 'new'
-            detail = f"{'Editó' if hostname else 'Nuevo'} host: {new_name}"
-            _save_yaml(ETC_DIR / 'hosts.yaml', data)
-            if removed_services:
-                _delete_service_statuses({hostname, new_name}, removed_services)
-            _save_config_snapshot('hosts', data, action, detail)
-            spong_config.load_all()
-            _clear_dashboard_cache()
-            return redirect(url_for('config_admin.hosts'))
+                action = 'edit' if hostname else 'new'
+                if hostname and hostname != new_name:
+                    detail = f"Renombró host: {hostname} → {new_name}"
+                else:
+                    detail = f"{'Editó' if hostname else 'Nuevo'} host: {new_name}"
+                _save_yaml(ETC_DIR / 'hosts.yaml', data)
+                _replace_host_in_groups(hostname, new_name, original_group_keys)
+                _replace_host_in_aux_configs(hostname, new_name)
+                _replace_host_in_message_rules(hostname, new_name)
+                if removed_services:
+                    _delete_service_statuses({hostname, new_name}, removed_services)
+                _save_config_snapshot('hosts', data, action, detail)
+                spong_config.load_all()
+                _clear_dashboard_cache()
+                if hostname and hostname != new_name:
+                    _clear_graph_cache()
+                return redirect(url_for('config_admin.hosts'))
 
     # GET — load existing data
     host = hosts_dict.get(hostname, {}) if hostname else {}
+    original_group_keys = _group_keys_for_host(hostname)
     svcs_list, stops_set = _parse_services(host.get('services', ''))
     svcs_set = set(svcs_list)
     # Custom: services in use but not in the known plugin list
@@ -772,6 +1040,7 @@ def host_edit(hostname=None):
         contacts=contacts,
         categories=categories,
         custom_list=custom_list,
+        original_group_keys=original_group_keys,
         error=error,
     )
 

@@ -11,6 +11,10 @@
 {% endif %}
 
 <form method="post">
+  {% for group_key in original_group_keys %}
+    <input type="hidden" name="original_groups" value="{{ group_key }}">
+  {% endfor %}
+  <input type="hidden" id="services_dirty" name="services_dirty" value="0">
 
   <!-- Datos básicos -->
   <div class="card">
@@ -20,10 +24,7 @@
         <label class="field-label" for="hostname">{{ _('Nombre del host') }}</label>
         <input type="text" id="hostname" name="hostname"
                value="{{ hostname or '' }}" placeholder="{{ _('ej: camara-jardin') }}" required
-               {% if hostname %}readonly style="opacity:.6;"{% endif %}>
-        {% if hostname %}
-          <div class="field-hint">{{ _('El nombre no se puede cambiar. Para renombrar, eliminá y volvé a crear.') }}</div>
-        {% endif %}
+               autocomplete="off">
       </div>
       <div class="form-group">
         <label class="field-label" for="ip_addr">{{ _('Dirección IP') }}</label>
@@ -236,6 +237,14 @@ document.querySelector('form').addEventListener('submit', function() {
     row.querySelector('.days-val').value = daysToStr(checked);
   });
 });
+
+const servicesDirty = document.getElementById('services_dirty');
+if (servicesDirty) {
+  document.querySelectorAll('#services input').forEach(el => {
+    el.addEventListener('change', () => { servicesDirty.value = '1'; });
+    el.addEventListener('input', () => { servicesDirty.value = '1'; });
+  });
+}
 
 // Init existing rows
 document.querySelectorAll('.sched-row').forEach(initSchedRow);

@@ -28,3 +28,5 @@
 + hacer click en "SPONG" (superior izquierda), sea lo mismo que persionar en "Grupos"  [DONE v3.5.2]
 + cuando borro un azul en reconocidos, en vista principal vuelve el estado (Verde/Rojo/Amarallo/Violeta), pero sigue estando en la lista de "Reconocidos"  [DONE v3.5.2]
 + actualizar version a v3.5.2, actualizar documentacion, generar .deb v3.5.2, y subir a github  [DONE v3.5.2]
++ ver dejar modificar host desde config (ahora hay que borrar y volver a crear)  [DONE v3.5.3]
++ actualizar version a v3.5.3, documentacion, .deb y github  [DONE v3.5.3]

@@ -60,6 +60,8 @@ _GRAPH_CACHE_TTL = max(5, int(config.get("web.graph_cache_seconds", 60) or 60))
 _GRAPH_CACHE_MAX_ENTRIES = max(64, int(config.get("web.graph_cache_entries", 512) or 512))
 _graph_cache = OrderedDict()
 _graph_cache_lock = threading.Lock()
+app.config["SPONG_GRAPH_CACHE"] = _graph_cache
+app.config["SPONG_GRAPH_CACHE_LOCK"] = _graph_cache_lock
 
 _CHECK_COOLDOWN_SECONDS = max(5, int(config.get("web.check_cooldown_seconds", 15) or 15))
 _check_state = {}

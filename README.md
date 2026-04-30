@@ -1,8 +1,8 @@
-# SPONG v3.5.2 — Network & Services Monitor
+# SPONG v3.5.3 — Network & Services Monitor
 
 **SPONG** (Simple Preventive Operations Network Guardian) is a network and services monitoring system originally written in Perl. v3 is a complete rewrite in Python 3, keeping full compatibility with the original database and configuration files.
 
-> **Features:** multi-group host matrix · RRD graphs (SmokePing-style ping) · ACK/acknowledgements · 7-language UI · dark mode · mobile-responsive UI · historical uptime % · on-demand service checks · cached graph API · .deb packages · migration script from Perl config · web config UI · alert schedule suppression
+> **Features:** multi-group host matrix · RRD graphs (SmokePing-style ping) · ACK/acknowledgements · 7-language UI · dark mode · mobile-responsive UI · historical uptime % · on-demand service checks · cached graph API · .deb packages · migration script from Perl config · web config UI · safe host rename · alert schedule suppression
 
 [![Build .deb](https://github.com/mostro3000/spong-v3/actions/workflows/build-deb.yml/badge.svg)](https://github.com/mostro3000/spong-v3/actions/workflows/build-deb.yml)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
@@ -49,10 +49,10 @@
 
 ```bash
 # 1. Descargar el .deb desde Releases
-wget https://github.com/mostro3000/spong-v3/releases/latest/download/spong-server_3.5.2-1_all.deb
+wget https://github.com/mostro3000/spong-v3/releases/latest/download/spong-server_3.5.3-1_all.deb
 
 # 2. Instalar (el postinst configura dependencias y activa los 4 servicios systemd)
-dpkg -i spong-server_3.5.2-1_all.deb
+dpkg -i spong-server_3.5.3-1_all.deb
 
 # 3. Editar la configuración
 nano /usr/local/spong/etc/spong.yaml    # servidor, thresholds, checks
@@ -69,11 +69,11 @@ xdg-open http://localhost:8090/
 ### Cliente remoto (en otro host)
 
 ```bash
-wget https://github.com/mostro3000/spong-v3/releases/latest/download/spong-client_3.5.2-1_all.deb
-dpkg -i spong-client_3.5.2-1_all.deb   # instalación interactiva: pregunta servidor, hostname, checks
+wget https://github.com/mostro3000/spong-v3/releases/latest/download/spong-client_3.5.3-1_all.deb
+dpkg -i spong-client_3.5.3-1_all.deb   # instalación interactiva: pregunta servidor, hostname, checks
 ```
 
-> Si el asset `3.5.2-1` todavía no está publicado en GitHub Releases, construir localmente con `cd packaging && bash build-deb.sh` o crear el tag `v3.5.2` para que CI publique los `.deb`.
+> Si el asset `3.5.3-1` todavía no está publicado en GitHub Releases, construir localmente con `cd packaging && bash build-deb.sh` o crear el tag `v3.5.3` para que CI publique los `.deb`.
 
 ### Migración desde SPONG Perl (spong.conf / spong.hosts / spong.groups)
 
@@ -86,12 +86,12 @@ python3 /usr/local/spong/bin/spong-migrate.py --all --outdir /usr/local/spong/et
 
 ## Estado actual del código
 
-SPONG v3.5.2 está organizado como una aplicación Python 3 con cuatro procesos principales: servidor TCP asyncio, agente de red, agente local y UI Flask. La base de datos sigue siendo de archivos para mantener compatibilidad con SPONG Perl; los RRD se actualizan desde el servidor cuando llegan estados nuevos.
+SPONG v3.5.3 está organizado como una aplicación Python 3 con cuatro procesos principales: servidor TCP asyncio, agente de red, agente local y UI Flask. La base de datos sigue siendo de archivos para mantener compatibilidad con SPONG Perl; los RRD se actualizan desde el servidor cuando llegan estados nuevos.
 
 El repositorio contiene el código Python en `spong/`, la UI en `web/`, wrappers ejecutables en `bin/`, configuración en `etc/`, empaquetado Debian en `packaging/` y capturas en `docs/screenshots/`. También conserva datos locales bajo `var/` y código histórico Perl en `lib/`, `cgi-bin/` y `www/`; esos árboles no son necesarios para entender la implementación Python nueva.
 
 Resumen operativo:
-- **Versión actual:** `spong.__version__ = 3.5.2`, `setup.py = 3.5.2`, paquetes `3.5.2-1`
+- **Versión actual:** `spong.__version__ = 3.5.3`, `setup.py = 3.5.3`, paquetes `3.5.3-1`
 - **Runtime:** Python 3.10+ para instalación por `setup.py`; los paquetes Debian declaran `python3 >= 3.9`
 - **Dependencias principales:** `pyyaml`, `flask`, `werkzeug`, `rrdtool`, `fping`, `snmp`, `rpcbind`; `tinytuya` solo para plugins Tuya
 - **Persistencia:** `/usr/local/spong/var/database`, `/usr/local/spong/var/rrd`, `/usr/local/spong/var/archives`
@@ -690,6 +690,20 @@ Los servicios se muestran en el orden definido en `hosts.yaml`. Pares relacionad
 
 En `/config/hosts` se puede ordenar por host o IP en ambos sentidos. En `/config/groups` se puede ordenar por clave interna o nombre visible.
 
+### Renombrar hosts desde `/config`
+
+Desde `/config/host/<hostname>/edit` el campo **Nombre del host** es editable. Al guardar con un nombre nuevo, SPONG trata el cambio como un rename completo y mantiene las referencias asociadas:
+
+- `hosts.yaml`: cambia la clave del host sin perder IP, contacto, servicios ni horarios
+- `groups.yaml`: reemplaza el miembro viejo por el nuevo y preserva los grupos que tenía el host al abrir el formulario
+- `message.yaml`: actualiza coincidencias exactas en `hosts` y `exclude_hosts` de reglas de mensajería
+- `sensors.yaml` y `termicas.yaml`: si el hostname existe como clave de dispositivo, la clave se renombra
+- `var/database/<host>`: mueve estado actual, historial y ACKs al nuevo nombre
+- `var/rrd/<host>`: mueve los RRD para que los gráficos históricos sigan visibles en el host renombrado
+- `var/archives/<host>`: mueve historial archivado, tanto en formato directorio como en formato archivo legacy
+
+La operación valida que el nombre use solo letras, números, punto, guion y guion bajo. Si ya existe data histórica o auxiliar en el destino, el rename se aborta para no pisar archivos. Si solo se cambia el nombre y no se modifica la sección de servicios, la lista `services` se conserva literalmente y no se eliminan archivos de estado de servicios.
+
 ---
 
 ## 9. Gráficos RRD
@@ -962,14 +976,14 @@ Los paquetes `.deb` permiten instalar SPONG en cualquier sistema Debian/Ubuntu s
 cd /usr/local/spong/packaging
 bash build-deb.sh
 # Genera:
-#   dist/spong-server_3.5.2-1_all.deb
-#   dist/spong-client_3.5.2-1_all.deb
+#   dist/spong-server_3.5.3-1_all.deb
+#   dist/spong-client_3.5.3-1_all.deb
 ```
 
 ### Instalar el servidor
 
 ```bash
-dpkg -i spong-server_3.5.2-1_all.deb
+dpkg -i spong-server_3.5.3-1_all.deb
 # Depends: python3, python3-flask, python3-werkzeug, python3-yaml,
 #          rrdtool, fping, iputils-ping, snmp, rpcbind
 # Recommends: apache2
@@ -985,7 +999,7 @@ dpkg -i spong-server_3.5.2-1_all.deb
 ### Instalar solo el agente cliente
 
 ```bash
-dpkg -i spong-client_3.5.2-1_all.deb
+dpkg -i spong-client_3.5.3-1_all.deb
 # Depends: python3
 # Recommends: smartmontools, lm-sensors
 # El postinst es interactivo — pregunta:
@@ -1038,13 +1052,13 @@ El archivo `.github/workflows/build-deb.yml` automatiza la construcción de los 
 |--------|----------|
 | Push a `main` | Construye los `.deb` y los sube como artefacto del workflow (disponibles 30 días) |
 | Pull Request a `main` | Verifica que el build no se rompe |
-| Tag `v*` (ej: `v3.5.2`) | Build + crea un **GitHub Release** con los `.deb` adjuntos |
+| Tag `v*` (ej: `v3.5.3`) | Build + crea un **GitHub Release** con los `.deb` adjuntos |
 
 ### Crear una release oficial
 
 ```bash
-git tag v3.5.2
-git push origin v3.5.2
+git tag v3.5.3
+git push origin v3.5.3
 # GitHub Actions construye y publica la release automáticamente
 ```
 
@@ -1055,6 +1069,26 @@ En GitHub → pestaña **Actions** → seleccionar el workflow → sección **Ar
 ---
 
 ## 16. Historial de cambios
+
+### v3.5.3 — 2026-04-30
+
+**Config web**
+- `/config/host/<hostname>/edit` permite cambiar el nombre del host sin borrar y recrear la entrada
+- El rename actualiza `hosts.yaml`, membresías en `groups.yaml`, reglas exactas de `message.yaml` y claves auxiliares en `sensors.yaml` / `termicas.yaml`
+- Se preservan los grupos originales del host aunque el formulario haya quedado abierto durante cambios intermedios
+- Si solo se cambia el nombre, se conserva literalmente la lista `services` anterior y no se borran estados de servicios
+- Se validan nombres de host seguros y se evita pisar hosts, datos históricos o entradas auxiliares existentes
+
+**Historial y gráficos**
+- Al renombrar un host se mueven `var/database/<host>`, `var/rrd/<host>` y `var/archives/<host>` al nuevo nombre
+- Los gráficos históricos RRD siguen visibles después del rename
+- El migrador acepta `var/archives/<host>` tanto como directorio moderno como archivo legacy
+- La cache de gráficos se limpia luego de un rename para evitar 404 cacheados
+
+**Release**
+- `spong.__version__`: `3.5.3`
+- `setup.py`: `3.5.3`
+- Paquetes: `spong-server_3.5.3-1_all.deb`, `spong-client_3.5.3-1_all.deb`
 
 ### v3.5.2 — 2026-04
 
