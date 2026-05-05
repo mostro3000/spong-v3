@@ -13,7 +13,9 @@
 </div>
 
 <div style="margin-bottom:14px; display:flex; gap:8px;">
+  {% if spong_can_admin %}
   <a class="btn" href="{{ url_for('ack', host=hostname) }}">&#10003; {{ _('Reconocer') }}</a>
+  {% endif %}
   {% if config_host_edit_available %}
   <a class="btn" href="{{ url_for('config_admin.host_edit', hostname=hostname) }}#services" style="background:#607d8b;">{{ _('Editar servicios') }}</a>
   {% endif %}
@@ -38,7 +40,7 @@
       {% endif %}
     </td>
     <td style="color:#546e7a;">{{ ack.message }}</td>
-    <td><a class="btn btn-red btn-sm" href="{{ url_for('ack_del', hostname=ack.host, ack_file_id=ack.ack_id) }}">{{ _('Borrar') }}</a></td>
+    <td>{% if spong_can_admin %}<a class="btn btn-red btn-sm" href="{{ url_for('ack_del', hostname=ack.host, ack_file_id=ack.ack_id) }}">{{ _('Borrar') }}</a>{% endif %}</td>
   </tr>
   {% endfor %}
   </tbody>

@@ -11,13 +11,15 @@ import sys
 import time
 import os
 import re
+import secrets
 import threading
 from collections import OrderedDict
+from functools import wraps
 
 sys.path.insert(0, "/usr/local/spong")
 
 try:
-    from flask import Flask, render_template, redirect, url_for, request, jsonify, Response
+    from flask import Flask, render_template, redirect, url_for, request, jsonify, Response, g, make_response
 except ImportError:
     print("Flask not installed. Run: pip3 install flask", file=sys.stderr)
     sys.exit(1)
@@ -352,28 +354,145 @@ def _get_dashboard_snapshot():
 
 
 
-def _check_auth(username, password):
-    expected_user = config.get("web.auth_user", "")
-    expected_pass = config.get("web.auth_password", "")
-    expected_hash = config.get("web.auth_password_hash", "")
-    return check_basic_auth(username, password, expected_user, expected_pass, expected_hash)
+_SPONG_ROLES = ("admin", "view")
+_SPONG_ROLE_ALIASES = {
+    "owner":     "admin",
+    "write":     "admin",
+    "read":      "view",
+    "readonly":  "view",
+    "read-only": "view",
+    "viewer":    "view",
+}
+_SPONG_REALM = "SPONG"
+_SPONG_LOGGED_OUT_REALM = "SPONG signed out"
+
+
+def _normalize_spong_role(role):
+    role = (role or "view").strip().lower()
+    return _SPONG_ROLE_ALIASES.get(role, role if role in _SPONG_ROLES else "view")
+
+
+def _spong_user_entries():
+    """Return {username: {password, password_hash, role}} for spong UI auth.
+
+    Reads multi-user `web.users` and falls back to legacy single-user
+    `web.auth_user` / `web.auth_password` (treated as admin).
+    """
+    entries = {}
+    users_cfg = config.get("web.users", {})
+    if isinstance(users_cfg, dict):
+        for username, entry in users_cfg.items():
+            username = str(username or "").strip()
+            if not username or not isinstance(entry, dict):
+                continue
+            entries[username] = {
+                "password": entry.get("password", ""),
+                "password_hash": entry.get("password_hash", ""),
+                "role": _normalize_spong_role(entry.get("role")),
+            }
+
+    legacy_user = config.get("web.auth_user", "")
+    if legacy_user and legacy_user not in entries:
+        entries[legacy_user] = {
+            "password": config.get("web.auth_password", ""),
+            "password_hash": config.get("web.auth_password_hash", ""),
+            "role": "admin",
+        }
+    return entries
+
+
+def _authenticate_spong_user(username, password):
+    for expected_user, entry in _spong_user_entries().items():
+        if check_basic_auth(username, password, expected_user, entry["password"], entry["password_hash"]):
+            return expected_user, entry["role"]
+    return None
+
+
+def _spong_no_store(response):
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
 
 
 @app.before_request
 def require_auth():
-    # /config/ tiene su propio auth gestionado por el Blueprint
+    # /config/ tiene su propio auth gestionado por el Blueprint.
     if request.path.startswith('/config'):
         return
-    expected_user = config.get("web.auth_user", "")
-    if not expected_user:
-        return  # auth deshabilitada
+
+    g.spong_user = ""
+    g.spong_role = ""
+
+    # /logout debe ser alcanzable sin credenciales para poder cerrar la sesión Basic.
+    if request.endpoint == "logout":
+        return
+
+    entries = _spong_user_entries()
+    if not entries:
+        # auth deshabilitada → todos pueden hacer todo
+        g.spong_role = "admin"
+        return
+
     auth = request.authorization
-    if not auth or not _check_auth(auth.username, auth.password):
-        return Response(
-            "Acceso restringido - ingresá usuario y contraseña.",
+    identity = _authenticate_spong_user(auth.username, auth.password) if auth else None
+
+    logged_out_token = request.cookies.get("spong_logged_out")
+    reauth_token = request.cookies.get("spong_reauth")
+    if logged_out_token:
+        realm = f"{_SPONG_LOGGED_OUT_REALM} {logged_out_token}"
+        if reauth_token != logged_out_token:
+            resp = Response(
+                "Sesión cerrada. Volvé a autenticarte para entrar.",
+                401,
+                {"WWW-Authenticate": f'Basic realm="{realm}"'},
+            )
+            resp.set_cookie("spong_reauth", logged_out_token, max_age=5 * 60, samesite="Lax")
+            return _spong_no_store(resp)
+        if not identity:
+            return _spong_no_store(Response(
+                "Sesión cerrada. Volvé a autenticarte para entrar.",
+                401,
+                {"WWW-Authenticate": f'Basic realm="{realm}"'},
+            ))
+        g.spong_user, g.spong_role = identity
+        # se limpian las cookies en after_request via flag
+        g.spong_clear_logout = True
+        return
+
+    if not identity:
+        return _spong_no_store(Response(
+            "Acceso restringido — ingresá usuario y contraseña.",
             401,
-            {"WWW-Authenticate": 'Basic realm="SPONG"'},
-        )
+            {"WWW-Authenticate": f'Basic realm="{_SPONG_REALM}"'},
+        ))
+    g.spong_user, g.spong_role = identity
+
+
+def _require_spong_admin():
+    """Return a 403 Response if the current request lacks admin rights, else None."""
+    if getattr(g, "spong_role", "") != "admin":
+        return Response("Permiso insuficiente para esta acción.", 403)
+    return None
+
+
+def require_spong_admin(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        denied = _require_spong_admin()
+        if denied is not None:
+            return denied
+        return f(*args, **kwargs)
+    return decorated
+
+
+@app.route("/logout")
+def logout():
+    logout_token = secrets.token_urlsafe(8)
+    resp = redirect(url_for("index"))
+    resp.set_cookie("spong_logged_out", logout_token, max_age=30 * 60, samesite="Lax")
+    resp.delete_cookie("spong_reauth")
+    return _spong_no_store(resp)
 
 # ---- Color helpers ----
 COLORS_CSS = {
@@ -647,7 +766,9 @@ _EXTRA_TRANSLATIONS = {
             "Plugins not shown above, separated by spaces.",
         "Purple": "Purple", "Red": "Red", "Restaurado": "Restored",
         "Restaurar": "Restore", "Restaurar esta versión": "Restore this version",
-        "S": "S", "Salir": "Log out", "Servicios a monitorear": "Services to monitor",
+        "S": "S", "Salir": "Log out", "Cerrar sesión": "Sign out",
+        "admin": "admin", "view": "view-only",
+        "Servicios a monitorear": "Services to monitor",
         "Servicios adicionales": "Additional services", "Si ping falla,": "If ping fails,",
         "Sin datos de disponibilidad": "No availability data",
         "Tiene horarios de supresión": "Has suppression schedules",
@@ -721,6 +842,8 @@ _EXTRA_TRANSLATIONS = {
         "Tenés que cargar una contraseña o un hash de contraseña.": "You need to provide a password or a password hash.",
         "Tiene que quedar al menos un usuario administrador.": "At least one administrator user must remain.",
         "Usá letras, números, punto, guion y guion bajo.": "Use letters, numbers, dots, hyphens, and underscores.",
+        "Solo letras, números, puntos, guiones y guiones bajos. Sin barras ni espacios.":
+            "Only letters, numbers, dots, hyphens, and underscores. No slashes or spaces.",
         "Usuario": "User",
         "Usuarios": "Users",
         "usuarios configurados": "configured users",
@@ -791,6 +914,8 @@ _EXTRA_TRANSLATIONS = {
         "Usuario": "Utilisateur",
         "V": "V", "Ver": "Voir", "Ver gráficos": "Voir les graphiques", "Ver historial": "Voir l'historique",
         "Visible en el dashboard": "Visible sur le tableau de bord", "Vista compacta": "Vue compacte",
+        "Salir": "Déconnexion", "Cerrar sesión": "Se déconnecter",
+        "admin": "admin", "view": "lecture seule",
         "Volver": "Retour", "Volver al historial": "Retour à l'historique",
         "Volver al monitor": "Retour au moniteur", "X": "M", "Yellow": "Jaune",
         "agregar, editar o eliminar equipos monitoreados: dirección IP, servicios a verificar y horarios de supresión de alertas.":
@@ -855,6 +980,8 @@ _EXTRA_TRANSLATIONS = {
         "Tenés que cargar una contraseña o un hash de contraseña.": "Vous devez fournir un mot de passe ou un hachage de mot de passe.",
         "Tiene que quedar al menos un usuario administrador.": "Au moins un utilisateur administrateur doit rester.",
         "Usá letras, números, punto, guion y guion bajo.": "Utilisez des lettres, des chiffres, des points, des tirets et des underscores.",
+        "Solo letras, números, puntos, guiones y guiones bajos. Sin barras ni espacios.":
+            "Uniquement des lettres, des chiffres, des points, des tirets et des underscores. Pas de barres obliques ni d'espaces.",
         "Usuario": "Utilisateur",
         "Usuarios": "Utilisateurs",
         "usuarios configurados": "utilisateurs configurés",
@@ -925,6 +1052,8 @@ _EXTRA_TRANSLATIONS = {
         "Usuario": "Benutzer",
         "V": "F", "Ver": "Ansehen", "Ver gráficos": "Graphen anzeigen", "Ver historial": "Verlauf anzeigen",
         "Visible en el dashboard": "Im Dashboard sichtbar", "Vista compacta": "Kompakte Ansicht",
+        "Salir": "Abmelden", "Cerrar sesión": "Abmelden",
+        "admin": "Admin", "view": "nur Lesen",
         "Volver": "Zurück", "Volver al historial": "Zurück zum Verlauf",
         "Volver al monitor": "Zurück zum Monitor", "X": "M", "Yellow": "Gelb",
         "agregar, editar o eliminar equipos monitoreados: dirección IP, servicios a verificar y horarios de supresión de alertas.":
@@ -989,6 +1118,8 @@ _EXTRA_TRANSLATIONS = {
         "Tenés que cargar una contraseña o un hash de contraseña.": "Du musst ein Passwort oder einen Passworthash angeben.",
         "Tiene que quedar al menos un usuario administrador.": "Mindestens ein Administrator muss übrig bleiben.",
         "Usá letras, números, punto, guion y guion bajo.": "Verwende Buchstaben, Zahlen, Punkte, Bindestriche und Unterstriche.",
+        "Solo letras, números, puntos, guiones y guiones bajos. Sin barras ni espacios.":
+            "Nur Buchstaben, Zahlen, Punkte, Bindestriche und Unterstriche. Keine Schrägstriche oder Leerzeichen.",
         "Usuario": "Benutzer",
         "Usuarios": "Benutzer",
         "usuarios configurados": "konfigurierte Benutzer",
@@ -1059,6 +1190,8 @@ _EXTRA_TRANSLATIONS = {
         "Usuario": "Usuário",
         "V": "S", "Ver": "Ver", "Ver gráficos": "Ver gráficos", "Ver historial": "Ver histórico",
         "Visible en el dashboard": "Visível no dashboard", "Vista compacta": "Vista compacta",
+        "Salir": "Sair", "Cerrar sesión": "Encerrar sessão",
+        "admin": "admin", "view": "somente leitura",
         "Volver": "Voltar", "Volver al historial": "Voltar ao histórico",
         "Volver al monitor": "Voltar ao monitor", "X": "Q", "Yellow": "Amarelo",
         "agregar, editar o eliminar equipos monitoreados: dirección IP, servicios a verificar y horarios de supresión de alertas.":
@@ -1123,6 +1256,8 @@ _EXTRA_TRANSLATIONS = {
         "Tenés que cargar una contraseña o un hash de contraseña.": "Você precisa informar uma senha ou um hash de senha.",
         "Tiene que quedar al menos un usuario administrador.": "Ao menos um usuário administrador precisa permanecer.",
         "Usá letras, números, punto, guion y guion bajo.": "Use letras, números, ponto, hífen e sublinhado.",
+        "Solo letras, números, puntos, guiones y guiones bajos. Sin barras ni espacios.":
+            "Apenas letras, números, pontos, hífens e sublinhados. Sem barras nem espaços.",
         "Usuario": "Usuário",
         "Usuarios": "Usuários",
         "usuarios configurados": "usuários configurados",
@@ -1179,6 +1314,8 @@ _EXTRA_TRANSLATIONS = {
         "Usuario": "用户",
         "V": "五", "Ver": "查看", "Ver gráficos": "显示图表", "Ver historial": "查看历史",
         "Visible en el dashboard": "在仪表板中可见", "Vista compacta": "紧凑视图",
+        "Salir": "退出", "Cerrar sesión": "退出登录",
+        "admin": "管理员", "view": "只读",
         "Volver": "返回", "Volver al historial": "返回历史", "Volver al monitor": "返回监控",
         "X": "三", "Yellow": "黄色",
         "agregar, editar o eliminar equipos monitoreados: dirección IP, servicios a verificar y horarios de supresión de alertas.":
@@ -1238,6 +1375,8 @@ _EXTRA_TRANSLATIONS = {
         "Tenés que cargar una contraseña o un hash de contraseña.": "你需要提供密码或密码哈希。",
         "Tiene que quedar al menos un usuario administrador.": "至少要保留一个管理员用户。",
         "Usá letras, números, punto, guion y guion bajo.": "使用字母、数字、点、连字符和下划线。",
+        "Solo letras, números, puntos, guiones y guiones bajos. Sin barras ni espacios.":
+            "仅限字母、数字、点、连字符和下划线。不允许斜杠或空格。",
         "Usuario": "用户",
         "Usuarios": "用户",
         "usuarios configurados": "已配置用户",
@@ -1308,6 +1447,8 @@ _EXTRA_TRANSLATIONS = {
         "Usuario": "Пользователь",
         "V": "П", "Ver": "Открыть", "Ver gráficos": "Показать графики",
         "Ver historial": "Посмотреть историю", "Visible en el dashboard": "Видно на панели",
+        "Salir": "Выйти", "Cerrar sesión": "Выйти из системы",
+        "admin": "администратор", "view": "только просмотр",
         "Vista compacta": "Компактный вид", "Volver": "Назад",
         "Volver al historial": "Назад к истории", "Volver al monitor": "Назад к монитору",
         "X": "С", "Yellow": "Жёлтый",
@@ -1373,6 +1514,8 @@ _EXTRA_TRANSLATIONS = {
         "Tenés que cargar una contraseña o un hash de contraseña.": "Нужно указать пароль или хеш пароля.",
         "Tiene que quedar al menos un usuario administrador.": "Должен остаться как минимум один администратор.",
         "Usá letras, números, punto, guion y guion bajo.": "Используйте буквы, цифры, точки, дефисы и подчёркивания.",
+        "Solo letras, números, puntos, guiones y guiones bajos. Sin barras ni espacios.":
+            "Только буквы, цифры, точки, дефисы и подчёркивания. Без косых чёрт и пробелов.",
         "Usuario": "Пользователь",
         "Usuarios": "Пользователи",
         "usuarios configurados": "настроенные пользователи",
@@ -1475,6 +1618,16 @@ def inject_i18n():
         "lang_meta": _LANG_META,
         "current_theme": theme,
         "auto_refresh_seconds": _auto_refresh_seconds(),
+    }
+
+
+@app.context_processor
+def inject_spong_auth():
+    return {
+        "spong_user": getattr(g, "spong_user", "") or "",
+        "spong_role": getattr(g, "spong_role", "") or "",
+        "spong_can_admin": getattr(g, "spong_role", "") == "admin",
+        "spong_auth_enabled": bool(_spong_user_entries()),
     }
 
 
@@ -1616,6 +1769,7 @@ def _parse_duration(value: str) -> float:
 
 
 @app.route("/ack", methods=["GET", "POST"])
+@require_spong_admin
 def ack():
     if request.method == "POST":
         host = request.form.get("host", "")
@@ -1638,6 +1792,9 @@ def ack():
 
 @app.after_request
 def refresh_cookies(response):
+    if getattr(g, "spong_clear_logout", False):
+        response.delete_cookie("spong_logged_out")
+        response.delete_cookie("spong_reauth")
     if request.endpoint in ("set_lang", "set_theme", "config_admin.set_lang", "config_admin.set_theme"):
         return response
     lang = request.cookies.get("lang")
@@ -1669,6 +1826,7 @@ def set_lang(lang):
 
 @app.route("/ack-del/<hostname>/<ack_file_id>")
 @app.route("/ack-del/<path:ack_id>")
+@require_spong_admin
 def ack_del(ack_id=None, hostname=None, ack_file_id=None):
     if hostname and ack_file_id:
         database.delete_ack_by_id(hostname, ack_file_id)
@@ -1708,6 +1866,7 @@ def api_service(hostname, service):
 
 
 @app.route("/api/check/<hostname>/<service>", methods=["POST"])
+@require_spong_admin
 def api_check(hostname, service):
     """Ejecuta el plugin de red on-demand y devuelve el nuevo estado."""
     import importlib

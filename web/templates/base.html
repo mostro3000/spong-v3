@@ -171,6 +171,11 @@
     }
     #refresh-btn:hover { background: rgba(255,255,255,0.15); color: #fff; }
     #live-clock { font-size: 11px; color: #78909c; white-space: nowrap; font-variant-numeric: tabular-nums; }
+    .user-pill {
+      font-size: 11px; padding: 3px 8px; border-radius: 10px;
+      background: rgba(91,155,213,0.15); color: #b0d4ee; font-weight: 600;
+      border: 1px solid rgba(91,155,213,0.25); white-space: nowrap;
+    }
 
     /* ---- Layout ---- */
     #layout { display: flex; align-items: flex-start; min-height: calc(100vh - 42px); }
@@ -477,6 +482,10 @@
   <div class="spacer"></div>
   <button id="refresh-btn" onclick="location.reload()" title="{{ _('Actualizar ahora') }}">↻{% if auto_refresh_seconds %} <span id="countdown">{{ auto_refresh_seconds }}</span>s{% endif %}</button>
   <span id="live-clock">{{ time.strftime('%Y-%m-%d %H:%M:%S') }}</span>
+  {% if spong_auth_enabled and spong_user %}
+    <span class="user-pill" title="{{ _('Usuario') }}{% if spong_role %} · {{ _(spong_role) }}{% endif %}">{{ spong_user }}</span>
+    <a href="{{ url_for('logout') }}" class="theme-btn" title="{{ _('Cerrar sesión') }}">{{ _('Salir') }}</a>
+  {% endif %}
 </div>
 
 <div id="layout">

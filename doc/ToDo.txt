@@ -30,3 +30,6 @@
 + actualizar version a v3.5.2, actualizar documentacion, generar .deb v3.5.2, y subir a github  [DONE v3.5.2]
 + ver dejar modificar host desde config (ahora hay que borrar y volver a crear)  [DONE v3.5.3]
 + actualizar version a v3.5.3, documentacion, .deb y github  [DONE v3.5.3]
++ hacer multi-user en spong como en config  [DONE v3.5.4]
++ en el frond-end controlar que los nombres de hosts no tengan caracteres raros como /  [DONE v3.5.4]
++ actualizar version a v3.5.4, documentacion, .deb y github  [DONE v3.5.4]

@@ -17,7 +17,9 @@
       <div class="form-group">
         <label class="field-label" for="username">{{ _('Nombre de usuario') }}</label>
         <input type="text" id="username" name="username" value="{{ username or '' }}"
-               placeholder="{{ _('ej: altas') }}" required {% if username %}readonly style="opacity:.6;"{% endif %}>
+               placeholder="{{ _('ej: altas') }}" required {% if username %}readonly style="opacity:.6;"{% endif %}
+               maxlength="64" pattern="[A-Za-z0-9_.\-]+" autocomplete="off"
+               title="{{ _('Solo letras, números, puntos, guiones y guiones bajos. Sin barras ni espacios.') }}">
         <div class="field-hint">{{ _('Usá letras, números, punto, guion y guion bajo.') }}</div>
       </div>
       <div class="form-group">

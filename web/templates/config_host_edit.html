@@ -24,8 +24,11 @@
         <label class="field-label" for="hostname">{{ _('Nombre del host') }}</label>
         <input type="text" id="hostname" name="hostname"
                value="{{ hostname or '' }}" placeholder="{{ _('ej: camara-jardin') }}" required
-               autocomplete="off">
+               autocomplete="off" maxlength="64" pattern="[A-Za-z0-9_.\-]+"
+               title="{{ _('Solo letras, números, puntos, guiones y guiones bajos. Sin barras ni espacios.') }}">
+        <div class="field-hint">{{ _('Solo letras, números, puntos, guiones y guiones bajos. Sin barras ni espacios.') }}</div>
       </div>
+
       <div class="form-group">
         <label class="field-label" for="ip_addr">{{ _('Dirección IP') }}</label>
         <input type="text" id="ip_addr" name="ip_addr"

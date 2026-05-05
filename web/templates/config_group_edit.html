@@ -18,7 +18,9 @@
         <label class="field-label" for="group_key">{{ _('Clave interna') }}</label>
         <input type="text" id="group_key" name="group_key"
                value="{{ group_key or '' }}" placeholder="{{ _('ej: camaras') }}"
-               {% if group_key %}readonly style="opacity:.6;"{% endif %} required>
+               {% if group_key %}readonly style="opacity:.6;"{% endif %} required
+               maxlength="64" pattern="[A-Za-z0-9_.\-]+"
+               title="{{ _('Solo letras, números, puntos, guiones y guiones bajos. Sin barras ni espacios.') }}">
         <div class="field-hint">{{ _('Identificador único, sin espacios ni caracteres especiales.') }}</div>
       </div>
       <div class="form-group">

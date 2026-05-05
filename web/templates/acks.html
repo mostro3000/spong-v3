@@ -39,7 +39,7 @@
       {% endif %}
     </td>
     <td style="font-size:11px; color:#546e7a;">{{ ack.message }}</td>
-    <td><a class="btn btn-red btn-sm" href="{{ url_for('ack_del', hostname=ack.host, ack_file_id=ack.ack_id) }}">{{ _('Borrar') }}</a></td>
+    <td>{% if spong_can_admin %}<a class="btn btn-red btn-sm" href="{{ url_for('ack_del', hostname=ack.host, ack_file_id=ack.ack_id) }}">{{ _('Borrar') }}</a>{% endif %}</td>
   </tr>
   {% endfor %}
   </tbody>
@@ -47,8 +47,10 @@
 </div>
 {% endif %}
 
+{% if spong_can_admin %}
 <div style="margin-top:14px;">
   <a class="btn" href="{{ url_for('ack') }}">{{ _('+ Nuevo reconocimiento') }}</a>
 </div>
+{% endif %}
 
 {% endblock %}
