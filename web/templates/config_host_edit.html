@@ -3,7 +3,11 @@
 {% block content %}
 <div class="list-header">
   <h1 style="margin:0;">{% if hostname %}{{ _('Editar host:') }} {{ hostname }}{% else %}{{ _('Agregar host') }}{% endif %}</h1>
-  <a href="{{ url_for('config_admin.hosts') }}" class="btn btn-secondary">← {{ _('Volver') }}</a>
+  {% if from_host and hostname %}
+    <a href="{{ url_for('host_detail', hostname=hostname) }}" class="btn btn-secondary">← {{ _('Volver') }}</a>
+  {% else %}
+    <a href="{{ url_for('config_admin.hosts') }}" class="btn btn-secondary">← {{ _('Volver') }}</a>
+  {% endif %}
 </div>
 
 {% if error %}
@@ -11,6 +15,7 @@
 {% endif %}
 
 <form method="post">
+  {% if from_host %}<input type="hidden" name="from" value="host">{% endif %}
   {% for group_key in original_group_keys %}
     <input type="hidden" name="original_groups" value="{{ group_key }}">
   {% endfor %}
@@ -158,7 +163,11 @@
   <!-- Actions -->
   <div style="display:flex; gap:10px;">
     <button type="submit" class="btn btn-primary" style="min-width:120px;">{{ _('Guardar') }}</button>
-    <a href="{{ url_for('config_admin.hosts') }}" class="btn btn-secondary">{{ _('Cancelar') }}</a>
+    {% if from_host and hostname %}
+      <a href="{{ url_for('host_detail', hostname=hostname) }}" class="btn btn-secondary">{{ _('Cancelar') }}</a>
+    {% else %}
+      <a href="{{ url_for('config_admin.hosts') }}" class="btn btn-secondary">{{ _('Cancelar') }}</a>
+    {% endif %}
   </div>
 
 </form>

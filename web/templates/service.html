@@ -208,7 +208,7 @@
 {% endif %}
 
 <div style="margin-top:16px; display:flex; gap:8px; flex-wrap:wrap;">
-  {% if spong_can_admin %}
+  {% if spong_can_ack %}
     {% if not is_acked %}
     <a class="btn" href="{{ url_for('ack', host=hostname, service=service) }}">&#10003; {{ _('Reconocer') }}</a>
     {% elif service_ack %}

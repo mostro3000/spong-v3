@@ -175,8 +175,48 @@ def config_permission_available(permission: str) -> bool:
     return any(permission in entry['permissions'] for entry in _config_user_entries().values())
 
 
+_PERMISSION_LABELS = {
+    'view':    'ver',
+    'add':     'agregar',
+    'edit':    'editar',
+    'delete':  'eliminar',
+    'restore': 'restaurar',
+    'users':   'administrar usuarios',
+}
+
+_ROLE_LABELS = {
+    'admin':  'Administrador',
+    'editor': 'Editor',
+    'add':    'Solo agregar',
+    'read':   'Solo lectura',
+}
+
+
+def _config_message(*, status: int, title: str, message: str,
+                    required_permission: str = '', back_url: str = '',
+                    back_label: str = '') -> Response:
+    role = getattr(g, 'config_role', '') or ''
+    html = render_template(
+        'config_message.html',
+        status=status,
+        title=title,
+        message=message,
+        required_permission=_PERMISSION_LABELS.get(required_permission, required_permission),
+        current_role=_ROLE_LABELS.get(role, role),
+        back_url=back_url,
+        back_label=back_label,
+    )
+    return Response(html, status=status, mimetype='text/html')
+
+
 def _permission_denied(permission: str) -> Response:
-    return Response('Permiso insuficiente para esta acción.', 403)
+    return _config_message(
+        status=403,
+        title='Permiso insuficiente',
+        message='Tu usuario no tiene permiso para realizar esta acción.',
+        required_permission=permission,
+        back_url=request.referrer or url_for('config_admin.hosts'),
+    )
 
 
 def _config_no_store(response):
@@ -190,7 +230,18 @@ def _require_config_auth(f):
     @wraps(f)
     def decorated(*args, **kwargs):
         if not _config_user_entries():
-            return Response('Config UI no habilitado. Configurá web.config_user o web.config_users en spong.yaml.', 403)
+            html = render_template(
+                'config_message.html',
+                status=403,
+                title='Configuración deshabilitada',
+                message='El panel de configuración no está habilitado. '
+                        'Configurá web.config_user o web.config_users en spong.yaml.',
+                required_permission='',
+                current_role='',
+                back_url=url_for('index'),
+                back_label='Ir al monitor',
+            )
+            return Response(html, status=403, mimetype='text/html')
         logged_out_token = request.cookies.get('spong_config_logged_out')
         reauth_token = request.cookies.get('spong_config_reauth')
         auth = request.authorization
@@ -642,7 +693,13 @@ def user_edit(username=None):
     error = None
     existing = users_cfg.get(username, {}) if username else {}
     if username and username not in users_cfg:
-        return Response('Usuario no encontrado.', 404)
+        return _config_message(
+            status=404,
+            title='Usuario no encontrado',
+            message=f'No existe un usuario llamado "{username}".',
+            back_url=url_for('config_admin.users'),
+            back_label='Volver a usuarios',
+        )
 
     if request.method == 'POST':
         new_username = request.form.get('username', '').strip()
@@ -708,14 +765,32 @@ def user_delete(username):
         return _permission_denied('users')
     legacy_user = _legacy_config_user()
     if username == legacy_user:
-        return Response('El usuario legacy se administra desde spong.yaml.', 403)
+        return _config_message(
+            status=403,
+            title='Usuario legacy',
+            message='El usuario legacy se administra desde spong.yaml y no puede eliminarse desde el panel.',
+            back_url=url_for('config_admin.users'),
+            back_label='Volver a usuarios',
+        )
     users_cfg = _config_users_section()
     if username not in users_cfg:
-        return Response('Usuario no encontrado.', 404)
+        return _config_message(
+            status=404,
+            title='Usuario no encontrado',
+            message=f'No existe un usuario llamado "{username}".',
+            back_url=url_for('config_admin.users'),
+            back_label='Volver a usuarios',
+        )
     candidate_users = dict(users_cfg)
     del candidate_users[username]
     if not _has_admin_user(candidate_users):
-        return Response('Tiene que quedar al menos un usuario administrador.', 403)
+        return _config_message(
+            status=403,
+            title='Operación bloqueada',
+            message='Tiene que quedar al menos un usuario administrador.',
+            back_url=url_for('config_admin.users'),
+            back_label='Volver a usuarios',
+        )
     _dump_config_users_section(candidate_users)
     _save_config_snapshot('users', _config_users_snapshot_data(), 'delete', f'Eliminó usuario: {username}')
     spong_config.load_all()
@@ -924,6 +999,8 @@ def host_edit(hostname=None):
     if not _config_can(required_permission):
         return _permission_denied(required_permission)
 
+    from_host = (request.values.get('from', '') == 'host')
+
     if request.method == 'POST':
         new_name = request.form.get('hostname', '').strip()
         original_group_keys = request.form.getlist('original_groups')
@@ -1020,6 +1097,8 @@ def host_edit(hostname=None):
                 _clear_dashboard_cache()
                 if hostname and hostname != new_name:
                     _clear_graph_cache()
+                if from_host:
+                    return redirect(url_for('host_detail', hostname=new_name))
                 return redirect(url_for('config_admin.hosts'))
 
     # GET — load existing data
@@ -1042,6 +1121,7 @@ def host_edit(hostname=None):
         custom_list=custom_list,
         original_group_keys=original_group_keys,
         error=error,
+        from_host=from_host,
     )
 
 

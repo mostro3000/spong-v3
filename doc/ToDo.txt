@@ -33,3 +33,7 @@
 + hacer multi-user en spong como en config  [DONE v3.5.4]
 + en el frond-end controlar que los nombres de hosts no tengan caracteres raros como /  [DONE v3.5.4]
 + actualizar version a v3.5.4, documentacion, .deb y github  [DONE v3.5.4]
++ cuando se va desde un hosts a "Editar servicios", se modifica y guarda, vuelta al spong donde se estaba antes de editar  [DONE v3.5.5]
++ rediseno de la pagina de "Permiso insuficiente" en monitor y en /config  [DONE v3.5.5]
++ permitir a usuarios con rol editor reconocer problemas y borrar reconocimientos  [DONE v3.5.5]
++ actualizar version a v3.5.5, documentacion, .deb y github  [DONE v3.5.5]

@@ -354,15 +354,17 @@ def _get_dashboard_snapshot():
 
 
 
-_SPONG_ROLES = ("admin", "view")
+_SPONG_ROLES = ("admin", "editor", "add", "read", "view")
 _SPONG_ROLE_ALIASES = {
     "owner":     "admin",
-    "write":     "admin",
-    "read":      "view",
-    "readonly":  "view",
-    "read-only": "view",
-    "viewer":    "view",
+    "write":     "editor",
+    "readonly":  "read",
+    "read-only": "read",
+    "viewer":    "read",
+    "add-only":  "add",
+    "add_only":  "add",
 }
+_SPONG_ACK_ROLES = frozenset({"admin", "editor"})
 _SPONG_REALM = "SPONG"
 _SPONG_LOGGED_OUT_REALM = "SPONG signed out"
 
@@ -469,10 +471,28 @@ def require_auth():
     g.spong_user, g.spong_role = identity
 
 
+def _spong_role_denied(message: str) -> Response:
+    html = render_template(
+        "error.html",
+        title="Permiso insuficiente",
+        message=message,
+        back_url=request.referrer or url_for("index"),
+        back_label="Volver",
+    )
+    return Response(html, status=403, mimetype="text/html")
+
+
 def _require_spong_admin():
     """Return a 403 Response if the current request lacks admin rights, else None."""
     if getattr(g, "spong_role", "") != "admin":
-        return Response("Permiso insuficiente para esta acción.", 403)
+        return _spong_role_denied("Esta acción requiere un usuario con rol de administrador.")
+    return None
+
+
+def _require_spong_ack():
+    """Return a 403 Response if the current request can't ack/unack, else None."""
+    if getattr(g, "spong_role", "") not in _SPONG_ACK_ROLES:
+        return _spong_role_denied("Esta acción requiere un usuario con rol administrador o editor.")
     return None
 
 
@@ -480,6 +500,16 @@ def require_spong_admin(f):
     @wraps(f)
     def decorated(*args, **kwargs):
         denied = _require_spong_admin()
+        if denied is not None:
+            return denied
+        return f(*args, **kwargs)
+    return decorated
+
+
+def require_spong_ack(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        denied = _require_spong_ack()
         if denied is not None:
             return denied
         return f(*args, **kwargs)
@@ -1623,10 +1653,12 @@ def inject_i18n():
 
 @app.context_processor
 def inject_spong_auth():
+    role = getattr(g, "spong_role", "") or ""
     return {
         "spong_user": getattr(g, "spong_user", "") or "",
-        "spong_role": getattr(g, "spong_role", "") or "",
-        "spong_can_admin": getattr(g, "spong_role", "") == "admin",
+        "spong_role": role,
+        "spong_can_admin": role == "admin",
+        "spong_can_ack": role in _SPONG_ACK_ROLES,
         "spong_auth_enabled": bool(_spong_user_entries()),
     }
 
@@ -1769,7 +1801,7 @@ def _parse_duration(value: str) -> float:
 
 
 @app.route("/ack", methods=["GET", "POST"])
-@require_spong_admin
+@require_spong_ack
 def ack():
     if request.method == "POST":
         host = request.form.get("host", "")
@@ -1826,7 +1858,7 @@ def set_lang(lang):
 
 @app.route("/ack-del/<hostname>/<ack_file_id>")
 @app.route("/ack-del/<path:ack_id>")
-@require_spong_admin
+@require_spong_ack
 def ack_del(ack_id=None, hostname=None, ack_file_id=None):
     if hostname and ack_file_id:
         database.delete_ack_by_id(hostname, ack_file_id)

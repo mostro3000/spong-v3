@@ -1,0 +1,55 @@
+{% extends "config_base.html" %}
+{% block title %}SPONG - {{ title }}{% endblock %}
+{% block content %}
+<style>
+  .msg-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 32px 36px; margin: 60px auto 0;
+    max-width: 560px; box-shadow: 0 6px 24px rgba(0,0,0,0.08);
+    text-align: center;
+  }
+  html.dark .msg-card { box-shadow: 0 6px 24px rgba(0,0,0,0.35); }
+  .msg-icon {
+    width: 64px; height: 64px; border-radius: 50%;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 32px; margin-bottom: 18px;
+    background: var(--alert-bg); color: var(--alert-text);
+    border: 1px solid var(--alert-brd);
+  }
+  .msg-icon.warn { background: var(--surface2); color: var(--yellow); border-color: var(--border); }
+  .msg-title { font-size: 20px; font-weight: 600; color: var(--text-h); margin-bottom: 10px; }
+  .msg-body  { font-size: 14px; color: var(--text); margin-bottom: 18px; }
+  .msg-meta {
+    display: inline-flex; flex-wrap: wrap; justify-content: center; gap: 8px;
+    margin-bottom: 22px;
+  }
+  .msg-meta .tag {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 999px; padding: 4px 10px; font-size: 12px;
+    color: var(--text-m); font-family: inherit;
+  }
+  .msg-meta .tag b { color: var(--text-h); font-weight: 600; }
+  .msg-actions { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
+</style>
+
+<div class="msg-card">
+  <div class="msg-icon {{ 'warn' if status == 404 else '' }}">{{ '⛔' if status == 403 else ('🔍' if status == 404 else 'ℹ') }}</div>
+  <div class="msg-title">{{ title }}</div>
+  <div class="msg-body">{{ message }}</div>
+
+  {% if config_user or required_permission or current_role %}
+  <div class="msg-meta">
+    {% if config_user %}<span class="tag">{{ _('Usuario') }}: <b>{{ config_user }}</b></span>{% endif %}
+    {% if current_role %}<span class="tag">{{ _('Rol') }}: <b>{{ current_role }}</b></span>{% endif %}
+    {% if required_permission %}<span class="tag">{{ _('Permiso requerido') }}: <b>{{ required_permission }}</b></span>{% endif %}
+  </div>
+  {% endif %}
+
+  <div class="msg-actions">
+    {% if back_url %}
+      <a href="{{ back_url }}" class="btn btn-primary">← {{ back_label or _('Volver') }}</a>
+    {% endif %}
+    <a href="{{ url_for('index') }}" class="btn btn-secondary">{{ _('Ir al monitor') }}</a>
+  </div>
+</div>
+{% endblock %}

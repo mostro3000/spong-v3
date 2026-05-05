@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}SPONG - {{ title }}{% endblock %}
+{% block content %}
+<style>
+  .err-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 32px 36px; margin: 60px auto 0;
+    max-width: 560px; box-shadow: 0 6px 24px rgba(0,0,0,0.08);
+    text-align: center;
+  }
+  html.dark .err-card { box-shadow: 0 6px 24px rgba(0,0,0,0.35); }
+  .err-icon {
+    width: 64px; height: 64px; border-radius: 50%;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 32px; margin-bottom: 18px;
+    background: #fff2f2; color: #b32626; border: 1px solid #efb5b5;
+  }
+  html.dark .err-icon { background: #4a1515; color: #f08080; border-color: #6a2020; }
+  .err-title { font-size: 20px; font-weight: 600; color: var(--text-h); margin-bottom: 10px; }
+  .err-body  { font-size: 14px; color: var(--text); margin-bottom: 18px; }
+  .err-meta  {
+    display: inline-flex; flex-wrap: wrap; justify-content: center; gap: 8px;
+    margin-bottom: 22px;
+  }
+  .err-meta .tag {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 999px; padding: 4px 10px; font-size: 12px; color: var(--text-m);
+  }
+  .err-meta .tag b { color: var(--text-h); font-weight: 600; }
+  .err-actions { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
+  .err-btn {
+    display: inline-flex; align-items: center; gap: 5px; padding: 7px 16px;
+    border-radius: 5px; font-size: 13px; font-weight: 500; text-decoration: none;
+    border: 1px solid var(--border); background: var(--surface2); color: var(--text-h);
+  }
+  .err-btn:hover { background: var(--hover); text-decoration: none; }
+  .err-btn-primary { background: #4a6fa5; color: #fff; border-color: #4a6fa5; }
+  .err-btn-primary:hover { background: #2e4d7a; color: #fff; }
+</style>
+
+<div class="err-card">
+  <div class="err-icon">⛔</div>
+  <div class="err-title">{{ title }}</div>
+  <div class="err-body">{{ message }}</div>
+
+  {% if spong_user or spong_role %}
+  <div class="err-meta">
+    {% if spong_user %}<span class="tag">{{ _('Usuario') }}: <b>{{ spong_user }}</b></span>{% endif %}
+    {% if spong_role %}<span class="tag">{{ _('Rol') }}: <b>{{ spong_role }}</b></span>{% endif %}
+  </div>
+  {% endif %}
+
+  <div class="err-actions">
+    {% if back_url %}
+      <a href="{{ back_url }}" class="err-btn err-btn-primary">← {{ back_label or _('Volver') }}</a>
+    {% endif %}
+    <a href="{{ url_for('index') }}" class="err-btn">{{ _('Ir al monitor') }}</a>
+  </div>
+</div>
+{% endblock %}
