@@ -37,3 +37,5 @@
 + rediseno de la pagina de "Permiso insuficiente" en monitor y en /config  [DONE v3.5.5]
 + permitir a usuarios con rol editor reconocer problemas y borrar reconocimientos  [DONE v3.5.5]
 + actualizar version a v3.5.5, documentacion, .deb y github  [DONE v3.5.5]
++ rediseno de la pagina 401 (Basic Auth) en monitor y en /config con estilo claro/oscuro  [DONE v3.5.6]
++ actualizar version a v3.5.6, documentacion, .deb y github  [DONE v3.5.6]

@@ -11,6 +11,7 @@ import sys
 import time
 import os
 import re
+import html
 import secrets
 import threading
 from collections import OrderedDict
@@ -417,6 +418,64 @@ def _spong_no_store(response):
     return response
 
 
+def _spong_auth_page(title, message, *, icon="🔒"):
+    """Render a self-contained styled HTML page for 401 responses.
+
+    No template inheritance: avoids leaking sidebar / nav to unauthenticated users
+    and works regardless of session state.
+    """
+    theme = request.cookies.get("theme", "dark")
+    if theme not in ("light", "dark"):
+        theme = "dark"
+    safe_title = html.escape(title)
+    safe_message = html.escape(message)
+    safe_icon = html.escape(icon)
+    return (
+        '<!DOCTYPE html>\n'
+        f'<html lang="es" class="{theme}"><head>'
+        '<meta charset="UTF-8">'
+        '<meta name="viewport" content="width=device-width, initial-scale=1.0">'
+        f'<title>SPONG — {safe_title}</title>'
+        '<style>'
+        ':root{--bg:#f0f2f5;--surface:#fff;--surface2:#f8f9fb;--border:#e0e4ea;'
+        '--text:#1a1a2e;--text-h:#1e2d40;--text-m:#546e7a;'
+        '--accent:#4a6fa5;--accent-h:#2e4d7a;'
+        '--icon-bg:#fff2f2;--icon-fg:#b32626;--icon-brd:#efb5b5;}'
+        'html.dark{--bg:#0d1b2a;--surface:#132232;--surface2:#192d3e;--border:#2a4258;'
+        '--text:#cdd8e3;--text-h:#e0eaf4;--text-m:#8bafc7;'
+        '--accent:#5b9bd5;--accent-h:#7aabdb;'
+        '--icon-bg:#4a1515;--icon-fg:#f08080;--icon-brd:#6a2020;}'
+        '*{box-sizing:border-box;margin:0;padding:0;}'
+        'body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;'
+        'font-size:13px;background:var(--bg);color:var(--text);'
+        'min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;}'
+        '.auth-card{background:var(--surface);border:1px solid var(--border);'
+        'border-radius:10px;padding:36px 40px;max-width:480px;width:100%;'
+        'box-shadow:0 6px 24px rgba(0,0,0,0.08);text-align:center;}'
+        'html.dark .auth-card{box-shadow:0 6px 24px rgba(0,0,0,0.35);}'
+        '.auth-icon{width:64px;height:64px;border-radius:50%;'
+        'display:inline-flex;align-items:center;justify-content:center;'
+        'font-size:30px;margin-bottom:20px;'
+        'background:var(--icon-bg);color:var(--icon-fg);border:1px solid var(--icon-brd);}'
+        '.auth-title{font-size:20px;font-weight:600;color:var(--text-h);margin-bottom:10px;}'
+        '.auth-body{font-size:14px;color:var(--text-m);margin-bottom:24px;line-height:1.5;}'
+        '.auth-btn{display:inline-block;padding:9px 22px;background:var(--accent);'
+        'color:#fff;border-radius:5px;font-size:13px;font-weight:600;'
+        'text-decoration:none;border:0;cursor:pointer;transition:background 0.15s;}'
+        '.auth-btn:hover{background:var(--accent-h);text-decoration:none;}'
+        '.auth-brand{margin-top:18px;font-size:11px;color:var(--text-m);opacity:0.6;'
+        'letter-spacing:0.5px;text-transform:uppercase;}'
+        '</style></head><body>'
+        '<div class="auth-card">'
+        f'<div class="auth-icon">{safe_icon}</div>'
+        f'<div class="auth-title">{safe_title}</div>'
+        f'<div class="auth-body">{safe_message}</div>'
+        '<a href="" onclick="location.reload();return false;" class="auth-btn">Reintentar</a>'
+        '<div class="auth-brand">● SPONG</div>'
+        '</div></body></html>'
+    )
+
+
 @app.before_request
 def require_auth():
     # /config/ tiene su propio auth gestionado por el Blueprint.
@@ -444,18 +503,28 @@ def require_auth():
     if logged_out_token:
         realm = f"{_SPONG_LOGGED_OUT_REALM} {logged_out_token}"
         if reauth_token != logged_out_token:
+            body = _spong_auth_page(
+                "Sesión cerrada",
+                "Volvé a autenticarte para entrar al monitor.",
+            )
             resp = Response(
-                "Sesión cerrada. Volvé a autenticarte para entrar.",
+                body,
                 401,
                 {"WWW-Authenticate": f'Basic realm="{realm}"'},
+                mimetype="text/html",
             )
             resp.set_cookie("spong_reauth", logged_out_token, max_age=5 * 60, samesite="Lax")
             return _spong_no_store(resp)
         if not identity:
+            body = _spong_auth_page(
+                "Sesión cerrada",
+                "Volvé a autenticarte para entrar al monitor.",
+            )
             return _spong_no_store(Response(
-                "Sesión cerrada. Volvé a autenticarte para entrar.",
+                body,
                 401,
                 {"WWW-Authenticate": f'Basic realm="{realm}"'},
+                mimetype="text/html",
             ))
         g.spong_user, g.spong_role = identity
         # se limpian las cookies en after_request via flag
@@ -463,10 +532,15 @@ def require_auth():
         return
 
     if not identity:
+        body = _spong_auth_page(
+            "Acceso restringido",
+            "Ingresá usuario y contraseña para entrar al monitor.",
+        )
         return _spong_no_store(Response(
-            "Acceso restringido — ingresá usuario y contraseña.",
+            body,
             401,
             {"WWW-Authenticate": f'Basic realm="{_SPONG_REALM}"'},
+            mimetype="text/html",
         ))
     g.spong_user, g.spong_role = identity
 
