@@ -39,3 +39,5 @@
 + actualizar version a v3.5.5, documentacion, .deb y github  [DONE v3.5.5]
 + rediseno de la pagina 401 (Basic Auth) en monitor y en /config con estilo claro/oscuro  [DONE v3.5.6]
 + actualizar version a v3.5.6, documentacion, .deb y github  [DONE v3.5.6]
++ separar plugins de network del .deb del server / overrides de plugins que sobrevivan al upgrade  [DONE v3.5.7]
++ actualizar version a v3.5.7, documentacion, .deb y github  [DONE v3.5.7]

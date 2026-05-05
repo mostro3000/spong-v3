@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 import argparse
-import importlib
 import logging
 import os
 import random
@@ -14,10 +13,11 @@ from pathlib import Path
 
 from . import config
 from .daemon import daemonize, write_pid, read_pid, is_running
+from .plugin_loader import load_plugin
 
 log = logging.getLogger(__name__)
 
-PLUGIN_PKG = "spong.plugins.client"
+PLUGIN_CATEGORY = "client"
 BINDIR = Path("/usr/local/spong/bin")
 
 
@@ -31,7 +31,7 @@ class ClientAgent:
         check_names = config.get_checks()
         for name in check_names:
             try:
-                mod = importlib.import_module(f"{PLUGIN_PKG}.{name}")
+                mod = load_plugin(PLUGIN_CATEGORY, name)
                 func = getattr(mod, f"check_{name}", None)
                 if func:
                     self._check_funcs[name] = func

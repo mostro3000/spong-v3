@@ -3,12 +3,12 @@
 # Ejecutar desde /usr/local/spong/packaging/
 #
 # Produce:
-#   spong-server_3.5.6-1_all.deb  — servidor completo (server + network + client + web)
-#   spong-client_3.5.6-1_all.deb  — solo agente cliente
+#   spong-server_3.5.7-1_all.deb  — servidor completo (server + network + client + web)
+#   spong-client_3.5.7-1_all.deb  — solo agente cliente
 
 set -e
 
-VERSION="3.5.6-1"
+VERSION="3.5.7-1"
 # Directorio raíz del repo: funciona tanto en /usr/local/spong como en CI (GitHub Actions)
 SPONG_SRC="$(cd "$(dirname "$0")/.." && pwd)"
 BUILD_DIR="/tmp/spong-deb-build"
@@ -71,6 +71,14 @@ done
 [ -f "$SPONG_SRC/etc/termicas.yaml.example" ] && \
     cp "$SPONG_SRC/etc/termicas.yaml.example" "$PKG/usr/local/spong/etc/"
 
+# Directorios para plugins personalizados (overrides). Sobreviven al upgrade
+# porque dpkg no toca archivos ajenos al .deb. El README explica el sistema.
+for cat in network client; do
+    mkdir -p "$PKG/usr/local/spong/etc/plugins/$cat"
+    [ -f "$SPONG_SRC/etc/plugins/$cat/README.txt" ] && \
+        cp "$SPONG_SRC/etc/plugins/$cat/README.txt" "$PKG/usr/local/spong/etc/plugins/$cat/"
+done
+
 # Systemd units
 mkdir -p "$PKG/etc/systemd/system"
 for svc in spong-server spong-network spong-client spong-web; do
@@ -110,7 +118,8 @@ mkdir -p "$SPONG_LIB/plugins/client"
 
 # Módulos core
 for f in __init__.py client_agent.py config.py database.py models.py \
-          protocol.py safe_exec.py status_sender.py daemon.py messenger.py; do
+          protocol.py safe_exec.py status_sender.py daemon.py messenger.py \
+          plugin_loader.py; do
     [ -f "$SPONG_SRC/spong/$f" ] && cp "$SPONG_SRC/spong/$f" "$SPONG_LIB/"
 done
 
@@ -125,6 +134,11 @@ chmod +x "$PKG/usr/local/spong/bin/spong-client"
 
 # Directorio etc (vacío — postinst crea la config interactivamente)
 mkdir -p "$PKG/usr/local/spong/etc"
+
+# Directorio para plugins personalizados (overrides). Solo client en este .deb.
+mkdir -p "$PKG/usr/local/spong/etc/plugins/client"
+[ -f "$SPONG_SRC/etc/plugins/client/README.txt" ] && \
+    cp "$SPONG_SRC/etc/plugins/client/README.txt" "$PKG/usr/local/spong/etc/plugins/client/"
 
 # Systemd unit
 mkdir -p "$PKG/etc/systemd/system"

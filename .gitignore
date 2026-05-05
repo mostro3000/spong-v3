@@ -11,6 +11,13 @@ etc/groups.yaml
 etc/termicas.yaml
 etc/sensors.yaml
 
+# Plugins personalizados del usuario (overrides) — no subir.
+# El README.txt de cada subdirectorio sí se versiona.
+etc/plugins/network/*.py
+etc/plugins/client/*.py
+etc/plugins/network/__pycache__/
+etc/plugins/client/__pycache__/
+
 # Paquetes .deb compilados — se generan con build-deb.sh
 packaging/dist/
 

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 import argparse
-import importlib
 import logging
 import os
 import random
@@ -16,11 +15,12 @@ from pathlib import Path
 
 from . import config
 from .daemon import daemonize, write_pid, read_pid, is_running
+from .plugin_loader import load_plugin
 from .status_sender import send_status
 
 log = logging.getLogger(__name__)
 
-PLUGIN_PKG = "spong.plugins.network"
+PLUGIN_CATEGORY = "network"
 
 
 class NetworkAgent:
@@ -41,15 +41,14 @@ class NetworkAgent:
                 needed.add(svc)
 
         for svc in needed:
-            mod_name = f"{PLUGIN_PKG}.{svc}"
             try:
-                mod = importlib.import_module(mod_name)
+                mod = load_plugin(PLUGIN_CATEGORY, svc)
                 func = getattr(mod, f"check_{svc}", None)
                 if func:
                     self._plugins[svc] = func
                     log.debug("Loaded network plugin: %s", svc)
                 else:
-                    log.warning("No check_%s in plugin %s", svc, mod_name)
+                    log.warning("No check_%s in plugin %s", svc, mod.__name__)
             except ImportError as e:
                 log.debug("No plugin for service '%s': %s", svc, e)
 
