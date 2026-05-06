@@ -4,14 +4,14 @@
 
 <div class="page-title">
   <button type="button" class="page-title-action" id="group-title-toggle"
-          title="{{ _('Minimizar / ampliar todos los grupos') }}">
+          title="{{ _('Cambiar modo de visualización de grupos') }}">
     {{ _('Grupos de Hosts') }}
   </button>
-  <span class="sub">{{ groups|length }} {{ _('grupos') }}</span>
+  <span class="sub">{{ groups|length }} {{ _('grupos') }} · <span id="group-mode-label">{{ _('rojo expandido') }}</span></span>
 </div>
 
 {% for group in groups %}
-{% set starts_collapsed = group.color not in ('red', 'yellow', 'purple') %}
+{% set starts_collapsed = group.color != 'red' %}
 <div class="group-section {{ 'collapsed' if starts_collapsed }}" id="group-{{ group.key }}" data-color="{{ group.color }}">
   <div class="group-title has-{{ group.color }}">
     <span style="display:inline-block; width:12px; height:12px; border-radius:50%; flex-shrink:0;
@@ -74,8 +74,16 @@
   var expandLabel = {{ _('Ampliar grupo') | tojson }};
   var collapseLabel = {{ _('Minimizar grupo') | tojson }};
   var problemColors = {red: true, yellow: true, purple: true};
+  var modes = ['red', 'problems', 'expand', 'collapse'];
+  var modeLabels = {
+    red: {{ _('rojo expandido') | tojson }},
+    problems: {{ _('problemas expandidos') | tojson }},
+    expand: {{ _('todos expandidos') | tojson }},
+    collapse: {{ _('todos minimizados') | tojson }}
+  };
   var titleToggle = document.getElementById('group-title-toggle');
-  var bulkMode = 'auto';
+  var modeLabelEl = document.getElementById('group-mode-label');
+  var bulkMode = 'red';
 
   function setGroupCollapsed(section, collapsed) {
     var button = section.querySelector('.group-toggle');
@@ -85,14 +93,17 @@
     button.title = collapsed ? expandLabel : collapseLabel;
   }
 
-  function applyBulkMode(action) {
+  function applyBulkMode(mode) {
     document.querySelectorAll('.group-section').forEach(function(section) {
-      var collapsed = action === 'collapse';
-      if (action === 'auto') {
-        collapsed = !problemColors[section.getAttribute('data-color')];
-      }
+      var color = section.getAttribute('data-color');
+      var collapsed;
+      if (mode === 'collapse') collapsed = true;
+      else if (mode === 'expand') collapsed = false;
+      else if (mode === 'problems') collapsed = !problemColors[color];
+      else collapsed = color !== 'red';
       setGroupCollapsed(section, collapsed);
     });
+    if (modeLabelEl) modeLabelEl.textContent = modeLabels[mode];
   }
 
   document.querySelectorAll('.group-toggle').forEach(function(button) {
@@ -105,7 +116,8 @@
 
   if (titleToggle) {
     titleToggle.addEventListener('click', function() {
-      bulkMode = bulkMode === 'auto' ? 'expand' : (bulkMode === 'expand' ? 'collapse' : 'auto');
+      var idx = modes.indexOf(bulkMode);
+      bulkMode = modes[(idx + 1) % modes.length];
       applyBulkMode(bulkMode);
     });
   }
