@@ -20,6 +20,7 @@
 + modificar para en spong sobre "Grupos de Hosts" poder apretar para minimizar/ampliar/(minimizado si es verde-maximizado rojo/amarillo/violeta) todos los grupos
 + en "Grupos de Hosts" el toggle ahora cicla 4 modos (rojo expandido / problemas expandidos / todos expandidos / todos minimizados); por defecto solo se expanden los grupos en rojo
 + la barra lateral izquierda (lista de problemas) ahora queda sticky al scrollear el contenido principal del dashboard
++ el título de página ("Grupos de Hosts" en el dashboard, y los títulos equivalentes en problemas/host/servicio/etc.) queda sticky debajo del header al scrollear
 + desde config, solo poner o cambiar clave de usuarios con texto en el frond-end(no hash), que luego queda guardado el hash en la config
 + en config/Hosts poder ordenar por Host/IP  de Menor a Mayor o viceversa
 + en config/Grupos poder ordenar por Clave/Nombre de Menor a Mayor o viceversa

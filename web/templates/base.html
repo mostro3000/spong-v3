@@ -233,7 +233,7 @@
     }
 
     /* ---- Main content ---- */
-    #main { flex: 1; padding: 14px 16px; overflow-x: auto; min-width: 0; }
+    #main { flex: 1; padding: 14px 16px; min-width: 0; }
 
     /* ---- Cards ---- */
     .card {
@@ -377,6 +377,9 @@
     .page-title {
       font-size: 16px; font-weight: 700; color: var(--text-h);
       margin-bottom: 14px; display: flex; align-items: center; gap: 10px;
+      position: sticky; top: 42px;
+      background: var(--bg); z-index: 90;
+      padding: 10px 0 6px;
     }
     .page-title .sub { font-size: 12px; font-weight: 400; color: var(--text-d); }
     .page-title-action {

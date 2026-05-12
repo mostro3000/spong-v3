@@ -1,4 +1,4 @@
-# SPONG v3.5.9 — Network & Services Monitor
+# SPONG v3.5.10 — Network & Services Monitor
 
 **SPONG** (Simple Preventive Operations Network Guardian) is a network and services monitoring system originally written in Perl. v3 is a complete rewrite in Python 3, keeping full compatibility with the original database and configuration files.
 
@@ -49,10 +49,10 @@
 
 ```bash
 # 1. Descargar el .deb desde Releases
-wget https://github.com/mostro3000/spong-v3/releases/latest/download/spong-server_3.5.9-1_all.deb
+wget https://github.com/mostro3000/spong-v3/releases/latest/download/spong-server_3.5.10-1_all.deb
 
 # 2. Instalar (el postinst configura dependencias y activa los 4 servicios systemd)
-dpkg -i spong-server_3.5.9-1_all.deb
+dpkg -i spong-server_3.5.10-1_all.deb
 
 # 3. Editar la configuración
 nano /usr/local/spong/etc/spong.yaml    # servidor, thresholds, checks
@@ -69,11 +69,11 @@ xdg-open http://localhost:8090/
 ### Cliente remoto (en otro host)
 
 ```bash
-wget https://github.com/mostro3000/spong-v3/releases/latest/download/spong-client_3.5.9-1_all.deb
-dpkg -i spong-client_3.5.9-1_all.deb   # instalación interactiva: pregunta servidor, hostname, checks
+wget https://github.com/mostro3000/spong-v3/releases/latest/download/spong-client_3.5.10-1_all.deb
+dpkg -i spong-client_3.5.10-1_all.deb   # instalación interactiva: pregunta servidor, hostname, checks
 ```
 
-> Si el asset `3.5.9-1` todavía no está publicado en GitHub Releases, construir localmente con `cd packaging && bash build-deb.sh` o crear el tag `v3.5.9` para que CI publique los `.deb`.
+> Si el asset `3.5.10-1` todavía no está publicado en GitHub Releases, construir localmente con `cd packaging && bash build-deb.sh` o crear el tag `v3.5.10` para que CI publique los `.deb`.
 
 ### Migración desde SPONG Perl (spong.conf / spong.hosts / spong.groups)
 
@@ -86,12 +86,12 @@ python3 /usr/local/spong/bin/spong-migrate.py --all --outdir /usr/local/spong/et
 
 ## Estado actual del código
 
-SPONG v3.5.9 está organizado como una aplicación Python 3 con cuatro procesos principales: servidor TCP asyncio, agente de red, agente local y UI Flask. La base de datos sigue siendo de archivos para mantener compatibilidad con SPONG Perl; los RRD se actualizan desde el servidor cuando llegan estados nuevos.
+SPONG v3.5.10 está organizado como una aplicación Python 3 con cuatro procesos principales: servidor TCP asyncio, agente de red, agente local y UI Flask. La base de datos sigue siendo de archivos para mantener compatibilidad con SPONG Perl; los RRD se actualizan desde el servidor cuando llegan estados nuevos.
 
 El repositorio contiene el código Python en `spong/`, la UI en `web/`, wrappers ejecutables en `bin/`, configuración en `etc/`, empaquetado Debian en `packaging/` y capturas en `docs/screenshots/`. También conserva datos locales bajo `var/` y código histórico Perl en `lib/`, `cgi-bin/` y `www/`; esos árboles no son necesarios para entender la implementación Python nueva.
 
 Resumen operativo:
-- **Versión actual:** `spong.__version__ = 3.5.9`, `setup.py = 3.5.9`, paquetes `3.5.9-1`
+- **Versión actual:** `spong.__version__ = 3.5.10`, `setup.py = 3.5.10`, paquetes `3.5.10-1`
 - **Runtime:** Python 3.10+ para instalación por `setup.py`; los paquetes Debian declaran `python3 >= 3.9`
 - **Dependencias principales:** `pyyaml`, `flask`, `werkzeug`, `rrdtool`, `fping`, `snmp`, `rpcbind`; `tinytuya` solo para plugins Tuya
 - **Persistencia:** `/usr/local/spong/var/database`, `/usr/local/spong/var/rrd`, `/usr/local/spong/var/archives`
@@ -1005,14 +1005,14 @@ Los paquetes `.deb` permiten instalar SPONG en cualquier sistema Debian/Ubuntu s
 cd /usr/local/spong/packaging
 bash build-deb.sh
 # Genera:
-#   dist/spong-server_3.5.9-1_all.deb
-#   dist/spong-client_3.5.9-1_all.deb
+#   dist/spong-server_3.5.10-1_all.deb
+#   dist/spong-client_3.5.10-1_all.deb
 ```
 
 ### Instalar el servidor
 
 ```bash
-dpkg -i spong-server_3.5.9-1_all.deb
+dpkg -i spong-server_3.5.10-1_all.deb
 # Depends: python3, python3-flask, python3-werkzeug, python3-yaml,
 #          rrdtool, fping, iputils-ping, snmp, rpcbind
 # Recommends: apache2
@@ -1028,7 +1028,7 @@ dpkg -i spong-server_3.5.9-1_all.deb
 ### Instalar solo el agente cliente
 
 ```bash
-dpkg -i spong-client_3.5.9-1_all.deb
+dpkg -i spong-client_3.5.10-1_all.deb
 # Depends: python3
 # Recommends: smartmontools, lm-sensors
 # El postinst es interactivo — pregunta:
@@ -1081,13 +1081,13 @@ El archivo `.github/workflows/build-deb.yml` automatiza la construcción de los 
 |--------|----------|
 | Push a `main` | Construye los `.deb` y los sube como artefacto del workflow (disponibles 30 días) |
 | Pull Request a `main` | Verifica que el build no se rompe |
-| Tag `v*` (ej: `v3.5.9`) | Build + crea un **GitHub Release** con los `.deb` adjuntos |
+| Tag `v*` (ej: `v3.5.10`) | Build + crea un **GitHub Release** con los `.deb` adjuntos |
 
 ### Crear una release oficial
 
 ```bash
-git tag v3.5.9
-git push origin v3.5.9
+git tag v3.5.10
+git push origin v3.5.10
 # GitHub Actions construye y publica la release automáticamente
 ```
 
@@ -1099,7 +1099,22 @@ En GitHub → pestaña **Actions** → seleccionar el workflow → sección **Ar
 
 ## 16. Historial de cambios
 
-### v3.5.9 — 2026-05-05
+### v3.5.10 — 2026-05-12
+
+**Título de página sticky**
+- El bloque `.page-title` ahora queda fijo debajo del header (`position: sticky; top: 42px`)
+- Aplica globalmente: dashboard, problemas, host, servicio, reconocimientos, historial, disponibilidad
+- Fondo opaco (`background: var(--bg)`) + padding interno para que las filas no se vean detrás al scrollear
+- `z-index: 90` (debajo del header en `z-index: 100`)
+- Removido `overflow-x: auto` de `#main` porque convertía a `#main` en un contenedor de scroll, anclando el sticky a `#main` (que crece con el contenido) en vez de al viewport. El scroll horizontal de tablas anchas ya lo maneja `.matrix-wrap` por su cuenta
+- Edita: `web/templates/base.html`
+
+**Release**
+- `spong.__version__`: `3.5.10`
+- `setup.py`: `3.5.10`
+- Paquetes: `spong-server_3.5.10-1_all.deb`, `spong-client_3.5.10-1_all.deb`
+
+### v3.5.9 — 2026-05-12
 
 **Sidebar sticky en el dashboard**
 - La barra lateral izquierda (lista de grupos con problemas) ahora queda fija al hacer scroll en el contenido principal
