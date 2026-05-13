@@ -58,7 +58,7 @@
     <td style="font-weight:500;"><a href="{{ url_for('service_detail', hostname=hostname, service=svc_name) }}">{{ svc_name }}</a></td>
     <td><span class="badge color-{{ svc.color }} svc-badge" style="cursor:pointer;"
               data-host="{{ hostname }}" data-svc="{{ svc_name }}"
-              title="Clic para actualizar">{{ svc.color }}</span></td>
+              title="Clic para actualizar">{{ svc.color }}</span>{% if sgt_enabled and spong_can_ack and svc.color in ['red', 'yellow', 'purple'] %}{% set sgt = sgt_links_by_svc.get(svc_name) %}{% if sgt %}<a class="btn btn-sm" href="{{ sgt.url }}" target="_blank" rel="noopener" title="{{ _('Abrir ticket en SGT') }}" style="background:#e8f1fb; color:#005cb9; margin-left:6px; padding:2px 6px; font-size:11px;">&#8594; {{ sgt.ticket_display }}</a>{% else %}<a class="btn btn-sm" href="{{ url_for('sgt_ticket', host=hostname, service=svc_name, color=svc.color, summary=svc.summary) }}" title="{{ _('Crear ticket en SGT') }}" style="margin-left:6px; padding:2px 6px; font-size:11px;">&#127915; SGT</a>{% endif %}{% endif %}</td>
     <td style="text-align:center;">
       <span class="graph-toggle btn btn-sm" data-host="{{ hostname }}" data-svc="{{ svc_name }}"
             style="cursor:pointer; background:#eceff1; color:#546e7a; border:1px solid #cdd5df;"

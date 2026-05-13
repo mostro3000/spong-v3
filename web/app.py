@@ -1820,6 +1820,16 @@ def host_detail(hostname):
         services.items(),
         key=lambda kv: (cfg_order.index(kv[0]) if kv[0] in cfg_order else len(cfg_order), kv[0])
     )
+    sgt_links_by_svc = {}
+    if sgt_link.enabled():
+        issues_like = [
+            {"host": hostname, "service": sn}
+            for sn, sv in sorted_services
+            if sv.color in ("red", "yellow", "purple")
+        ]
+        for k, v in sgt_link.links_for_issues(issues_like).items():
+            # k = "host\x00service" → quedarnos sólo con service
+            sgt_links_by_svc[k.split(chr(0), 1)[1]] = v
     return render_template(
         "host.html",
         hostname=hostname,
@@ -1828,6 +1838,7 @@ def host_detail(hostname):
         services=sorted_services,
         acks=acks,
         history=sorted(history, key=lambda e: e.timestamp, reverse=True),
+        sgt_links_by_svc=sgt_links_by_svc,
     )
 
 
