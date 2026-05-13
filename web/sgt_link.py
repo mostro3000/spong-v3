@@ -185,3 +185,137 @@ def borrar_link(host: str, service: str) -> bool:
         _save_links(data)
         return True
     return False
+
+# ============================================================================
+# Sincronización periódica spong↔SGT.
+# ============================================================================
+# Llamado por /usr/local/sbin/spong-sgt-sync (systemd timer cada 5 min) para
+# cerrar el lazo entre los dos sistemas:
+#   - Si el servicio volvió a verde, mandamos auto-resolver al ticket en SGT
+#     y borramos el link local.
+#   - Si el ticket fue cerrado/cancelado en SGT, borramos el link local.
+# Si la integración está deshabilitada (sgt.enabled=False), la función sale
+# inmediatamente sin hacer nada.
+
+
+def _color_actual(host: str, service: str) -> str | None:
+    """Color actual del servicio en spong, o None si no existe el archivo."""
+    # Lazy import — spong.database depende de muchas cosas y no queremos
+    # cargarlo a menos que estemos sincronizando.
+    from spong import database
+    svc = database.load_service(host, service)
+    return svc.color if svc else None
+
+
+def _get_ticket(numero: int) -> dict | None:
+    """GET /api/v1/tickets/N/ — devuelve dict o None si 404/error."""
+    base_url = (config.get("sgt.base_url") or "").rstrip("/")
+    token = config.get("sgt.token") or ""
+    try:
+        r = requests.get(
+            f"{base_url}/api/v1/tickets/{numero}/",
+            headers={"Authorization": f"Token {token}"},
+            timeout=10,
+            verify=_verify_param(),
+        )
+    except requests.RequestException as e:
+        log.warning("GET ticket %s falló: %s", numero, e)
+        return None
+    if r.status_code == 200:
+        return r.json()
+    if r.status_code == 404:
+        return None
+    log.warning("GET ticket %s -> HTTP %s: %s", numero, r.status_code, (r.text or "")[:200])
+    return None
+
+
+def _post_auto_resolver(numero: int) -> bool:
+    """POST /api/v1/tickets/N/auto-resolver/. True si éxito."""
+    base_url = (config.get("sgt.base_url") or "").rstrip("/")
+    token = config.get("sgt.token") or ""
+    try:
+        r = requests.post(
+            f"{base_url}/api/v1/tickets/{numero}/auto-resolver/",
+            headers={"Authorization": f"Token {token}",
+                     "Content-Type": "application/json"},
+            json={},
+            timeout=10,
+            verify=_verify_param(),
+        )
+    except requests.RequestException as e:
+        log.warning("POST auto-resolver %s falló: %s", numero, e)
+        return False
+    if r.status_code in (200, 201):
+        return True
+    log.warning("POST auto-resolver %s -> HTTP %s: %s",
+                numero, r.status_code, (r.text or "")[:200])
+    return False
+
+
+def sync_once() -> dict[str, int]:
+    """Reconcilia sgt_links.json con el estado actual de spong y de SGT.
+
+    Para cada link guardado:
+      - Si el servicio NO está en rojo/amarillo/púrpura → manda auto-resolver
+        a SGT y borra el link.
+      - Si está en rojo/amarillo/púrpura pero el ticket está CERRADO o
+        CANCELADO en SGT → borra el link (deja que un humano cree uno nuevo
+        manualmente si quiere).
+
+    Devuelve un dict con contadores: {resueltos, ya_terminados, sin_cambio}.
+    """
+    counts = {"resueltos": 0, "ya_terminados": 0, "sin_cambio": 0, "errores": 0}
+    if not enabled():
+        return counts
+
+    data = _load_links()
+    if not data:
+        return counts
+
+    cambios = False
+    estados_terminales = {"CERRADO", "CANCELADO"}
+    estados_resueltos = estados_terminales | {"RESUELTO"}
+    for k, link in list(data.items()):
+        host = link.get("host", "")
+        service = link.get("service", "")
+        numero = link.get("ticket_numero")
+        if not (host and service and numero):
+            log.warning("Link malformado en sgt_links.json, lo borro: %r", k)
+            del data[k]; cambios = True; continue
+
+        color = _color_actual(host, service)
+        # Verde, clear, blue, sin archivo → problema desapareció en el monitor.
+        problema_activo = color in ("red", "yellow", "purple")
+
+        if not problema_activo:
+            # Auto-resolver en SGT (si todavía no está terminado).
+            ticket = _get_ticket(numero)
+            if ticket is None:
+                counts["errores"] += 1
+                continue
+            if ticket.get("estado") in estados_resueltos:
+                # Ya resuelto/cerrado/cancelado, sólo limpieza local.
+                counts["ya_terminados"] += 1
+            else:
+                if _post_auto_resolver(numero):
+                    counts["resueltos"] += 1
+                else:
+                    counts["errores"] += 1
+                    continue
+            del data[k]; cambios = True
+        else:
+            # Problema activo: verificamos si el ticket fue cerrado/cancelado
+            # en SGT (humano decidió descartarlo). Si es así, soltamos el link.
+            ticket = _get_ticket(numero)
+            if ticket is None:
+                counts["errores"] += 1
+                continue
+            if ticket.get("estado") in estados_terminales:
+                del data[k]; cambios = True
+                counts["ya_terminados"] += 1
+            else:
+                counts["sin_cambio"] += 1
+
+    if cambios:
+        _save_links(data)
+    return counts
