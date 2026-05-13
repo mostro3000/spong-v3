@@ -1,0 +1,12 @@
+[Unit]
+Description=Spong→SGT link reconciliation (cada 5 min)
+
+[Timer]
+# Primer disparo 2 min después de boot, luego cada 5 min.
+OnBootSec=2min
+OnUnitActiveSec=5min
+AccuracySec=30s
+Persistent=true
+
+[Install]
+WantedBy=timers.target

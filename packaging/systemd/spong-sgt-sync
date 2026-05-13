@@ -1,0 +1,51 @@
+#!/usr/bin/env python3
+"""Reconcilia sgt_links.json de spong con el estado de los servicios y de SGT.
+
+Lo dispara un systemd timer cada N minutos (default 5). Si la integración SGT
+está deshabilitada (sgt.enabled=False en /usr/local/spong/etc/spong.yaml), el
+script sale en 0 sin hacer nada — el timer queda armado pero es no-op.
+
+Logging por stdout (capturado por journald via systemd).
+"""
+from __future__ import annotations
+
+import logging
+import sys
+import time
+
+sys.path.insert(0, "/usr/local/spong")
+sys.path.insert(0, "/usr/local/spong/web")
+
+import spong.config as config
+config.load_all()
+
+import sgt_link
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+log = logging.getLogger("spong-sgt-sync")
+
+
+def main() -> int:
+    if not sgt_link.enabled():
+        log.info("Integración SGT deshabilitada (sgt.enabled=False). Salgo.")
+        return 0
+    t0 = time.monotonic()
+    counts = sgt_link.sync_once()
+    dt = (time.monotonic() - t0) * 1000
+    log.info(
+        "sync OK (%.0f ms): resueltos=%d ya_terminados=%d sin_cambio=%d errores=%d",
+        dt,
+        counts["resueltos"],
+        counts["ya_terminados"],
+        counts["sin_cambio"],
+        counts["errores"],
+    )
+    return 0 if counts["errores"] == 0 else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

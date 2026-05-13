@@ -1,0 +1,10 @@
+[Unit]
+Description=Spong→SGT link reconciliation (one-shot)
+After=spong-web.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/spong-sgt-sync
+StandardOutput=journal
+StandardError=journal
