@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}SPONG - {{ _('Crear ticket SGT') }}{% endblock %}
+{% block content %}
+
+<div class="page-title">&#127915; {{ _('Crear ticket en SGT') }}</div>
+
+{% if existing %}
+<div class="card" style="padding:16px;">
+  <p>{{ _('Ya existe un ticket para este problema:') }}</p>
+  <p style="margin:8px 0;">
+    <a href="{{ existing.url }}" target="_blank" rel="noopener" class="btn">{{ existing.ticket_display }} &#8599;</a>
+  </p>
+  <p style="color:#546e7a; font-size:12px;">
+    {{ _('Creado por') }} <strong>{{ existing.creado_por or '?' }}</strong>
+    {% if existing.creado_iso %} &middot; {{ existing.creado_iso }}{% endif %}
+  </p>
+  <p style="margin-top:12px;">
+    <a href="{{ url_for('problems') }}" class="btn btn-sm">{{ _('Volver a problemas') }}</a>
+  </p>
+</div>
+{% else %}
+<div class="card" style="padding:16px;">
+  <form method="POST" action="{{ url_for('sgt_ticket') }}">
+    <input type="hidden" name="host" value="{{ host }}">
+    <input type="hidden" name="service" value="{{ service }}">
+    <input type="hidden" name="color" value="{{ color }}">
+    <input type="hidden" name="summary" value="{{ summary }}">
+    <p>{{ _('Se va a crear un ticket en SGT con estos datos:') }}</p>
+    <table style="border-collapse:collapse; margin:12px 0;">
+      <tr><td style="padding:4px 12px 4px 0; color:#546e7a;">{{ _('Host') }}</td><td><strong>{{ host }}</strong></td></tr>
+      <tr><td style="padding:4px 12px 4px 0; color:#546e7a;">{{ _('Servicio') }}</td><td><strong>{{ service }}</strong></td></tr>
+      <tr><td style="padding:4px 12px 4px 0; color:#546e7a;">{{ _('Estado') }}</td><td><span class="badge color-{{ color }}">{{ color }}</span></td></tr>
+      <tr><td style="padding:4px 12px 4px 0; color:#546e7a;">{{ _('Resumen') }}</td><td>{{ summary or '—' }}</td></tr>
+    </table>
+    <button type="submit" class="btn" style="background:#005cb9; color:#fff;">&#127915; {{ _('Confirmar y crear') }}</button>
+    <a href="{{ url_for('problems') }}" class="btn btn-sm" style="margin-left:8px;">{{ _('Cancelar') }}</a>
+  </form>
+</div>
+{% endif %}
+
+{% endblock %}

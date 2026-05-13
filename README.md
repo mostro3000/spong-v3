@@ -898,6 +898,52 @@ Desde `/acks` → botón "Borrar", o desde la vista de host en la tabla de recon
 
 Se guardan en `/usr/local/spong/var/database/<hostname>/acks/<id>`. Un ACK vencido se elimina automáticamente al ser leído.
 
+
+---
+
+## 10b. Integración con SGT (Sistema de Gestión de Tareas UNSL)
+
+Permite crear tickets en [SGT](https://sgt.unsl.edu.ar) con un clic desde la vista de problemas. La integración es **opcional** y se controla con un flag global; si está apagada, ni el botón ni la ruta existen.
+
+### Habilitar
+
+En `etc/spong.yaml`:
+
+```yaml
+sgt:
+  enabled: true
+  base_url: https://sgt.unsl.edu.ar
+  token: "<ApiToken>"          # generado por admin SGT en /perfil/api-tokens
+  categoria_id: <id>           # categoría "Monitoreo" en SGT
+  facultad_id: <id>            # facultad "Rectorado" en SGT
+  verify_tls: true             # false sólo si el chain TLS está incompleto upstream
+  prioridad_por_color:
+    red: ALTA
+    yellow: MEDIA
+    purple: ALTA
+```
+
+Reiniciar: `systemctl restart spong-web`.
+
+### Uso
+
+En `/problems`, cada fila muestra un botón **🎫 SGT** (sólo para roles `admin` y `editor`). Al apretarlo aparece una pantalla de confirmación con host/servicio/color/resumen; al confirmar se hace `POST /api/v1/tickets/` contra SGT, se persiste el link en `var/sgt_links.json`, y se vuelve a `/problems` con un banner de éxito o error.
+
+Si ya existe un ticket creado desde spong para ese par `(host, servicio)`, el botón se transforma en **→ SGT-N** linkeando al ticket en SGT — no se crean tickets duplicados.
+
+### Apagar
+
+Tres formas, en orden de preferencia:
+
+1. **Flag global**: poner `sgt.enabled: false` en `etc/spong.yaml` y reiniciar `spong-web`. El botón deja de renderizarse y la ruta `/sgt-ticket` devuelve 404.
+2. **Por rol**: el botón ya está limitado a roles que pueden hacer ACK; quitarle el rol `editor`/`admin` a un usuario lo deja sin el botón.
+3. **Del lado SGT**: revocar el `ApiToken` desde `/perfil/api-tokens`. Spong empieza a recibir 401 y muestra error en el banner sin crear nada.
+
+### Limitaciones conocidas
+
+- SGT acepta `prioridad` sólo cuando un admin la cambia post-creación. El campo del payload se ignora; el mapeo `prioridad_por_color` queda anotado en la descripción del ticket pero no afecta la prioridad real (queda en MEDIA hasta que un admin de SGT la ajuste).
+- La dedup vive en `var/sgt_links.json` y no se entera si el ticket fue cerrado en SGT. Si querés permitir crear un ticket nuevo para el mismo par, borrar la entrada del JSON o usar `python3 -c "import sgt_link; sgt_link.borrar_link(host,svc)"`.
+
 ---
 
 ## 11. Base de datos

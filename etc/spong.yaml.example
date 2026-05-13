@@ -154,3 +154,23 @@ web:
 date_format: "%d/%m/%y"
 time_format: "%H:%M:%S"
 datetime_format: "%c"
+
+# SGT (Sistema de Gestión de Tareas UNSL) — integración opcional
+#
+# Cuando enabled está en true, la vista /problems muestra un botón
+# "SGT" por fila que crea un ticket en SGT con un clic. Si está en
+# false (o falta el bloque), el botón no se renderiza y la ruta
+# /sgt-ticket devuelve 404.
+sgt:
+  enabled: false                       # switch global
+  base_url: https://sgt.unsl.edu.ar
+  token: ""                            # ApiToken de SGT (el admin del SGT
+                                       # lo crea desde /perfil/api-tokens)
+  categoria_id: 0                      # ID de la categoría "Monitoreo" en SGT
+  facultad_id: 0                       # ID de la facultad "Rectorado" en SGT
+  verify_tls: true                     # false sólo si el proxy upstream sirve
+                                       # un chain TLS incompleto
+  prioridad_por_color:                 # mapeo informativo — SGT sólo acepta
+    red: ALTA                          # cambios de prioridad post-creación
+    yellow: MEDIA                      # por un admin
+    purple: ALTA

@@ -28,6 +28,7 @@ except ImportError:
 from spong import config, database, __version__
 from spong.models import worst_color
 from auth_utils import check_basic_auth
+import sgt_link
 
 _COLOR_ORDER = {"red": 0, "yellow": 1, "purple": 2, "blue": 3, "clear": 4, "green": 5}
 from spong.status_sender import send_ack, send_ack_del
@@ -1763,6 +1764,7 @@ def inject_spong_auth():
         "spong_can_admin": role == "admin",
         "spong_can_ack": role in _SPONG_ACK_ROLES,
         "spong_auth_enabled": bool(_spong_user_entries()),
+        "sgt_enabled": sgt_link.enabled(),
     }
 
 
@@ -1870,7 +1872,15 @@ def problems():
                     "lag": time.time() - svc.report_time,
                 })
     issues.sort(key=lambda x: (x["color"] != "red", x["color"] != "yellow"))
-    return render_template("problems.html", issues=issues)
+    links = sgt_link.links_for_issues(issues) if sgt_link.enabled() else {}
+    for issue in issues:
+        issue["sgt_link"] = links.get(f"{issue[host]}\x00{issue[service]}")
+    return render_template(
+        "problems.html",
+        issues=issues,
+        sgt_ok=request.args.get("sgt_ok", ""),
+        sgt_err=request.args.get("sgt_err", ""),
+    )
 
 
 @app.route("/acks")
@@ -1923,6 +1933,47 @@ def ack():
     host = request.args.get("host", "")
     service = request.args.get("service", ".*")
     return render_template("ack.html", host=host, service=service)
+
+
+@app.route("/sgt-ticket", methods=["GET", "POST"])
+@require_spong_ack
+def sgt_ticket():
+    """Crea un ticket en SGT a partir de un problema activo en spong.
+
+    GET con host/service en query string muestra la pantalla de confirmación.
+    POST efectivamente lo crea y vuelve a /problems con un flash de éxito o
+    error. Si la integración SGT está deshabilitada, 404.
+    """
+    if not sgt_link.enabled():
+        from flask import abort
+        abort(404)
+
+    if request.method == "POST":
+        host = request.form.get("host", "").strip()
+        service = request.form.get("service", "").strip()
+        color = request.form.get("color", "red").strip() or "red"
+        summary = request.form.get("summary", "").strip()
+        if not host or not service:
+            return redirect(url_for("problems", sgt_err="Faltan host/service."))
+        try:
+            link = sgt_link.crear_ticket(
+                host=host, service=service, color=color, summary=summary,
+                creado_por=getattr(g, "spong_user", "") or "",
+            )
+            return redirect(url_for("problems", sgt_ok=link["ticket_display"]))
+        except sgt_link.SgtError as e:
+            return redirect(url_for("problems", sgt_err=str(e)[:300]))
+
+    host = request.args.get("host", "").strip()
+    service = request.args.get("service", "").strip()
+    color = request.args.get("color", "red").strip() or "red"
+    summary = request.args.get("summary", "").strip()
+    existing = sgt_link.link_for(host, service) if host and service else None
+    return render_template(
+        "sgt_ticket.html",
+        host=host, service=service, color=color, summary=summary,
+        existing=existing,
+    )
 
 
 @app.after_request

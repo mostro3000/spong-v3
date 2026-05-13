@@ -9,6 +9,15 @@
   {% endif %}
 </div>
 
+{% if sgt_ok %}
+<div class="ok-msg" style="margin-bottom:12px;">&#10003; {{ _('Ticket') }} <strong>{{ sgt_ok }}</strong> {{ _('creado en SGT.') }}</div>
+{% endif %}
+{% if sgt_err %}
+<div class="card" style="padding:12px; border-left:4px solid #e53935; background:#fde7e7; color:#7c1d1d; margin-bottom:12px;">
+  &#9888; {{ sgt_err }}
+</div>
+{% endif %}
+
 {% if not issues %}
 <div class="ok-msg">&#10003; {{ _('Todo OK — sin problemas activos') }}</div>
 {% else %}
@@ -31,7 +40,16 @@
       <span{% if lag >= 3600 %} style="color:#e53935;"{% endif %}>{{ time_ago(lag) }}</span>
     </td>
     <td style="color:#37474f;">{{ issue.summary }}</td>
-    <td>{% if spong_can_ack %}<a class="btn btn-sm" href="{{ url_for('ack', host=issue.host, service=issue.service) }}" style="white-space:nowrap;">{{ _('Reconocer') }}</a>{% endif %}</td>
+    <td style="white-space:nowrap;">
+      {% if spong_can_ack %}<a class="btn btn-sm" href="{{ url_for('ack', host=issue.host, service=issue.service) }}">{{ _('Reconocer') }}</a>{% endif %}
+      {% if sgt_enabled and spong_can_ack %}
+        {% if issue.sgt_link %}
+          <a class="btn btn-sm" href="{{ issue.sgt_link.url }}" target="_blank" rel="noopener" title="{{ _('Abrir ticket en SGT') }}" style="background:#e8f1fb; color:#005cb9; margin-left:4px;">&#8594; {{ issue.sgt_link.ticket_display }}</a>
+        {% else %}
+          <a class="btn btn-sm" href="{{ url_for('sgt_ticket', host=issue.host, service=issue.service, color=issue.color, summary=issue.summary) }}" title="{{ _('Crear ticket en SGT') }}" style="margin-left:4px;">&#127915; SGT</a>
+        {% endif %}
+      {% endif %}
+    </td>
   </tr>
   {% endfor %}
   </tbody>
