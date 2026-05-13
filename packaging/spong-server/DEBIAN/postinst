@@ -55,6 +55,11 @@ for svc in spong-server spong-network spong-client spong-web; do
     systemctl enable "$svc" 2>/dev/null || true
 done
 
+# Timer de sincronización SGT (opcional — sólo si el unit está instalado)
+if [ -f /etc/systemd/system/spong-sgt-sync.timer ]; then
+    systemctl enable --now spong-sgt-sync.timer 2>/dev/null || true
+fi
+
 # 6. Apache (opcional)
 if command -v apache2ctl >/dev/null 2>&1; then
     echo ""

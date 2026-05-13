@@ -3,12 +3,12 @@
 # Ejecutar desde /usr/local/spong/packaging/
 #
 # Produce:
-#   spong-server_3.5.10-1_all.deb  — servidor completo (server + network + client + web)
-#   spong-client_3.5.10-1_all.deb  — solo agente cliente
+#   spong-server_3.5.11-1_all.deb  — servidor completo (server + network + client + web)
+#   spong-client_3.5.11-1_all.deb  — solo agente cliente
 
 set -e
 
-VERSION="3.5.10-1"
+VERSION="3.5.11-1"
 # Directorio raíz del repo: funciona tanto en /usr/local/spong como en CI (GitHub Actions)
 SPONG_SRC="$(cd "$(dirname "$0")/.." && pwd)"
 BUILD_DIR="/tmp/spong-deb-build"
@@ -85,6 +85,14 @@ for svc in spong-server spong-network spong-client spong-web; do
     [ -f "/etc/systemd/system/${svc}.service" ] && \
         cp "/etc/systemd/system/${svc}.service" "$PKG/etc/systemd/system/"
 done
+
+# Integración SGT: script + unit + timer (versionados en packaging/systemd/)
+if [ -f "$SPONG_SRC/packaging/systemd/spong-sgt-sync" ]; then
+    mkdir -p "$PKG/usr/local/sbin"
+    install -m 0755 "$SPONG_SRC/packaging/systemd/spong-sgt-sync" "$PKG/usr/local/sbin/spong-sgt-sync"
+    install -m 0644 "$SPONG_SRC/packaging/systemd/spong-sgt-sync.service" "$PKG/etc/systemd/system/spong-sgt-sync.service"
+    install -m 0644 "$SPONG_SRC/packaging/systemd/spong-sgt-sync.timer"   "$PKG/etc/systemd/system/spong-sgt-sync.timer"
+fi
 
 # Directorios vacíos necesarios (dpkg no empaqueta dirs vacíos sin un archivo)
 for d in var/database var/rrd var/archives tmp; do
