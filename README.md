@@ -931,6 +931,33 @@ En `/problems`, cada fila muestra un botón **🎫 SGT** (sólo para roles `admi
 
 Si ya existe un ticket creado desde spong para ese par `(host, servicio)`, el botón se transforma en **→ SGT-N** linkeando al ticket en SGT — no se crean tickets duplicados.
 
+### Sincronización periódica (cierre del lazo)
+
+Un timer de systemd (`spong-sgt-sync.timer`) corre `/usr/local/sbin/spong-sgt-sync` cada 5 minutos para reconciliar los links locales con el estado real:
+
+- Si el servicio del par `(host, service)` volvió a verde, mandamos `POST /api/v1/tickets/<N>/auto-resolver/` a SGT (la cuenta de servicio que creó el ticket se autoriza a resolverlo) y borramos el link local.
+- Si el ticket en SGT está en CERRADO/CANCELADO, sólo borramos el link local — el ticket queda como historial.
+
+Si `sgt.enabled` está en `false`, el script chequea ese flag primero y sale en 0 sin tocar nada. El timer queda armado pero es no-op.
+
+Instalación manual del timer (sólo la primera vez, los `.deb` no lo empaquetan todavía):
+
+```
+install -m 0755 spong-sgt-sync /usr/local/sbin/spong-sgt-sync
+install -m 0644 spong-sgt-sync.service /etc/systemd/system/spong-sgt-sync.service
+install -m 0644 spong-sgt-sync.timer   /etc/systemd/system/spong-sgt-sync.timer
+systemctl daemon-reload
+systemctl enable --now spong-sgt-sync.timer
+```
+
+Inspección:
+
+```
+systemctl list-timers spong-sgt-sync.timer
+journalctl -u spong-sgt-sync.service --since 1 hour ago
+systemctl start spong-sgt-sync.service   # forzar una corrida ad-hoc
+```
+
 ### Apagar
 
 Tres formas, en orden de preferencia:
