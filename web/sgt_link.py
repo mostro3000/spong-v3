@@ -104,7 +104,7 @@ def _build_payload(host: str, service: str, color: str, summary: str) -> dict[st
         f"Reportado por SPONG.\n"
         f"Host: {host}\n"
         f"Servicio: {service}\n"
-        f"Color: {color} (sugerida: {prio})\n"
+        f"Color: {color}\n"
         f"Resumen: {summary or '(sin resumen)'}\n"
     )
     return {
@@ -112,6 +112,7 @@ def _build_payload(host: str, service: str, color: str, summary: str) -> dict[st
         "descripcion": descripcion,
         "categoria": categoria_id,
         "facultad": facultad_id,
+        "prioridad": prio,
         "edificio_libre": f"host:{host}",
     }
 
