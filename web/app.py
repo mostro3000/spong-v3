@@ -1874,7 +1874,7 @@ def problems():
     issues.sort(key=lambda x: (x["color"] != "red", x["color"] != "yellow"))
     links = sgt_link.links_for_issues(issues) if sgt_link.enabled() else {}
     for issue in issues:
-        issue["sgt_link"] = links.get(f"{issue[host]}\x00{issue[service]}")
+        issue["sgt_link"] = links.get(f"{issue['host']}\x00{issue['service']}")
     return render_template(
         "problems.html",
         issues=issues,
