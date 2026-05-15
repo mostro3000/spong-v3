@@ -618,6 +618,8 @@ app.jinja_env.globals["color_style"] = color_style
 app.jinja_env.globals["worst_color"] = worst_color
 app.jinja_env.globals["time"] = time
 app.jinja_env.globals["spong_version"] = __version__
+app.jinja_env.globals["sgt_ticket_url"] = sgt_link.ticket_url
+app.jinja_env.globals["sgt_ticket_display"] = sgt_link.ticket_display
 
 # ---------------------------------------------------------------------------
 # i18n — simple dict-based translation, no external deps
@@ -1830,6 +1832,28 @@ def host_detail(hostname):
         for k, v in sgt_link.links_for_issues(issues_like).items():
             # k = "host\x00service" → quedarnos sólo con service
             sgt_links_by_svc[k.split(chr(0), 1)[1]] = v
+
+    history_service_options = sorted({e.service.lower() for e in history if e.service})
+
+    def _collect_filter(name):
+        out = []
+        for value in request.args.getlist(name):
+            for part in value.split(","):
+                p = part.strip().lower()
+                if p and p not in out:
+                    out.append(p)
+        return out
+
+    history_service_filters = _collect_filter("service")
+    history_color_filters = _collect_filter("color")
+    filtered_history = history
+    if history_service_filters:
+        allowed = set(history_service_filters)
+        filtered_history = [e for e in filtered_history if e.service.lower() in allowed]
+    if history_color_filters:
+        allowed = set(history_color_filters)
+        filtered_history = [e for e in filtered_history if e.color.lower() in allowed]
+
     return render_template(
         "host.html",
         hostname=hostname,
@@ -1837,7 +1861,12 @@ def host_detail(hostname):
         config_host_edit_available=config_host_edit_available,
         services=sorted_services,
         acks=acks,
-        history=sorted(history, key=lambda e: e.timestamp, reverse=True),
+        history=sorted(filtered_history, key=lambda e: e.timestamp, reverse=True),
+        history_has_entries=bool(history),
+        history_service_options=history_service_options,
+        history_service_filters=history_service_filters,
+        history_color_filters=history_color_filters,
+        history_color_options=("red", "yellow", "green", "purple", "clear", "blue"),
         sgt_links_by_svc=sgt_links_by_svc,
     )
 

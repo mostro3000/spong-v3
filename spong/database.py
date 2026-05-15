@@ -331,10 +331,11 @@ def load_history(
             if status_changes_only:
                 if not entry.color:
                     continue
-                prev_color = last_color_by_service.get(entry.service)
-                last_color_by_service[entry.service] = entry.color
-                if prev_color == entry.color:
-                    continue
+                if entry.event_type == "status":
+                    prev_color = last_color_by_service.get(entry.service)
+                    last_color_by_service[entry.service] = entry.color
+                    if prev_color == entry.color:
+                        continue
             if entry.timestamp < cutoff:
                 continue
             entries.append(entry)

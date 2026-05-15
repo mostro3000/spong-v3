@@ -1,4 +1,4 @@
-# SPONG v3.5.11 — Network & Services Monitor
+# SPONG v3.6.0 — Network & Services Monitor
 
 **SPONG** (Simple Preventive Operations Network Guardian) is a network and services monitoring system originally written in Perl. v3 is a complete rewrite in Python 3, keeping full compatibility with the original database and configuration files.
 
@@ -49,10 +49,10 @@
 
 ```bash
 # 1. Descargar el .deb desde Releases
-wget https://github.com/mostro3000/spong-v3/releases/latest/download/spong-server_3.5.11-1_all.deb
+wget https://github.com/mostro3000/spong-v3/releases/latest/download/spong-server_3.6.0-1_all.deb
 
 # 2. Instalar (el postinst configura dependencias y activa los 4 servicios systemd)
-dpkg -i spong-server_3.5.11-1_all.deb
+dpkg -i spong-server_3.6.0-1_all.deb
 
 # 3. Editar la configuración
 nano /usr/local/spong/etc/spong.yaml    # servidor, thresholds, checks
@@ -69,11 +69,11 @@ xdg-open http://localhost:8090/
 ### Cliente remoto (en otro host)
 
 ```bash
-wget https://github.com/mostro3000/spong-v3/releases/latest/download/spong-client_3.5.11-1_all.deb
-dpkg -i spong-client_3.5.11-1_all.deb   # instalación interactiva: pregunta servidor, hostname, checks
+wget https://github.com/mostro3000/spong-v3/releases/latest/download/spong-client_3.6.0-1_all.deb
+dpkg -i spong-client_3.6.0-1_all.deb   # instalación interactiva: pregunta servidor, hostname, checks
 ```
 
-> Si el asset `3.5.11-1` todavía no está publicado en GitHub Releases, construir localmente con `cd packaging && bash build-deb.sh` o crear el tag `v3.5.10` para que CI publique los `.deb`.
+> Si el asset `3.6.0-1` todavía no está publicado en GitHub Releases, construir localmente con `cd packaging && bash build-deb.sh` o crear el tag `v3.6.0` para que CI publique los `.deb`.
 
 ### Migración desde SPONG Perl (spong.conf / spong.hosts / spong.groups)
 
@@ -86,12 +86,12 @@ python3 /usr/local/spong/bin/spong-migrate.py --all --outdir /usr/local/spong/et
 
 ## Estado actual del código
 
-SPONG v3.5.11 está organizado como una aplicación Python 3 con cuatro procesos principales: servidor TCP asyncio, agente de red, agente local y UI Flask. La base de datos sigue siendo de archivos para mantener compatibilidad con SPONG Perl; los RRD se actualizan desde el servidor cuando llegan estados nuevos.
+SPONG v3.6.0 está organizado como una aplicación Python 3 con cuatro procesos principales: servidor TCP asyncio, agente de red, agente local y UI Flask. La base de datos sigue siendo de archivos para mantener compatibilidad con SPONG Perl; los RRD se actualizan desde el servidor cuando llegan estados nuevos.
 
 El repositorio contiene el código Python en `spong/`, la UI en `web/`, wrappers ejecutables en `bin/`, configuración en `etc/`, empaquetado Debian en `packaging/` y capturas en `docs/screenshots/`. También conserva datos locales bajo `var/` y código histórico Perl en `lib/`, `cgi-bin/` y `www/`; esos árboles no son necesarios para entender la implementación Python nueva.
 
 Resumen operativo:
-- **Versión actual:** `spong.__version__ = 3.5.11`, `setup.py = 3.5.11`, paquetes `3.5.11-1`
+- **Versión actual:** `spong.__version__ = 3.6.0`, `setup.py = 3.6.0`, paquetes `3.6.0-1`
 - **Runtime:** Python 3.10+ para instalación por `setup.py`; los paquetes Debian declaran `python3 >= 3.9`
 - **Dependencias principales:** `pyyaml`, `flask`, `werkzeug`, `rrdtool`, `fping`, `snmp`, `rpcbind`; `tinytuya` solo para plugins Tuya
 - **Persistencia:** `/usr/local/spong/var/database`, `/usr/local/spong/var/rrd`, `/usr/local/spong/var/archives`
@@ -1078,14 +1078,14 @@ Los paquetes `.deb` permiten instalar SPONG en cualquier sistema Debian/Ubuntu s
 cd /usr/local/spong/packaging
 bash build-deb.sh
 # Genera:
-#   dist/spong-server_3.5.11-1_all.deb
-#   dist/spong-client_3.5.11-1_all.deb
+#   dist/spong-server_3.6.0-1_all.deb
+#   dist/spong-client_3.6.0-1_all.deb
 ```
 
 ### Instalar el servidor
 
 ```bash
-dpkg -i spong-server_3.5.11-1_all.deb
+dpkg -i spong-server_3.6.0-1_all.deb
 # Depends: python3, python3-flask, python3-werkzeug, python3-yaml,
 #          rrdtool, fping, iputils-ping, snmp, rpcbind
 # Recommends: apache2
@@ -1101,7 +1101,7 @@ dpkg -i spong-server_3.5.11-1_all.deb
 ### Instalar solo el agente cliente
 
 ```bash
-dpkg -i spong-client_3.5.11-1_all.deb
+dpkg -i spong-client_3.6.0-1_all.deb
 # Depends: python3
 # Recommends: smartmontools, lm-sensors
 # El postinst es interactivo — pregunta:
@@ -1154,13 +1154,13 @@ El archivo `.github/workflows/build-deb.yml` automatiza la construcción de los 
 |--------|----------|
 | Push a `main` | Construye los `.deb` y los sube como artefacto del workflow (disponibles 30 días) |
 | Pull Request a `main` | Verifica que el build no se rompe |
-| Tag `v*` (ej: `v3.5.11`) | Build + crea un **GitHub Release** con los `.deb` adjuntos |
+| Tag `v*` (ej: `v3.6.0`) | Build + crea un **GitHub Release** con los `.deb` adjuntos |
 
 ### Crear una release oficial
 
 ```bash
-git tag v3.5.11
-git push origin v3.5.11
+git tag v3.6.0
+git push origin v3.6.0
 # GitHub Actions construye y publica la release automáticamente
 ```
 
@@ -1171,6 +1171,27 @@ En GitHub → pestaña **Actions** → seleccionar el workflow → sección **Ar
 ---
 
 ## 16. Historial de cambios
+
+### v3.6.0 — 2026-05-15
+
+**Filtros en el historial por host**
+- Nuevos selectores Servicio / Estado en la tabla "Historial (últimos 7 días)" de `/host/<nombre>`, con el mismo patrón visual que `/history` global
+- Multi-selección por checkboxes, params en URL (`?service=foo&color=red`); el form queda visible aún cuando el filtro deja 0 filas (cartel "Sin cambios para el filtro actual.")
+- `host_detail` deriva `service_options` antes de filtrar, así el dropdown siempre lista todos los servicios del historial
+- Edita: `web/app.py` (`host_detail`), `web/templates/host.html`
+
+**Referencias permanentes a tickets SGT en el historial**
+- Al crear un ticket via `/sgt-ticket`, además de guardar el link en `var/sgt_links.json` se escribe una línea `event_type="sgt"` en `var/database/<host>/history/current`
+- La traza es append-only, así que sobrevive al `sync_once()` (que borra el link cuando el ticket se cierra o el servicio vuelve a verde) y al `borrar_link()` manual
+- Visible en `/host/<x>` (tabla Historial) y `/history` global como tag clickeable `🎫 SGT-N` que linkea al ticket; si la integración SGT está apagada o no hay `sgt.base_url`, el tag queda sin link pero la traza se conserva
+- Nuevos helpers públicos `sgt_link.ticket_url(numero)` y `sgt_link.ticket_display(numero)`, expuestos como globales Jinja
+- Ajuste en `database.load_history(status_changes_only=True)`: el dedup por color repetido sólo aplica a `event_type == "status"`, así las filas SGT pasan sin que las aplaste un cambio de status posterior con color repetido
+- Edita: `web/sgt_link.py`, `spong/database.py`, `web/app.py`, `web/templates/host.html`, `web/templates/history.html`
+
+**Release**
+- `spong.__version__`: `3.6.0`
+- `setup.py`: `3.6.0`
+- Paquetes: `spong-server_3.6.0-1_all.deb`, `spong-client_3.6.0-1_all.deb`
 
 ### v3.5.11 — 2026-05-13
 
@@ -1210,7 +1231,7 @@ En GitHub → pestaña **Actions** → seleccionar el workflow → sección **Ar
 **Release**
 - `spong.__version__`: `3.5.10`
 - `setup.py`: `3.5.10`
-- Paquetes: `spong-server_3.5.11-1_all.deb`, `spong-client_3.5.11-1_all.deb`
+- Paquetes: `spong-server_3.5.10-1_all.deb`, `spong-client_3.5.10-1_all.deb`
 
 ### v3.5.9 — 2026-05-12
 

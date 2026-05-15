@@ -278,8 +278,132 @@ if (checkAllStatus) {
 }
 </script>
 
-{% if history %}
+{% if history_has_entries %}
+{% set color_labels = {
+  'red': _('Red'),
+  'yellow': _('Yellow'),
+  'green': _('Green'),
+  'purple': _('Purple'),
+  'clear': _('Clear'),
+  'blue': _('Blue')
+} %}
+{% set selected_color_labels = [] %}
+{% for option in history_color_options %}
+  {% if option in history_color_filters %}
+    {% set _ = selected_color_labels.append(color_labels.get(option, option)) %}
+  {% endif %}
+{% endfor %}
+{% set selected_services = [] %}
+{% for option in history_service_options %}
+  {% if option in history_service_filters %}
+    {% set _ = selected_services.append(option) %}
+  {% endif %}
+{% endfor %}
+
+<style>
+  .host-history-filter { min-width: 160px; position: relative; z-index: 40; }
+  .host-history-filter summary {
+    list-style: none;
+    cursor: pointer;
+    padding: 6px 30px 6px 9px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--inp-bg, #1f2730);
+    color: var(--text-f);
+    user-select: none;
+    position: relative;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 13px;
+  }
+  .host-history-filter summary::-webkit-details-marker { display: none; }
+  .host-history-filter summary::after {
+    content: "▾";
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-m);
+    font-size: 11px;
+  }
+  .host-history-filter[open] summary {
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+  }
+  .host-history-menu {
+    position: absolute;
+    top: calc(100% - 1px);
+    left: 0;
+    min-width: 200px;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-top: 0;
+    border-bottom-left-radius: 6px;
+    border-bottom-right-radius: 6px;
+    background: var(--inp-bg, #1f2730);
+    box-shadow: 0 10px 24px rgba(0,0,0,0.28);
+    z-index: 50;
+    max-height: 280px;
+    overflow: auto;
+  }
+  .host-history-menu label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 0;
+    color: var(--text-f);
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .host-history-menu input { margin: 0; flex: 0 0 auto; }
+  .host-history-menu .badge {
+    display: inline-flex;
+    align-items: center;
+    min-width: 74px;
+    justify-content: center;
+  }
+</style>
+
 <h3>{{ _('Historial (últimos 7 días)') }}</h3>
+<div class="card" style="margin-bottom:10px; padding:10px 12px; overflow:visible; position:relative; z-index:5;">
+  <form method="get" action="{{ url_for('host_detail', hostname=hostname) }}"
+        style="display:flex; gap:10px; flex-wrap:wrap; align-items:end;">
+    <div>
+      <div style="font-size:11px; color:var(--text-m); margin-bottom:4px;">{{ _('Servicio') }}</div>
+      <details class="host-history-filter">
+        <summary>{{ selected_services|join(', ') if selected_services else _('Todos') }}</summary>
+        <div class="host-history-menu">
+          {% for option in history_service_options %}
+          <label>
+            <input type="checkbox" name="service" value="{{ option }}"{% if option in history_service_filters %} checked{% endif %}>
+            <span>{{ option }}</span>
+          </label>
+          {% endfor %}
+        </div>
+      </details>
+    </div>
+    <div>
+      <div style="font-size:11px; color:var(--text-m); margin-bottom:4px;">{{ _('Estado') }}</div>
+      <details class="host-history-filter">
+        <summary>{{ selected_color_labels|join(', ') if selected_color_labels else _('Todos') }}</summary>
+        <div class="host-history-menu">
+          {% for option in history_color_options %}
+          <label>
+            <input type="checkbox" name="color" value="{{ option }}"{% if option in history_color_filters %} checked{% endif %}>
+            <span class="badge color-{{ option }}">{{ color_labels.get(option, option) }}</span>
+          </label>
+          {% endfor %}
+        </div>
+      </details>
+    </div>
+    <div style="display:flex; gap:8px;">
+      <button class="btn btn-sm" type="submit">{{ _('Filtrar') }}</button>
+      <a class="btn btn-sm" href="{{ url_for('host_detail', hostname=hostname) }}" style="background:#78909c;">{{ _('Limpiar') }}</a>
+    </div>
+  </form>
+</div>
+{% if history %}
 <div class="card">
 <table class="history-table">
   <thead><tr><th>{{ _('Fecha') }}</th><th>{{ _('Tipo') }}</th><th>{{ _('Servicio') }}</th><th>{{ _('Estado') }}</th><th>{{ _('Resumen') }}</th></tr></thead>
@@ -289,13 +413,28 @@ if (checkAllStatus) {
     <td style="white-space:nowrap;">{{ entry.timestamp | int | strftime('%m-%d %H:%M') }}</td>
     <td><span style="color:#78909c;">{{ entry.event_type }}</span></td>
     <td>{{ entry.service }}</td>
-    <td>{% if entry.color %}<span class="badge color-{{ entry.color }}">{{ entry.color }}</span>{% endif %}</td>
+    <td>
+      {% if entry.event_type == 'sgt' %}
+        {% set turl = sgt_ticket_url(entry.color) %}
+        {% if turl %}
+          <a href="{{ turl }}" target="_blank" rel="noopener" class="tag"
+             style="background:#e8f1fb; color:#005cb9;">🎫 {{ sgt_ticket_display(entry.color) }}</a>
+        {% else %}
+          <span class="tag">🎫 {{ sgt_ticket_display(entry.color) }}</span>
+        {% endif %}
+      {% elif entry.color %}
+        <span class="badge color-{{ entry.color }}">{{ entry.color }}</span>
+      {% endif %}
+    </td>
     <td style="color:#546e7a;">{{ entry.summary }}</td>
   </tr>
   {% endfor %}
   </tbody>
 </table>
 </div>
+{% else %}
+<div class="ok-msg">{{ _('Sin cambios para el filtro actual.') }}</div>
+{% endif %}
 {% endif %}
 
 {% endblock %}

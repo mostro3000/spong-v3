@@ -83,6 +83,25 @@ def link_for(host: str, service: str) -> dict[str, Any] | None:
     return _load_links().get(_key(host, service))
 
 
+def ticket_url(numero) -> str:
+    """Reconstruye la URL del ticket SGT a partir de su número.
+
+    Devuelve "" si falta base_url o numero. Útil para renderizar referencias
+    históricas (var/database/<host>/history/current) cuando el link ya fue
+    limpiado de sgt_links.json.
+    """
+    base = (config.get("sgt.base_url") or "").rstrip("/")
+    if not base or not numero:
+        return ""
+    return f"{base}/tickets/{numero}"
+
+
+def ticket_display(numero) -> str:
+    if numero in (None, ""):
+        return ""
+    return f"SGT-{numero}"
+
+
 def links_for_issues(issues: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     if not issues:
         return {}
@@ -173,6 +192,30 @@ def crear_ticket(*, host: str, service: str, color: str, summary: str,
     data = _load_links()
     data[_key(host, service)] = link
     _save_links(data)
+
+    # Referencia permanente en el historial del host. Sobrevive a la
+    # limpieza de sgt_links.json (cierre del ticket, sync, borrado manual)
+    # para que la traza del ticket quede siempre visible en /host/<x> y
+    # /history. event_type="sgt" + color=str(numero) — load_history mantiene
+    # estos registros sin pasarlos por el dedup de status.
+    try:
+        from spong import database
+        from spong.models import HistoryEntry
+        summary = f"Ticket {display} creado"
+        if creado_por:
+            summary += f" por {creado_por}"
+        database.append_history(host, HistoryEntry(
+            event_type="sgt",
+            timestamp=time.time(),
+            service=service,
+            color=str(numero),
+            summary=summary,
+            user=creado_por,
+        ))
+    except Exception as e:
+        log.warning("No pude escribir historial SGT para %s/%s: %s",
+                    host, service, e)
+
     return link
 
 

@@ -46,3 +46,7 @@
 + actualizar version a v3.5.7, documentacion, .deb y github  [DONE v3.5.7]
 + ver que la barra de la izquierda (indicando los problemas) no se baje cuando paso para abajo la parte de la derecha
 + Integrar con SGT (Sistema de Gestión de Tareas UNSL): botón en /problems y /host para crear tickets, dedup en var/sgt_links.json, sync periódico (auto-resolver al volver verde, limpieza si se cierra en SGT)   [DONE v3.5.11]
++ en el historial de un host la hora sale con distinto utc del sistema  [no era bug: la hora del historial es local -03 correcta; el desfase venía del reloj JS del navegador]
++ cuando se crea un ticket y sale el numero en el spong, se puede hacer que quede en el historial del host y general quede una referencia al ticket por mas que el ticket ya fue cerrado?  [DONE v3.6.0]
++ agrega filtro por estado/servicio en el historial de un host  [DONE v3.6.0]
++ actualizar version a v3.6.0, documentacion, .deb y github  [DONE v3.6.0]

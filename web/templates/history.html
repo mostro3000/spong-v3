@@ -192,7 +192,19 @@
         <td class="ts">{{ item.entry.timestamp | int | strftime('%Y-%m-%d %H:%M') }}</td>
         <td><a href="{{ url_for('host_detail', hostname=item.host) }}">{{ item.host }}</a></td>
         <td><a href="{{ url_for('service_detail', hostname=item.host, service=item.entry.service) }}">{{ item.entry.service }}</a></td>
-        <td><span class="badge color-{{ item.entry.color }}">{{ item.entry.color }}</span></td>
+        <td>
+          {% if item.entry.event_type == 'sgt' %}
+            {% set turl = sgt_ticket_url(item.entry.color) %}
+            {% if turl %}
+              <a href="{{ turl }}" target="_blank" rel="noopener" class="tag"
+                 style="background:#e8f1fb; color:#005cb9;">🎫 {{ sgt_ticket_display(item.entry.color) }}</a>
+            {% else %}
+              <span class="tag">🎫 {{ sgt_ticket_display(item.entry.color) }}</span>
+            {% endif %}
+          {% else %}
+            <span class="badge color-{{ item.entry.color }}">{{ item.entry.color }}</span>
+          {% endif %}
+        </td>
         <td style="color:var(--text-f);">{{ item.entry.summary }}</td>
       </tr>
     {% endfor %}
