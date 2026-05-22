@@ -23,7 +23,7 @@ def check_rcpu(hostname: str) -> tuple[str, str, str]:
         cpu = snmp_get_int(host, community, _OID_MTK_CPU)
 
     if cpu is None:
-        return "red", f"rcpu: no response from {hostname}", ""
+        return "purple", f"rcpu: no SNMP response from {hostname}", ""
 
     if cpu >= _CRIT:
         color = "red"

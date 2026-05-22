@@ -27,7 +27,7 @@ def check_scpu1m(hostname: str) -> tuple[str, str, str]:
         descr = snmp_get_str(host, community, _OID_SYSDESCR) or ""
         if "SwOS" in descr:
             return "clear", "scpu1m: N/A (SwOS no soporta CPU via SNMP)", descr
-        return "red", f"scpu1m: no response from {hostname}", ""
+        return "purple", f"scpu1m: no SNMP response from {hostname}", ""
 
     if cpu >= _CRIT:
         color = "red"

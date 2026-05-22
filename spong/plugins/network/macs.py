@@ -16,6 +16,6 @@ def check_macs(hostname: str) -> tuple[str, str, str]:
     count = snmp_walk_count(host, community, _OID_FDB)
 
     if count is None:
-        return "red", f"macs: no SNMP response from {hostname}", ""
+        return "purple", f"macs: no SNMP response from {hostname}", ""
 
     return "green", f"macs: {count} MACs learned", f"Bridge forwarding table: {count} entries"

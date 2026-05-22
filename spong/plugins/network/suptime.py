@@ -21,7 +21,7 @@ def check_suptime(hostname: str) -> tuple[str, str, str]:
 
     ticks = snmp_get_int(host, community, _OID_SYSUPTIME)
     if ticks is None:
-        return "red", f"suptime: no SNMP response from {hostname}", ""
+        return "purple", f"suptime: no SNMP response from {hostname}", ""
 
     total_seconds = ticks / 100
     days = int(total_seconds // 86400)

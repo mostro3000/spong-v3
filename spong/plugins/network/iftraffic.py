@@ -286,7 +286,7 @@ def check_iftraffic(hostname: str) -> tuple[str, str, str]:
         names = _snmp_walk_column(host, community, _OID_IF_NAME)
         descrs = _snmp_walk_column(host, community, _OID_IF_DESCR)
         if not names and not descrs:
-            return "red", f"iftraffic: sin respuesta SNMP de {hostname}", ""
+            return "purple", f"iftraffic: sin respuesta SNMP de {hostname}", ""
         opers = _snmp_walk_column(host, community, _OID_IF_OPER)
         speeds32 = _snmp_walk_column(host, community, _OID_IF_SPEED)
         speeds_hi = _snmp_walk_column(host, community, _OID_IF_HIGH_SPEED)
@@ -328,7 +328,7 @@ def check_iftraffic(hostname: str) -> tuple[str, str, str]:
                     meta_dirty = True
 
         if not opers and not in64 and not out64 and not in32 and not out32:
-            return "red", f"iftraffic: sin respuesta SNMP de {hostname}", ""
+            return "purple", f"iftraffic: sin respuesta SNMP de {hostname}", ""
 
     selected = []
     snapshot_items = {}

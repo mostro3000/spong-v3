@@ -44,7 +44,7 @@ def check_rtemp(hostname: str) -> tuple[str, str, str]:
         raw_board = snmp_get_int(host, community, _OID_SWOS)
 
     if raw_board is None and raw_cpu is None:
-        return "red", f"rtemp: no SNMP response from {hostname}", ""
+        return "purple", f"rtemp: no SNMP response from {hostname}", ""
 
     parts = []
     max_temp = 0

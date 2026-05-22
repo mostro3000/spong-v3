@@ -120,7 +120,7 @@ def check_ups(hostname: str) -> tuple[str, str, str]:
             problems.append(f"Text={temp}°C")
 
     if not results:
-        return "red", "ups: sin respuesta SNMP", f"No se pudo contactar {host} via SNMP"
+        return "purple", "ups: sin respuesta SNMP", f"No se pudo contactar {host} via SNMP"
 
     # Color global: el peor
     if "red" in colors:

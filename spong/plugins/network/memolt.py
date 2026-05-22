@@ -178,7 +178,7 @@ def _check_mem(hostname: str, service_name: str) -> tuple[str, str, str]:
         descr = snmp_get_str(host, community, _OID_SYSDESCR)
         if descr:
             return "clear", f"{service_name}: N/A (sin memoria SNMP)", descr
-        return "red", f"{service_name}: sin respuesta SNMP", f"No se pudo leer memoria de {host}"
+        return "purple", f"{service_name}: sin respuesta SNMP", f"No se pudo leer memoria de {host}"
 
     mem, detail = result
 

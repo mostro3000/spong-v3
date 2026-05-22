@@ -51,7 +51,7 @@ def check_ups_metric(hostname: str, metric: str) -> tuple[str, str, str]:
 
     raw = snmp_get_int(host, community, OIDS[metric])
     if raw is None:
-        return "red", f"{metric}: sin respuesta SNMP", ""
+        return "purple", f"{metric}: sin respuesta SNMP", ""
 
     val = _normalize(metric, raw)
     unit = UNITS[metric]

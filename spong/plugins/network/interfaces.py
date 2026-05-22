@@ -74,7 +74,7 @@ def check_interfaces(hostname: str) -> tuple[str, str, str]:
     opers   = _snmp_walk_column(host, community, _OID_IF_OPER_STATUS)
 
     if not descrs:
-        return "red", "interfaces: sin respuesta SNMP", f"No se pudo contactar {host}"
+        return "purple", "interfaces: sin respuesta SNMP", f"No se pudo contactar {host}"
 
     down = []
     lines = []
