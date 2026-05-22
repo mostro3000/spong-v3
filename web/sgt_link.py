@@ -83,6 +83,16 @@ def link_for(host: str, service: str) -> dict[str, Any] | None:
     return _load_links().get(_key(host, service))
 
 
+def find_link(links: dict[str, dict[str, Any]], host: str, service: str) -> dict[str, Any] | None:
+    """Versión barata de link_for() cuando ya tenés cargado el dict."""
+    return links.get(_key(host, service))
+
+
+def all_links() -> dict[str, dict[str, Any]]:
+    """Snapshot del JSON de links. Útil para iterar sin pegarle al disco varias veces."""
+    return _load_links()
+
+
 def ticket_url(numero) -> str:
     """Reconstruye la URL del ticket SGT a partir de su número.
 

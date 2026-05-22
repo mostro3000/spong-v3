@@ -268,6 +268,7 @@ def _build_dashboard_snapshot():
     groups = config.get_groups()
     group_data = []
     sidebar = []
+    sgt_links = sgt_link.all_links() if sgt_link.enabled() else {}
     for gname, gdata in groups.items():
         if not gdata.get("display", True):
             continue
@@ -285,10 +286,22 @@ def _build_dashboard_snapshot():
             ]) if services else "green"
             host_statuses[host] = {"color": host_color, "services": services}
             red_svcs = [svc_name for svc_name, svc in services.items() if svc.color == "red"]
+            red_tickets = []
+            if sgt_links:
+                for svc_name in red_svcs:
+                    ln = sgt_link.find_link(sgt_links, host, svc_name)
+                    if ln:
+                        red_tickets.append(ln)
             if len(red_svcs) == 1:
-                red_items.append({"host": host, "service": red_svcs[0]})
+                item = {"host": host, "service": red_svcs[0]}
+                if red_tickets:
+                    item["ticket"] = red_tickets[0]
+                red_items.append(item)
             elif len(red_svcs) > 1:
-                red_items.append({"host": host, "service": "multiple"})
+                item = {"host": host, "service": "multiple"}
+                if red_tickets:
+                    item["ticket"] = red_tickets[0]
+                red_items.append(item)
 
         if red_items:
             sidebar.append({

@@ -226,6 +226,10 @@
     .sidebar-group .sg-item .dot { width: 6px; height: 6px; border-radius: 50%; background: #e53935; flex-shrink: 0; }
     .sidebar-group .sg-item a { color: #b71c1c; }
     .sidebar-group .sg-item a:hover { color: #e53935; }
+    /* Problemas con ticket SGT activo: tono bordeaux para distinguir de un rojo "sin ticket". */
+    .sidebar-group .sg-item.has-ticket .dot { background: #6d1b1f; box-shadow: 0 0 0 1px #4e0c0c inset; }
+    .sidebar-group .sg-item.has-ticket a { color: #6d1b1f; }
+    .sidebar-group .sg-item.has-ticket a:hover { color: #8e1a1d; }
     .no-problems-box {
       margin: 16px 12px; padding: 8px 10px;
       background: var(--ok-bg); border-left: 3px solid var(--ok-brd);
@@ -513,7 +517,7 @@
         <span class="sg-count">{{ sg.count }}</span>
       </div>
       {% for item in sg.problems %}
-      <div class="sg-item">
+      <div class="sg-item{% if item.ticket %} has-ticket{% endif %}"{% if item.ticket %} title="{{ _('Ticket SGT activo') }}: {{ item.ticket.ticket_display or ('SGT-' ~ item.ticket.ticket_numero) }}"{% endif %}>
         <span class="dot"></span>
         <a href="{{ url_for('host_detail', hostname=item.host) }}">{{ item.host }}</a>/<a href="{{ url_for('service_detail', hostname=item.host, service=item.service) }}">{{ item.service }}</a>
       </div>
