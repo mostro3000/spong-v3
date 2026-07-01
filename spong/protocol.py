@@ -72,7 +72,7 @@ def parse_update(header: str, body: str) -> Optional[StatusMessage | AckMessage 
 
     # status / event / page
     m = re.match(
-        r"^(status|event|page)\s+(\S+)\s+(\w+)\s+(\w+)\s+([\d:]+)\s+(.*)$",
+        r"^(status|event|page)\s+(\S+)\s+(\w+)\s+(\w+)\s+([\d:]+)\s*(.*)$",
         header,
     )
     if m:

@@ -1,4 +1,4 @@
-# SPONG v3.6.2 — Network & Services Monitor
+# SPONG v3.6.5 — Network & Services Monitor
 
 **SPONG** (Simple Preventive Operations Network Guardian) is a network and services monitoring system originally written in Perl. v3 is a complete rewrite in Python 3, keeping full compatibility with the original database and configuration files.
 
@@ -1078,8 +1078,8 @@ Los paquetes `.deb` permiten instalar SPONG en cualquier sistema Debian/Ubuntu s
 cd /usr/local/spong/packaging
 bash build-deb.sh
 # Genera:
-#   dist/spong-server_3.6.2-1_all.deb
-#   dist/spong-client_3.6.2-1_all.deb
+#   dist/spong-server_3.6.5-1_all.deb
+#   dist/spong-client_3.6.5-1_all.deb
 ```
 
 ### Instalar el servidor
@@ -1171,6 +1171,47 @@ En GitHub → pestaña **Actions** → seleccionar el workflow → sección **Ar
 ---
 
 ## 16. Historial de cambios
+
+### v3.6.5 — 2026-07-01
+
+**Plugin `disktemp` — temperatura de disco vía smartctl**
+- Nuevo plugin cliente `spong/plugins/client/disktemp.py`, reemplazo del `hddtemp` (binario removido en Debian 12+/13). Lee la temperatura de cada disco físico con `smartctl -j -i -A /dev/<disco>` (`.temperature.current`), uniforme para SATA/SAS/NVMe
+- Enumera discos con `lsblk` (salta rom/loop/zram y demás pseudo-dispositivos). Umbrales `thresholds.disktemp.warn` (50 °C → amarillo) / `crit` (60 °C → rojo)
+- Robusto: descarta lecturas implausibles (0/negativas/>120 °C), tolera JSON con `temperature: null` o ruido de stderr; un timeout/error de smartctl se reporta amarillo (síntoma de disco colgado), no N/A silencioso. Sin smartmontools → verde "no instalado"; sin discos con SMART (VMs) → verde
+- Agregado a los checks por defecto del cliente (postinst) y a la categoría "Cliente" del panel admin
+
+**Packaging: dependencias faltantes en `Depends`**
+- `spong-client` ahora depende de `python3-yaml` (el cliente hace `import yaml`; en Debian 13 mínimo no venía y fallaba con `ModuleNotFoundError: No module named 'yaml'`)
+- `spong-server` ahora depende de `python3-requests` y `python3-pil` (usados por el web)
+
+**Release**
+- `spong.__version__`: `3.6.5`
+- `setup.py`: `3.6.5`
+- Paquetes: `spong-server_3.6.5-1_all.deb`, `spong-client_3.6.5-1_all.deb`
+
+### v3.6.4 — 2026-07-01
+
+**Plugin `chronyc` — sincronización NTP (chrony)**
+- Nuevo plugin cliente `spong/plugins/client/chronyc.py`, reimplementación del viejo plugin Perl `check_chronyc`. Parsea `chronyc tracking` (offset de "System time", "Leap status") y `chronyc -n sources` (cantidad de fuentes y si hay una seleccionada `*`)
+- Umbrales `thresholds.chronyc.warn` (0.01 s → amarillo) / `crit` (0.1 s → rojo). Maneja "Insert/Delete second" como estado normal (no error), el signo del offset (fast/slow), daemon caído y chrony no instalado
+- Agregado a los checks por defecto del cliente y a la categoría "Cliente" del admin
+
+**Backport de fixes de servidor (venían parcheados en caliente en la instancia s3vz)**
+- `spong/protocol.py`: el regex de `parse_update` acepta status sin summary (`\s+` → `\s*`). Los clientes viejos en Perl que mandan servicios sin resumen (p. ej. zfs, amd) se descartaban como "unrecognized header" y el server no los tomaba
+- `web/app.py`: `_visible_service_names` ahora incluye los servicios ya guardados en la base, para que se vean en la web los servicios legacy pusheados por el cliente (zfs, drbd, amd) aunque no estén en `hosts.yaml`/`checks`
+- `web/config_admin.py`: al borrar un host desde el front-end, además de `hosts.yaml` ahora se lo saca de `groups.yaml` (antes quedaba "colgado" en el dashboard), de `sensors.yaml`/`termicas.yaml`, y se borran sus datos (DB/RRD/archivos) y cachés
+
+**Release**
+- Paquetes: `spong-server_3.6.4-1_all.deb`, `spong-client_3.6.4-1_all.deb`
+
+### v3.6.3 — 2026-07-01
+
+**Cliente instalable en hosts solo-cliente**
+- `packaging/build-deb.sh` ahora genera una unit systemd propia para el paquete cliente, sin `Requires=spong-server.service` / `After=... spong-server.service`. Antes copiaba la unit del build-host (que al ser servidor llevaba esa dependencia) y en un host solo-cliente systemd rechazaba el arranque con "Unit spong-server.service not found"
+- El postinst del cliente crea `etc/message.yaml` y `etc/groups.yaml` vacíos si faltan (`config.load_all()` los abre siempre; sin ellos el agente fallaba con `FileNotFoundError`)
+
+**Release**
+- Paquetes: `spong-server_3.6.3-1_all.deb`, `spong-client_3.6.3-1_all.deb`
 
 ### v3.6.2 — 2026-05-22
 

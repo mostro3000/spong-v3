@@ -31,7 +31,7 @@ if [ ! -f "$SPONG_YAML" ]; then
     THIS_HOST=${THIS_HOST:-$LOCAL_HOST}
 
     read -p "  Checks a ejecutar [disk diski cpu memory uptime]: " CHECKS
-    CHECKS=${CHECKS:-"disk diski cpu memory uptime"}
+    CHECKS=${CHECKS:-"disk diski cpu memory uptime chronyc disktemp"}
 
     echo ""
     echo "Escribiendo configuración..."

@@ -190,7 +190,8 @@ def _client_plugin_services():
 def _visible_service_names(hostname):
     configured = {svc_name for svc_name, _ in config.host_services(hostname)}
     client_services = set(config.get_checks()) | _client_plugin_services()
-    return configured | client_services
+    stored = set(database.load_all_services(hostname).keys())
+    return configured | client_services | stored
 
 
 def _is_visible_service(hostname, service):

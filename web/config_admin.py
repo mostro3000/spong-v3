@@ -499,7 +499,7 @@ _SERVICE_CATEGORIES = [
                          'volt_in', 'volt_out']),
     ('Cámaras',         ['rtsp', 'camara', 'dvrcam']),
     ('UPS',             ['ups']),
-    ('Cliente',         ['jobs', 'logs', 'memory', 'sensors', 'hddtemp', 'uptime', 'speedtest']),
+    ('Cliente',         ['jobs', 'logs', 'memory', 'sensors', 'hddtemp', 'uptime', 'speedtest', 'chronyc', 'disktemp']),
 ]
 
 
@@ -1199,6 +1199,53 @@ def host_edit(hostname=None):
     )
 
 
+def _remove_host_from_groups(hostname: str) -> list[str]:
+    """Quita el host de todos los grupos. Devuelve los grupos afectados."""
+    if not hostname:
+        return []
+    data = _load_yaml(ETC_DIR / 'groups.yaml')
+    affected: list[str] = []
+    for group_key, group in data.get('groups', {}).items():
+        members = group.get('members', [])
+        if isinstance(members, list) and hostname in members:
+            group['members'] = [m for m in members if m != hostname]
+            affected.append(group_key)
+    if affected:
+        _save_yaml(ETC_DIR / 'groups.yaml', data)
+        _save_config_snapshot('groups', data, 'edit',
+                              f'Quitó host de grupos por borrado: {hostname}')
+    return affected
+
+
+def _remove_host_from_aux_configs(hostname: str) -> None:
+    """Quita el host de configs auxiliares con clave por host (sensors/termicas).
+
+    Simétrico con _replace_host_in_aux_configs del rename. NO toca message.yaml:
+    sus reglas son patrones regex y removerlas podría alterar el ruteo de alertas.
+    """
+    if not hostname:
+        return
+    for path, section_name in _AUX_HOST_KEY_CONFIGS:
+        data = _load_yaml(path)
+        section = data.get(section_name)
+        if not isinstance(section, dict):
+            continue
+        if section.pop(hostname, None) is not None:
+            _save_yaml(path, data)
+
+
+def _delete_host_storage(hostname: str) -> None:
+    """Borra del disco todos los datos del host (estado/historial, RRD, archivos)."""
+    roots = [spong_config.db_path(), RRD_DIR, spong_config.archive_path()]
+    for root in roots:
+        try:
+            target = _safe_host_dir(Path(root), hostname)
+        except ValueError:
+            continue
+        if target.exists():
+            shutil.rmtree(target, ignore_errors=True)
+
+
 @config_bp.route('/host/<hostname>/delete', methods=['POST'])
 @_require_config_auth
 def host_delete(hostname):
@@ -1208,8 +1255,12 @@ def host_delete(hostname):
     data.get('hosts', {}).pop(hostname, None)
     _save_yaml(ETC_DIR / 'hosts.yaml', data)
     _save_config_snapshot('hosts', data, 'delete', f'Eliminó host: {hostname}')
+    _remove_host_from_groups(hostname)
+    _remove_host_from_aux_configs(hostname)
+    _delete_host_storage(hostname)
     spong_config.load_all()
     _clear_dashboard_cache()
+    _clear_graph_cache()
     return redirect(url_for('config_admin.hosts'))
 
 
