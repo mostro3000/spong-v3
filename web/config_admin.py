@@ -10,6 +10,8 @@ import re
 import hmac
 import secrets
 import shutil
+import tempfile
+import threading
 import yaml
 from datetime import datetime
 from pathlib import Path
@@ -423,11 +425,53 @@ def _load_yaml(path: Path) -> dict:
         return {}
 
 
+# Locks por ruta para serializar escrituras concurrentes del mismo archivo.
+# spong-web corre como un solo proceso multihilo (Flask dev server), y sólo el
+# web escribe estos YAML / el log de historial, así que un lock de hilos alcanza.
+_path_locks: dict[str, threading.Lock] = {}
+_path_locks_guard = threading.Lock()
+
+
+def _path_lock(path) -> threading.Lock:
+    key = str(path)
+    with _path_locks_guard:
+        lk = _path_locks.get(key)
+        if lk is None:
+            lk = threading.Lock()
+            _path_locks[key] = lk
+        return lk
+
+
+def _atomic_write_text(path: Path, text: str) -> None:
+    """Escribe text en path de forma atómica y durable.
+
+    Usa un temporal de nombre único en el mismo directorio (no un `.tmp` fijo
+    compartido, que dos escritores pisarían), lo fsync-ea y hace os.replace.
+    Un lector siempre ve el archivo viejo completo o el nuevo completo, nunca
+    uno a medio escribir ni vacío.
+    """
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmpname = tempfile.mkstemp(dir=str(path.parent),
+                                   prefix=f'.{path.name}.', suffix='.tmp')
+    try:
+        with os.fdopen(fd, 'w') as f:
+            f.write(text)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmpname, path)
+    except BaseException:
+        try:
+            os.unlink(tmpname)
+        except OSError:
+            pass
+        raise
+
+
 def _save_yaml(path: Path, data: dict) -> None:
-    tmp = path.with_suffix('.tmp')
-    with open(tmp, 'w') as f:
-        yaml.dump(data, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
-    os.replace(tmp, path)
+    text = yaml.dump(data, default_flow_style=False, allow_unicode=True, sort_keys=False)
+    with _path_lock(path):
+        _atomic_write_text(path, text)
 
 
 # ---------------------------------------------------------------------------
@@ -450,43 +494,48 @@ def _save_config_snapshot(config_name: str, data: dict, action: str, detail: str
     config_dir = HISTORY_DIR / config_name
     config_dir.mkdir(exist_ok=True)
 
-    ts = datetime.now().strftime('%Y%m%d_%H%M%S')
-    snapshot_path = config_dir / f'{ts}.yaml'
-    counter = 0
-    while snapshot_path.exists():
-        counter += 1
-        snapshot_path = config_dir / f'{ts}_{counter}.yaml'
-    ts_key = snapshot_path.stem
-
-    with open(snapshot_path, 'w') as f:
-        yaml.dump(data, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
-
+    snapshot_yaml = yaml.dump(data, default_flow_style=False, allow_unicode=True, sort_keys=False)
     log_path = HISTORY_DIR / 'log.json'
-    try:
-        log = json.loads(log_path.read_text())
-    except (FileNotFoundError, ValueError):
-        log = []
 
-    actor, role, remote_addr = _current_config_actor()
-    log.append({
-        'ts':     datetime.now().isoformat(timespec='seconds'),
-        'ts_key': ts_key,
-        'config': config_name,
-        'action': action,
-        'detail': detail,
-        'user':   actor,
-        'role':   role,
-        'remote_addr': remote_addr,
-    })
+    # Todo bajo un lock: asignar un ts_key único (dos snapshots en el mismo
+    # segundo no deben chocar) y el read-modify-write de log.json (dos snapshots
+    # concurrentes perderían una entrada). Ambas escrituras son atómicas.
+    with _path_lock(HISTORY_DIR):
+        ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+        snapshot_path = config_dir / f'{ts}.yaml'
+        counter = 0
+        while snapshot_path.exists():
+            counter += 1
+            snapshot_path = config_dir / f'{ts}_{counter}.yaml'
+        ts_key = snapshot_path.stem
 
-    if len(log) > _MAX_HISTORY:
-        for entry in log[:-_MAX_HISTORY]:
-            p = HISTORY_DIR / entry['config'] / f"{entry['ts_key']}.yaml"
-            if p.exists():
-                p.unlink()
-        log = log[-_MAX_HISTORY:]
+        _atomic_write_text(snapshot_path, snapshot_yaml)
 
-    log_path.write_text(json.dumps(log, ensure_ascii=False, indent=2))
+        try:
+            log = json.loads(log_path.read_text())
+        except (FileNotFoundError, ValueError):
+            log = []
+
+        actor, role, remote_addr = _current_config_actor()
+        log.append({
+            'ts':     datetime.now().isoformat(timespec='seconds'),
+            'ts_key': ts_key,
+            'config': config_name,
+            'action': action,
+            'detail': detail,
+            'user':   actor,
+            'role':   role,
+            'remote_addr': remote_addr,
+        })
+
+        if len(log) > _MAX_HISTORY:
+            for entry in log[:-_MAX_HISTORY]:
+                p = HISTORY_DIR / entry['config'] / f"{entry['ts_key']}.yaml"
+                if p.exists():
+                    p.unlink()
+            log = log[-_MAX_HISTORY:]
+
+        _atomic_write_text(log_path, json.dumps(log, ensure_ascii=False, indent=2))
 
 
 def _load_history_log() -> list:

@@ -1,4 +1,4 @@
-# SPONG v3.6.8 — Network & Services Monitor
+# SPONG v3.6.9 — Network & Services Monitor
 
 **SPONG** (Simple Preventive Operations Network Guardian) is a network and services monitoring system originally written in Perl. v3 is a complete rewrite in Python 3, keeping full compatibility with the original database and configuration files.
 
@@ -86,12 +86,12 @@ python3 /usr/local/spong/bin/spong-migrate.py --all --outdir /usr/local/spong/et
 
 ## Estado actual del código
 
-SPONG v3.6.8 está organizado como una aplicación Python 3 con cuatro procesos principales: servidor TCP asyncio, agente de red, agente local y UI Flask. La base de datos sigue siendo de archivos para mantener compatibilidad con SPONG Perl; los RRD se actualizan desde el servidor cuando llegan estados nuevos.
+SPONG v3.6.9 está organizado como una aplicación Python 3 con cuatro procesos principales: servidor TCP asyncio, agente de red, agente local y UI Flask. La base de datos sigue siendo de archivos para mantener compatibilidad con SPONG Perl; los RRD se actualizan desde el servidor cuando llegan estados nuevos.
 
 El repositorio contiene el código Python en `spong/`, la UI en `web/`, wrappers ejecutables en `bin/`, configuración en `etc/`, empaquetado Debian en `packaging/` y capturas en `docs/screenshots/`. También conserva datos locales bajo `var/` y código histórico Perl en `lib/`, `cgi-bin/` y `www/`; esos árboles no son necesarios para entender la implementación Python nueva.
 
 Resumen operativo:
-- **Versión actual:** `spong.__version__ = 3.6.8`, `setup.py = 3.6.8`, paquetes `3.6.8-1`
+- **Versión actual:** `spong.__version__ = 3.6.9`, `setup.py = 3.6.9`, paquetes `3.6.9-1`
 - **Runtime:** Python 3.10+ para instalación por `setup.py`; los paquetes Debian declaran `python3 >= 3.9`
 - **Dependencias principales:** `pyyaml`, `flask`, `werkzeug`, `rrdtool`, `fping`, `snmp`, `rpcbind`; `tinytuya` solo para plugins Tuya
 - **Persistencia:** `/usr/local/spong/var/database`, `/usr/local/spong/var/rrd`, `/usr/local/spong/var/archives`
@@ -1078,8 +1078,8 @@ Los paquetes `.deb` permiten instalar SPONG en cualquier sistema Debian/Ubuntu s
 cd /usr/local/spong/packaging
 bash build-deb.sh
 # Genera:
-#   dist/spong-server_3.6.8-1_all.deb
-#   dist/spong-client_3.6.8-1_all.deb
+#   dist/spong-server_3.6.9-1_all.deb
+#   dist/spong-client_3.6.9-1_all.deb
 ```
 
 ### Instalar el servidor
@@ -1154,13 +1154,13 @@ El archivo `.github/workflows/build-deb.yml` automatiza la construcción de los 
 |--------|----------|
 | Push a `main` | Construye los `.deb` y los sube como artefacto del workflow (disponibles 30 días) |
 | Pull Request a `main` | Verifica que el build no se rompe |
-| Tag `v*` (ej: `v3.6.8`) | Build + crea un **GitHub Release** con los `.deb` adjuntos |
+| Tag `v*` (ej: `v3.6.9`) | Build + crea un **GitHub Release** con los `.deb` adjuntos |
 
 ### Crear una release oficial
 
 ```bash
-git tag v3.6.8
-git push origin v3.6.8
+git tag v3.6.9
+git push origin v3.6.9
 # GitHub Actions construye y publica la release automáticamente
 ```
 
@@ -1171,6 +1171,17 @@ En GitHub → pestaña **Actions** → seleccionar el workflow → sección **Ar
 ---
 
 ## 16. Historial de cambios
+
+### v3.6.9 — 2026-07-01
+
+**Escritura atómica de YAML de configuración y de `sgt_links.json`**
+- `config_admin._save_yaml` escribía siempre en un temporal de nombre fijo (`hosts.tmp`, etc.) compartido por todos los escritores: dos admins guardando el mismo archivo a la vez producían un `.tmp` con contenido entremezclado que `os.replace` promovía corrupto. Ahora la escritura usa un temporal de **nombre único** (`tempfile.mkstemp` en el mismo directorio) con `fsync` + `os.replace`, serializada por un lock por ruta. Un lector siempre ve el archivo viejo o el nuevo completo, nunca uno a medias. Mismo tratamiento para los snapshots de historial y el `log.json` (cuyo read-modify-write concurrente perdía entradas)
+- `sgt_link._save_links` tenía el mismo `.json.tmp` fijo y además ningún lock, así que el read-modify-write de `crear_ticket` (leer → POST a SGT → leer → guardar) tenía una carrera: dos clics simultáneos creaban **dos tickets** en SGT y una escritura pisaba la otra. Ahora todo el dedup+POST+guardado corre bajo un candado **`flock`** sobre un archivo de lock aparte, que serializa tanto entre hilos del web como entre el web y el proceso separado `spong-sgt-sync`. La escritura es atómica (tmp único + `fsync`) y ya no traga los errores de disco en silencio (los loguea sin perder el número de ticket). `sync_once` hace la fase de red sin lock y aplica los borrados bajo lock con una relectura fresca, para no pisar un link recién creado en paralelo
+
+**Release**
+- `spong.__version__`: `3.6.9`
+- `setup.py`: `3.6.9`
+- Paquetes: `spong-server_3.6.9-1_all.deb`, `spong-client_3.6.9-1_all.deb`
 
 ### v3.6.8 — 2026-07-01
 

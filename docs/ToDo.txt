@@ -60,3 +60,5 @@
 + actualizar version a v3.6.7, documentacion, .deb y github  [DONE v3.6.7]
 + proteccion CSRF (double-submit cookie con token en cookie HttpOnly + campo oculto/meta + hmac.compare_digest) en el monitor (/ack, /sgt-ticket, /api/check via header) y en todo el panel /config (alta/edit/borrado hosts/usuarios/grupos, rename, restore)  [DONE v3.6.8]
 + actualizar version a v3.6.8, documentacion, .deb y github  [DONE v3.6.8]
++ escritura atomica de YAML de config (_save_yaml/_save_config_snapshot/log.json con tmp unico via mkstemp + fsync + lock por ruta) y de sgt_links.json (tmp unico + fsync + flock cross-process web/spong-sgt-sync; dedup de crear_ticket bajo lock evita tickets duplicados por doble clic; sync_once minimiza tiempo bajo lock)  [DONE v3.6.9]
++ actualizar version a v3.6.9, documentacion, .deb y github  [DONE v3.6.9]

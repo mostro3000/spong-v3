@@ -28,10 +28,14 @@ desde SGT, el botón se transforma en "→ SGT-N".
 
 from __future__ import annotations
 
+import fcntl
 import json
 import logging
 import os
+import tempfile
+import threading
 import time
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -43,8 +47,32 @@ log = logging.getLogger(__name__)
 
 _VAR_DIR = Path(__file__).resolve().parent.parent / "var"
 _LINKS_PATH = _VAR_DIR / "sgt_links.json"
+_LOCK_PATH = _VAR_DIR / "sgt_links.lock"
 
 _DEFAULT_PRIO_MAP = {"red": "ALTA", "yellow": "MEDIA", "purple": "ALTA"}
+
+# El web (crear_ticket/borrar_link) y el proceso spong-sgt-sync (sync_once)
+# mutan sgt_links.json en procesos distintos. Un lock de hilos no alcanza:
+# usamos flock sobre un archivo de lock aparte (el de datos se reemplaza con
+# os.replace, así que bloquear su FD no serviría) más un lock de hilos para
+# ordenar los hilos dentro del propio proceso web.
+_thread_lock = threading.Lock()
+
+
+@contextmanager
+def _links_locked():
+    """Sección crítica para el read-modify-write de sgt_links.json.
+
+    Serializa entre hilos (web) y entre procesos (web ↔ spong-sgt-sync).
+    """
+    _VAR_DIR.mkdir(parents=True, exist_ok=True)
+    with _thread_lock:
+        with open(_LOCK_PATH, "w") as lf:
+            fcntl.flock(lf.fileno(), fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                fcntl.flock(lf.fileno(), fcntl.LOCK_UN)
 
 
 def enabled() -> bool:
@@ -73,10 +101,27 @@ def _load_links() -> dict[str, dict[str, Any]]:
 
 
 def _save_links(data: dict[str, dict[str, Any]]) -> None:
+    """Escritura atómica y durable. Los llamadores toman `_links_locked()`.
+
+    Usa un temporal de nombre único (no un `.json.tmp` fijo que dos escritores
+    pisarían), lo fsync-ea y hace os.replace. Propaga OSError para que el
+    llamador decida (no se traga el error en silencio: perdería el link).
+    """
     _VAR_DIR.mkdir(parents=True, exist_ok=True)
-    tmp = _LINKS_PATH.with_suffix(".json.tmp")
-    tmp.write_text(json.dumps(data, indent=2, sort_keys=True))
-    os.replace(tmp, _LINKS_PATH)
+    fd, tmpname = tempfile.mkstemp(dir=str(_VAR_DIR),
+                                   prefix=".sgt_links.", suffix=".json.tmp")
+    try:
+        with os.fdopen(fd, "w") as f:
+            json.dump(data, f, indent=2, sort_keys=True)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmpname, _LINKS_PATH)
+    except OSError:
+        try:
+            os.unlink(tmpname)
+        except OSError:
+            pass
+        raise
 
 
 def link_for(host: str, service: str) -> dict[str, Any] | None:
@@ -156,9 +201,6 @@ def crear_ticket(*, host: str, service: str, color: str, summary: str,
     si ya hay link, devuelve el existente sin crear otro."""
     if not enabled():
         raise SgtError("Integración SGT deshabilitada (sgt.enabled=False).")
-    existing = link_for(host, service)
-    if existing:
-        return existing
 
     base_url = (config.get("sgt.base_url") or "").rstrip("/")
     token = config.get("sgt.token") or ""
@@ -168,40 +210,54 @@ def crear_ticket(*, host: str, service: str, color: str, summary: str,
         raise SgtError("Falta config: revisá sgt.base_url, sgt.token, sgt.categoria_id, sgt.facultad_id.")
 
     payload = _build_payload(host, service, color, summary)
-    try:
-        r = requests.post(
-            f"{base_url}/api/v1/tickets/",
-            headers={
-                "Authorization": f"Token {token}",
-                "Content-Type": "application/json",
-            },
-            json=payload,
-            timeout=10,
-            verify=_verify_param(),
-        )
-    except requests.RequestException as e:
-        raise SgtError(f"Error de red contra SGT: {e}") from e
 
-    if r.status_code != 201:
-        snippet = (r.text or "")[:500]
-        raise SgtError(f"SGT respondió HTTP {r.status_code}: {snippet}")
-    body = r.json()
-    numero = body.get("numero")
-    display = body.get("numero_display") or f"SGT-{numero}"
+    # Todo el dedup+POST+save va bajo el lock: sin él, dos clics simultáneos
+    # pasarían ambos el chequeo de existencia y crearían dos tickets en SGT.
+    with _links_locked():
+        existing = find_link(_load_links(), host, service)
+        if existing:
+            return existing
 
-    link = {
-        "ticket_numero": numero,
-        "ticket_display": display,
-        "url": f"{base_url}/tickets/{numero}",
-        "creado_iso": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
-        "creado_por": creado_por,
-        "host": host,
-        "service": service,
-        "color": color,
-    }
-    data = _load_links()
-    data[_key(host, service)] = link
-    _save_links(data)
+        try:
+            r = requests.post(
+                f"{base_url}/api/v1/tickets/",
+                headers={
+                    "Authorization": f"Token {token}",
+                    "Content-Type": "application/json",
+                },
+                json=payload,
+                timeout=10,
+                verify=_verify_param(),
+            )
+        except requests.RequestException as e:
+            raise SgtError(f"Error de red contra SGT: {e}") from e
+
+        if r.status_code != 201:
+            snippet = (r.text or "")[:500]
+            raise SgtError(f"SGT respondió HTTP {r.status_code}: {snippet}")
+        body = r.json()
+        numero = body.get("numero")
+        display = body.get("numero_display") or f"SGT-{numero}"
+
+        link = {
+            "ticket_numero": numero,
+            "ticket_display": display,
+            "url": f"{base_url}/tickets/{numero}",
+            "creado_iso": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+            "creado_por": creado_por,
+            "host": host,
+            "service": service,
+            "color": color,
+        }
+        data = _load_links()
+        data[_key(host, service)] = link
+        try:
+            _save_links(data)
+        except OSError as e:
+            # El ticket ya existe en SGT; no podemos deshacerlo. Avisamos fuerte
+            # pero devolvemos el link para no ocultarle el número al usuario.
+            log.error("Ticket %s creado en SGT pero no pude persistir el link "
+                      "(%s/%s): %s", display, host, service, e)
 
     # Referencia permanente en el historial del host. Sobrevive a la
     # limpieza de sgt_links.json (cierre del ticket, sync, borrado manual)
@@ -231,12 +287,13 @@ def crear_ticket(*, host: str, service: str, color: str, summary: str,
 
 def borrar_link(host: str, service: str) -> bool:
     """Borra el link para un par (host, service). True si había algo."""
-    data = _load_links()
     k = _key(host, service)
-    if k in data:
-        del data[k]
-        _save_links(data)
-        return True
+    with _links_locked():
+        data = _load_links()
+        if k in data:
+            del data[k]
+            _save_links(data)
+            return True
     return False
 
 # ============================================================================
@@ -325,7 +382,11 @@ def sync_once() -> dict[str, int]:
     if not data:
         return counts
 
-    cambios = False
+    # Fase de red SIN lock: decidimos qué links borrar (cada _get_ticket es una
+    # llamada HTTP; no queremos bloquear la creación de tickets del web durante
+    # toda la reconciliación). Los borrados se aplican después bajo lock con una
+    # relectura fresca, para no pisar un link recién creado en paralelo.
+    to_delete: list[str] = []
     estados_terminales = {"CERRADO", "CANCELADO"}
     estados_resueltos = estados_terminales | {"RESUELTO"}
     for k, link in list(data.items()):
@@ -334,7 +395,7 @@ def sync_once() -> dict[str, int]:
         numero = link.get("ticket_numero")
         if not (host and service and numero):
             log.warning("Link malformado en sgt_links.json, lo borro: %r", k)
-            del data[k]; cambios = True; continue
+            to_delete.append(k); continue
 
         color = _color_actual(host, service)
         # Verde, clear, blue, sin archivo → problema desapareció en el monitor.
@@ -355,7 +416,7 @@ def sync_once() -> dict[str, int]:
                 else:
                     counts["errores"] += 1
                     continue
-            del data[k]; cambios = True
+            to_delete.append(k)
         else:
             # Problema activo: verificamos si el ticket fue cerrado/cancelado
             # en SGT (humano decidió descartarlo). Si es así, soltamos el link.
@@ -364,11 +425,15 @@ def sync_once() -> dict[str, int]:
                 counts["errores"] += 1
                 continue
             if ticket.get("estado") in estados_terminales:
-                del data[k]; cambios = True
+                to_delete.append(k)
                 counts["ya_terminados"] += 1
             else:
                 counts["sin_cambio"] += 1
 
-    if cambios:
-        _save_links(data)
+    if to_delete:
+        with _links_locked():
+            fresh = _load_links()
+            for k in to_delete:
+                fresh.pop(k, None)
+            _save_links(fresh)
     return counts

@@ -3,12 +3,12 @@
 # Ejecutar desde /usr/local/spong/packaging/
 #
 # Produce:
-#   spong-server_3.6.8-1_all.deb  — servidor completo (server + network + client + web)
-#   spong-client_3.6.8-1_all.deb  — solo agente cliente
+#   spong-server_3.6.9-1_all.deb  — servidor completo (server + network + client + web)
+#   spong-client_3.6.9-1_all.deb  — solo agente cliente
 
 set -e
 
-VERSION="3.6.8-1"
+VERSION="3.6.9-1"
 # Directorio raíz del repo: funciona tanto en /usr/local/spong como en CI (GitHub Actions)
 SPONG_SRC="$(cd "$(dirname "$0")/.." && pwd)"
 BUILD_DIR="/tmp/spong-deb-build"
