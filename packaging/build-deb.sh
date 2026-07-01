@@ -3,12 +3,12 @@
 # Ejecutar desde /usr/local/spong/packaging/
 #
 # Produce:
-#   spong-server_3.6.2-1_all.deb  — servidor completo (server + network + client + web)
-#   spong-client_3.6.2-1_all.deb  — solo agente cliente
+#   spong-server_3.6.3-1_all.deb  — servidor completo (server + network + client + web)
+#   spong-client_3.6.3-1_all.deb  — solo agente cliente
 
 set -e
 
-VERSION="3.6.2-1"
+VERSION="3.6.3-1"
 # Directorio raíz del repo: funciona tanto en /usr/local/spong como en CI (GitHub Actions)
 SPONG_SRC="$(cd "$(dirname "$0")/.." && pwd)"
 BUILD_DIR="/tmp/spong-deb-build"
@@ -148,10 +148,30 @@ mkdir -p "$PKG/usr/local/spong/etc/plugins/client"
 [ -f "$SPONG_SRC/etc/plugins/client/README.txt" ] && \
     cp "$SPONG_SRC/etc/plugins/client/README.txt" "$PKG/usr/local/spong/etc/plugins/client/"
 
-# Systemd unit
+# Systemd unit — generada para el paquete cliente.
+# NO se copia la del sistema: en s2 (que es servidor) la unit lleva
+# Requires=spong-server.service, y en un host SOLO-cliente ese servicio
+# no existe -> systemd rechaza el arranque. El cliente no depende del
+# server local. (fix 3.6.3)
 mkdir -p "$PKG/etc/systemd/system"
-[ -f "/etc/systemd/system/spong-client.service" ] && \
-    cp "/etc/systemd/system/spong-client.service" "$PKG/etc/systemd/system/"
+cat > "$PKG/etc/systemd/system/spong-client.service" << 'UNIT'
+[Unit]
+Description=SPONG Client Agent (checks locales: disk, cpu, memory...)
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/usr/local/spong
+ExecStart=/usr/bin/python3 /usr/local/spong/bin/spong-client --nodaemonize
+Restart=on-failure
+RestartSec=10
+StandardOutput=append:/var/log/spong-client.log
+StandardError=append:/var/log/spong-client.log
+
+[Install]
+WantedBy=multi-user.target
+UNIT
 
 # Directorios de datos
 for d in var/database tmp; do

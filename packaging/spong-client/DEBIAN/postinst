@@ -101,6 +101,17 @@ else
     echo "  Configuración existente encontrada — no se sobreescribe."
 fi
 
+# 2b. YAML que el cliente carga SIEMPRE (config.load_all abre message.yaml
+#     y groups.yaml aunque el cliente no los use). Sin ellos el agente
+#     arranca con FileNotFoundError. Se crean vacíos si faltan. (fix 3.6.3)
+for f in message groups; do
+    Y="$SPONG_DIR/etc/$f.yaml"
+    if [ ! -f "$Y" ]; then
+        printf '# SPONG client - %s vacío (cliente no pagina ni agrupa localmente)\n%s: {}\n' "$f" "$f" > "$Y"
+        echo "  Creado $Y"
+    fi
+done
+
 # 3. Systemd
 echo "Configurando servicio systemd..."
 systemctl daemon-reload
