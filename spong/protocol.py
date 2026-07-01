@@ -26,6 +26,21 @@ VALID_HOST_RE = re.compile(r"^[a-zA-Z0-9_\-\.]+$")
 VALID_SVC_RE = re.compile(r"^[a-z0-9_\-\.]+$")
 
 
+def valid_host(host: str) -> bool:
+    """True si el host es seguro para usar como componente de ruta.
+
+    VALID_HOST_RE acepta cadenas compuestas sólo de puntos ("." / ".."), que
+    usadas como nombre de directorio permiten escapar de var/database, var/rrd,
+    etc. Se rechazan explícitamente.
+    """
+    return bool(VALID_HOST_RE.match(host)) and host not in (".", "..")
+
+
+def valid_service(service: str) -> bool:
+    """True si el service es seguro como componente de ruta."""
+    return bool(VALID_SVC_RE.match(service)) and service not in (".", "..")
+
+
 @dataclass
 class StatusMessage:
     cmd: str
@@ -77,10 +92,10 @@ def parse_update(header: str, body: str) -> Optional[StatusMessage | AckMessage 
     )
     if m:
         cmd, host, service, color, ts_raw, summary = m.groups()
-        if not VALID_HOST_RE.match(host):
+        if not valid_host(host):
             log.warning("parse_update: invalid host [%s]", host)
             return None
-        if not VALID_SVC_RE.match(service):
+        if not valid_service(service):
             log.warning("parse_update: invalid service [%s]", service)
             return None
         if color not in VALID_COLORS:
@@ -105,6 +120,9 @@ def parse_update(header: str, body: str) -> Optional[StatusMessage | AckMessage 
     m = re.match(r"^ack-del\s+([a-zA-Z0-9_\-\.]+)-(\d+-\d+-\d+)\s*$", header)
     if m:
         host, ack_file_id = m.group(1), m.group(2)
+        if not valid_host(host):
+            log.warning("parse_update: ack-del invalid host [%s]", host)
+            return None
         return AckDelMessage(
             ack_id=f"{host}-{ack_file_id}",
             host=host, services="", end_time=0, ack_file_id=ack_file_id,
@@ -114,6 +132,9 @@ def parse_update(header: str, body: str) -> Optional[StatusMessage | AckMessage 
     m = re.match(r"^ack-del\s+([a-zA-Z0-9_\-\.]+)-([^\s]+)-(\d+)\s*$", header)
     if m:
         host, services, end_time = m.group(1), m.group(2), int(m.group(3))
+        if not valid_host(host):
+            log.warning("parse_update: legacy ack-del invalid host [%s]", host)
+            return None
         return AckDelMessage(
             ack_id=f"{host}-{services}-{end_time}",
             host=host, services=services, end_time=end_time,
@@ -123,7 +144,7 @@ def parse_update(header: str, body: str) -> Optional[StatusMessage | AckMessage 
     m = re.match(r"^ack\s+(\S+)\s+(\S+)\s+(\d+)\s+(\d+)\s+(\S+)\s*$", header)
     if m:
         host, services, start, end, contact = m.groups()
-        if not VALID_HOST_RE.match(host):
+        if not valid_host(host):
             log.warning("parse_update: ack invalid host [%s]", host)
             return None
         return AckMessage(

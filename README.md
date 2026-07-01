@@ -1,4 +1,4 @@
-# SPONG v3.6.6 — Network & Services Monitor
+# SPONG v3.6.7 — Network & Services Monitor
 
 **SPONG** (Simple Preventive Operations Network Guardian) is a network and services monitoring system originally written in Perl. v3 is a complete rewrite in Python 3, keeping full compatibility with the original database and configuration files.
 
@@ -86,12 +86,12 @@ python3 /usr/local/spong/bin/spong-migrate.py --all --outdir /usr/local/spong/et
 
 ## Estado actual del código
 
-SPONG v3.6.6 está organizado como una aplicación Python 3 con cuatro procesos principales: servidor TCP asyncio, agente de red, agente local y UI Flask. La base de datos sigue siendo de archivos para mantener compatibilidad con SPONG Perl; los RRD se actualizan desde el servidor cuando llegan estados nuevos.
+SPONG v3.6.7 está organizado como una aplicación Python 3 con cuatro procesos principales: servidor TCP asyncio, agente de red, agente local y UI Flask. La base de datos sigue siendo de archivos para mantener compatibilidad con SPONG Perl; los RRD se actualizan desde el servidor cuando llegan estados nuevos.
 
 El repositorio contiene el código Python en `spong/`, la UI en `web/`, wrappers ejecutables en `bin/`, configuración en `etc/`, empaquetado Debian en `packaging/` y capturas en `docs/screenshots/`. También conserva datos locales bajo `var/` y código histórico Perl en `lib/`, `cgi-bin/` y `www/`; esos árboles no son necesarios para entender la implementación Python nueva.
 
 Resumen operativo:
-- **Versión actual:** `spong.__version__ = 3.6.6`, `setup.py = 3.6.6`, paquetes `3.6.6-1`
+- **Versión actual:** `spong.__version__ = 3.6.7`, `setup.py = 3.6.7`, paquetes `3.6.7-1`
 - **Runtime:** Python 3.10+ para instalación por `setup.py`; los paquetes Debian declaran `python3 >= 3.9`
 - **Dependencias principales:** `pyyaml`, `flask`, `werkzeug`, `rrdtool`, `fping`, `snmp`, `rpcbind`; `tinytuya` solo para plugins Tuya
 - **Persistencia:** `/usr/local/spong/var/database`, `/usr/local/spong/var/rrd`, `/usr/local/spong/var/archives`
@@ -1078,8 +1078,8 @@ Los paquetes `.deb` permiten instalar SPONG en cualquier sistema Debian/Ubuntu s
 cd /usr/local/spong/packaging
 bash build-deb.sh
 # Genera:
-#   dist/spong-server_3.6.6-1_all.deb
-#   dist/spong-client_3.6.6-1_all.deb
+#   dist/spong-server_3.6.7-1_all.deb
+#   dist/spong-client_3.6.7-1_all.deb
 ```
 
 ### Instalar el servidor
@@ -1154,13 +1154,13 @@ El archivo `.github/workflows/build-deb.yml` automatiza la construcción de los 
 |--------|----------|
 | Push a `main` | Construye los `.deb` y los sube como artefacto del workflow (disponibles 30 días) |
 | Pull Request a `main` | Verifica que el build no se rompe |
-| Tag `v*` (ej: `v3.6.6`) | Build + crea un **GitHub Release** con los `.deb` adjuntos |
+| Tag `v*` (ej: `v3.6.7`) | Build + crea un **GitHub Release** con los `.deb` adjuntos |
 
 ### Crear una release oficial
 
 ```bash
-git tag v3.6.6
-git push origin v3.6.6
+git tag v3.6.7
+git push origin v3.6.7
 # GitHub Actions construye y publica la release automáticamente
 ```
 
@@ -1171,6 +1171,19 @@ En GitHub → pestaña **Actions** → seleccionar el workflow → sección **Ar
 ---
 
 ## 16. Historial de cambios
+
+### v3.6.7 — 2026-07-01
+
+**Seguridad y robustez del servidor (hallazgos de auditoría)**
+- **Path traversal por hostname**: `VALID_HOST_RE` aceptaba `.` y `..` como hostname, que usados como componente de ruta permitían escribir/leer fuera de `var/database`, `var/rrd` y `var/archives`. Se agregó `protocol.valid_host()`/`valid_service()` que rechazan `.`/`..`, aplicado en `parse_update` (status/ack/ack-del) y en el handler BigBrother (que no pasaba por `parse_update` y además convierte comas en puntos y admite override FQDN). Defensa en profundidad adicional en `database` (guards en `save_status`/`load_service`/`load_all_services`/`delete_service`), en `rrd._rrd_dir` (lanza `ValueError`) y en la ruta web `/rrd/<host>/<svc>.png` (rechaza `.`/`..`/`/` con 400)
+- **Escritura de estado no atómica y con carrera**: `save_status` borraba los 5 archivos de color y luego escribía el nuevo con `write_text`, sin lock. Dos updates concurrentes del mismo servicio (el server usa un `ThreadPoolExecutor`) podían dejar dos archivos de color a la vez (estado fantasma) o una ventana sin ningún archivo (servicio que "desaparece"), y un lector podía ver el archivo a medio escribir. Ahora la escritura es atómica (temp + `os.replace`, el archivo nuevo se crea antes de borrar los viejos) y está serializada por un lock por `(host, service)`
+- **Borrado de historial de ping ante fallo transitorio de rrdtool**: `_rrd_ds_count()` devolvía `0` tanto si el RRD tenía 0 DS como si `rrdtool info` fallaba, y `_update_ping` interpretaba ese `0` como "RRD viejo" → `os.remove()` + recreación vacía, perdiendo hasta 720 días de historial de ping por un `fork` fallido momentáneo. Ahora `_rrd_ds_count()` devuelve `-1` ante error y sólo se migra el RRD si el conteo es un valor **positivo menor a 4** (RRD viejo real)
+- **Fuga de hashes de contraseña vía historial de config**: la ruta `/config/history/users/<ts>` sólo exigía autenticación, no el permiso `users`, así que un rol `read`/`add` podía leer los `password_hash` de los administradores desde un snapshot. Ahora ver y restaurar snapshots de `users` exige el permiso `users`, y el índice `/config/history` oculta las entradas de tipo `users` a quien no lo tiene
+
+**Release**
+- `spong.__version__`: `3.6.7`
+- `setup.py`: `3.6.7`
+- Paquetes: `spong-server_3.6.7-1_all.deb`, `spong-client_3.6.7-1_all.deb`
 
 ### v3.6.6 — 2026-07-01
 

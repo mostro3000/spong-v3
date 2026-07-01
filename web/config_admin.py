@@ -1365,6 +1365,9 @@ def group_delete(group_key):
 @_require_config_auth
 def history():
     log = sorted(_load_history_log(), key=lambda e: e.get('ts', ''), reverse=True)
+    # Sin permiso 'users' no se listan (ni linkean) los snapshots de usuarios.
+    if not _config_can('users'):
+        log = [e for e in log if e.get('config') != 'users']
     return render_template('config_history.html', entries=log, action_labels=_ACTION_LABELS)
 
 
@@ -1373,6 +1376,11 @@ def history():
 def history_view(config_name, ts_key):
     if config_name != 'users' and config_name not in _CONFIG_FILES:
         return Response('Config no válida', 400)
+
+    # Los snapshots de 'users' contienen los hashes de contraseña de todos los
+    # administradores: sólo pueden verse con el permiso 'users'.
+    if config_name == 'users' and not _config_can('users'):
+        return _permission_denied('users')
 
     snapshot_yaml = _get_snapshot_yaml(config_name, ts_key)
     if snapshot_yaml is None:
@@ -1416,6 +1424,10 @@ def history_view(config_name, ts_key):
 def history_restore(config_name, ts_key):
     if not _config_can('restore'):
         return _permission_denied('restore')
+    # Restaurar un snapshot de 'users' reintroduce/altera cuentas admin y hashes:
+    # exige además el permiso 'users', no sólo 'restore'.
+    if config_name == 'users' and not _config_can('users'):
+        return _permission_denied('users')
     if config_name != 'users' and config_name not in _CONFIG_FILES:
         return Response('Config no válida', 400)
 

@@ -13,6 +13,7 @@ import re
 import time
 import logging
 import random
+import threading
 from pathlib import Path
 from typing import Optional
 
@@ -22,6 +23,35 @@ from .models import ServiceStatus, Acknowledgment, HistoryEntry
 log = logging.getLogger(__name__)
 
 COLORS = ("red", "yellow", "green", "purple", "clear")
+
+_NAME_OK = re.compile(r"[A-Za-z0-9_.\-]+")
+
+
+def _valid_host(host: str) -> bool:
+    """Defensa en profundidad: rechaza hosts que escaparían del directorio."""
+    return bool(host) and _NAME_OK.fullmatch(host) is not None and host not in (".", "..")
+
+
+def _valid_service(service: str) -> bool:
+    return bool(service) and _NAME_OK.fullmatch(service) is not None and service not in (".", "..")
+
+
+# Un lock por (host, service) serializa los save_status concurrentes del mismo
+# servicio (el server procesa updates en un ThreadPoolExecutor). Sin esto, dos
+# updates simultáneos pueden dejar dos archivos de color a la vez (estado
+# fantasma) o una ventana sin ningún archivo (servicio que "desaparece").
+_save_locks: dict[tuple[str, str], threading.Lock] = {}
+_save_locks_guard = threading.Lock()
+
+
+def _service_lock(host: str, service: str) -> threading.Lock:
+    key = (host, service)
+    with _save_locks_guard:
+        lk = _save_locks.get(key)
+        if lk is None:
+            lk = threading.Lock()
+            _save_locks[key] = lk
+        return lk
 
 
 def _db() -> Path:
@@ -64,45 +94,59 @@ def save_status(
     ttl: int = 0,
 ) -> bool:
     """Save a status update. Returns True if the service color changed."""
-    _ensure_dirs(host)
-    svc_dir = _services_dir(host)
+    if not _valid_host(host) or not _valid_service(service):
+        log.warning("save_status: invalid host/service [%s]/[%s]", host, service)
+        return False
 
-    previous = load_service(host, service)
-    start_time = report_time
-    if previous and previous.color == color:
-        start_time = previous.start_time
+    with _service_lock(host, service):
+        _ensure_dirs(host)
+        svc_dir = _services_dir(host)
 
-    color_changed = previous is None or previous.color != color
+        previous = load_service(host, service)
+        start_time = report_time
+        if previous and previous.color == color:
+            start_time = previous.start_time
 
-    # Remove old color files for this service
-    for c in COLORS:
-        old = svc_dir / f"{service}-{c}"
-        if old.exists():
+        color_changed = previous is None or previous.color != color
+
+        status_file = svc_dir / f"{service}-{color}"
+        data = (f"timestamp {int(start_time)} {int(report_time)}\n"
+                f"{int(report_time)} {summary}\n"
+                f"{message}")
+
+        # Escritura atómica: temp + os.replace. Un lector nunca ve el archivo a
+        # medio escribir, y como el archivo nuevo se crea antes de borrar los
+        # colores viejos, nunca hay una ventana sin ningún archivo de estado.
+        tmp = svc_dir / f".{service}-{color}.tmp"
+        try:
+            tmp.write_text(data)
+            os.replace(tmp, status_file)
+        except OSError as e:
+            log.error("save_status: %s", e)
             try:
-                old.unlink()
+                tmp.unlink()
             except OSError:
                 pass
+            return color_changed
 
-    # Write the new status file
-    status_file = svc_dir / f"{service}-{color}"
-    expire = 0 if ttl == 0 else int(report_time) + ttl
-    data = (f"timestamp {int(start_time)} {int(report_time)}\n"
-            f"{int(report_time)} {summary}\n"
-            f"{message}")
-    try:
-        status_file.write_text(data)
-        if expire:
-            # Store expire time in the filename? No – track via mtime or separate field.
-            # We encode it in a comment line:
-            pass
-    except OSError as e:
-        log.error("save_status: %s", e)
+        # Borrar los otros archivos de color (después de escribir el nuevo).
+        for c in COLORS:
+            if c == color:
+                continue
+            old = svc_dir / f"{service}-{c}"
+            if old.exists():
+                try:
+                    old.unlink()
+                except OSError:
+                    pass
 
-    return color_changed
+        return color_changed
 
 
 def load_service(host: str, service: str) -> Optional[ServiceStatus]:
     """Load a service status from disk."""
+    if not _valid_host(host) or not _valid_service(service):
+        return None
     svc_dir = _services_dir(host)
     for color in COLORS:
         f = svc_dir / f"{service}-{color}"
@@ -139,6 +183,8 @@ def load_service(host: str, service: str) -> Optional[ServiceStatus]:
 
 def load_all_services(host: str) -> dict[str, ServiceStatus]:
     """Load all service statuses for a host."""
+    if not _valid_host(host):
+        return {}
     svc_dir = _services_dir(host)
     if not svc_dir.exists():
         return {}
@@ -205,6 +251,8 @@ def save_ack(
 
 def delete_service(host: str, service: str) -> None:
     """Remove all color files for a service (used to clean up unconfigured services)."""
+    if not _valid_host(host) or not _valid_service(service):
+        return
     svc_dir = _services_dir(host)
     for color in COLORS:
         f = svc_dir / f"{service}-{color}"

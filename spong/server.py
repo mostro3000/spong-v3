@@ -20,7 +20,10 @@ from typing import Optional
 
 from . import config, database
 from .models import HistoryEntry, worst_color
-from .protocol import parse_update, parse_query, StatusMessage, AckMessage, AckDelMessage
+from .protocol import (
+    parse_update, parse_query, valid_host, valid_service,
+    StatusMessage, AckMessage, AckDelMessage,
+)
 
 log = logging.getLogger(__name__)
 
@@ -409,6 +412,12 @@ async def handle_bb_update(reader: asyncio.StreamReader, writer: asyncio.StreamW
         summary = fqdn_m.group(2).strip()
 
     if color not in ("red", "yellow", "green", "purple", "clear"):
+        return
+
+    # El path BB no pasa por parse_update: los reemplazos (coma→punto) y el
+    # override FQDN pueden dejar un host tipo ".." que escaparía de var/database.
+    if not valid_host(host) or not valid_service(service):
+        log.warning("handle_bb_update: invalid host/service [%s]/[%s]", host, service)
         return
 
     msg = StatusMessage(

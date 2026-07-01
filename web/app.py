@@ -2382,6 +2382,11 @@ def rrd_graph(hostname, service):
     from spong import rrd as _rrd
 
     cache_headers = {"Cache-Control": f"public, max-age={_GRAPH_CACHE_TTL}"}
+    # Rechazar hostnames que escapen del directorio de RRDs (crean directorios
+    # fuera de var/rrd o agotan inodos con basura). El converter de Flask ya
+    # bloquea "/", pero no "." ni "..".
+    if hostname in (".", "..") or "/" in hostname or "\x00" in hostname:
+        return Response("Host no válido", status=400, headers=cache_headers)
     if request.method == "HEAD":
         # Old host pages probe /rrd/... with HEAD to decide whether to show graph buttons.
         # Answer cheaply instead of rendering PNGs just for availability checks.

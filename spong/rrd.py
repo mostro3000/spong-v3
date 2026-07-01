@@ -54,8 +54,15 @@ _TCP_TIME_GRAPH_META = {
 # Internal helpers
 # ---------------------------------------------------------------------------
 
+def _valid_host(host):
+    """Un componente de host seguro para usar como nombre de directorio."""
+    return bool(host) and "/" not in host and "\x00" not in host and host not in (".", "..")
+
+
 def _rrd_dir(host):
     """Return (and create if necessary) the RRD directory for a host."""
+    if not _valid_host(host):
+        raise ValueError("invalid host for rrd dir: {!r}".format(host))
     path = os.path.join(RRD_BASE, host)
     os.makedirs(path, exist_ok=True)
     return path
@@ -79,10 +86,16 @@ def _rrd_exists(path):
 
 
 def _rrd_ds_count(path):
-    """Return the number of DS entries in an existing RRD file, or 0 on error."""
+    """Número de DS en un RRD existente, o -1 si `rrdtool info` falla.
+
+    Se devuelve -1 (no 0) ante error para que quien decide migrar/recrear pueda
+    distinguir un fallo transitorio de `rrdtool info` de un RRD realmente viejo:
+    un 0 hacía que _update_ping borrara y recreara un RRD sano, perdiendo hasta
+    720 días de historial de ping.
+    """
     result = _run(["rrdtool", "info", path])
     if result is None or result.returncode != 0:
-        return 0
+        return -1
     return len(re.findall(rb"^ds\[\w+\]\.index\s*=", result.stdout, re.MULTILINE))
 
 
@@ -326,9 +339,11 @@ def _update_ping(rrd_dir, host, summary, timestamp):
     if not _rrd_exists(path):
         _create_rrd(path, 300, _PING_DS, _RRA_DEFS, timestamp)
 
-    # Migrate old RRDs that lack the loss DS (had 2 or 3 DS: min/avg[/max])
+    # Migrar RRDs viejos sin el DS de pérdida (tenían 2 o 3 DS: min/avg[/max]).
+    # Sólo recreamos ante un conteo POSITIVO menor a 4 (RRD viejo real). Un -1
+    # (info falló) o 0 no debe disparar el borrado: perderíamos el historial.
     ds_count = _rrd_ds_count(path)
-    if ds_count < 4:
+    if 0 < ds_count < 4:
         log.info("ping: deleting old %d-DS RRD for %s, will recreate", ds_count, host)
         os.remove(path)
         _create_rrd(path, 300, _PING_DS, _RRA_DEFS, timestamp)

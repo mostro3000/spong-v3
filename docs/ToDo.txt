@@ -56,3 +56,5 @@
 + actualizar version a v3.6.2, documentacion, .deb y github  [DONE v3.6.2]
 + fix plugins: https (expiracion de cert era codigo muerto por CERT_NONE + backend colgado tras handshake reportaba verde), dns (consultaba resolver local en vez del host objetivo), processes (enviaba servicio "jobs"), ups temp_ext (rojo falso a 25C por umbral /10 inconsistente), safe_exec (LC_ALL=C para parsing en locale es)  [DONE v3.6.6]
 + actualizar version a v3.6.6, documentacion, .deb y github  [DONE v3.6.6]
++ seguridad servidor: path traversal por hostname ".."/"." (protocol.valid_host + handler BB + guards en database/rrd/ruta web /rrd), save_status atomico (temp+os.replace) con lock por (host,service), _update_ping ya no borra el RRD ante fallo transitorio de rrdtool info (-1 vs 0), gate de permiso "users" en /config/history (view/restore/listado)  [DONE v3.6.7]
++ actualizar version a v3.6.7, documentacion, .deb y github  [DONE v3.6.7]

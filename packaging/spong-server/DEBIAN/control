@@ -1,5 +1,5 @@
 Package: spong-server
-Version: 3.6.6-1
+Version: 3.6.7-1
 Architecture: all
 Maintainer: SPONG <spong@localhost>
 Depends: python3 (>= 3.9), python3-flask, python3-werkzeug, python3-yaml, python3-requests, python3-pil, python3-cryptography, rrdtool, fping, iputils-ping, snmp, rpcbind
