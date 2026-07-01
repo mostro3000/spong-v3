@@ -11,6 +11,7 @@
 {% endif %}
 
 <form method="post">
+<input type="hidden" name="csrf_token" value="{{ csrf_token }}">
   <div class="card">
     <h2>{{ _('Datos del usuario') }}</h2>
     <div class="form-row">

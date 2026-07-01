@@ -226,7 +226,7 @@ function checkBadge(el) {
       .catch(function() { el.textContent = prev; finishRequest(el); return false; });
   }
 
-  return fetch(_base + '/api/check/' + host + '/' + svc, {method: 'POST'})
+  return fetch(_base + '/api/check/' + host + '/' + svc, {method: 'POST', headers: {'X-CSRF-Token': ((document.querySelector('meta[name=csrf-token]')||{}).content||'')}})
     .then(function(r) {
       if (r.status === 400) return fallbackRead();
       return r.json().then(function(d) {

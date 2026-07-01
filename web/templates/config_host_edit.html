@@ -15,6 +15,7 @@
 {% endif %}
 
 <form method="post">
+<input type="hidden" name="csrf_token" value="{{ csrf_token }}">
   {% if from_host %}<input type="hidden" name="from" value="host">{% endif %}
   {% for group_key in original_group_keys %}
     <input type="hidden" name="original_groups" value="{{ group_key }}">

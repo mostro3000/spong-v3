@@ -60,6 +60,7 @@
               {% if config_can('delete') %}
                 <form method="post" action="{{ url_for('config_admin.group_delete', group_key=key) }}"
                       onsubmit='return confirm({{ (_('¿Eliminar el grupo') ~ ' «' ~ group.get('name', key) ~ '»?') | tojson }});' style="display:inline;">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                   <button type="submit" class="btn btn-danger btn-sm">{{ _('Borrar') }}</button>
                 </form>
               {% endif %}

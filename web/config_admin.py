@@ -7,6 +7,7 @@ import ipaddress
 import json
 import os
 import re
+import hmac
 import secrets
 import shutil
 import yaml
@@ -359,7 +360,55 @@ def _config_auth_context():
         'config_user': getattr(g, 'config_user', ''),
         'config_role': getattr(g, 'config_role', 'read'),
         'config_can': lambda permission: permission in permissions,
+        'csrf_token': _config_csrf_token(),
     }
+
+
+# ---------------------------------------------------------------------------
+# CSRF (double-submit cookie) para el panel /config
+#
+# Igual que el monitor, el panel usa HTTP Basic Auth, así que sin protección un
+# POST cross-site (borrar host/usuario, rename, restore) reusaría las
+# credenciales del navegador. Un token aleatorio en cookie HttpOnly se inyecta
+# en cada formulario y se revalida en cada POST.
+# ---------------------------------------------------------------------------
+
+_CONFIG_CSRF_COOKIE = 'spong_config_csrf'
+
+
+def _config_csrf_token() -> str:
+    token = request.cookies.get(_CONFIG_CSRF_COOKIE)
+    if not token:
+        token = getattr(g, '_config_csrf_new', None)
+        if not token:
+            token = secrets.token_urlsafe(32)
+            g._config_csrf_new = token
+    return token
+
+
+def _config_csrf_valid() -> bool:
+    cookie = request.cookies.get(_CONFIG_CSRF_COOKIE, '')
+    sent = request.form.get('csrf_token', '') or request.headers.get('X-CSRF-Token', '')
+    return bool(cookie) and bool(sent) and hmac.compare_digest(cookie, sent)
+
+
+@config_bp.before_request
+def _config_csrf_protect():
+    _config_csrf_token()
+    if request.method in ('POST', 'PUT', 'PATCH', 'DELETE'):
+        if not _config_csrf_valid():
+            return Response('CSRF token inválido o ausente', status=403)
+
+
+@config_bp.after_request
+def _config_csrf_cookie(resp):
+    new = getattr(g, '_config_csrf_new', None)
+    if new:
+        resp.set_cookie(
+            _CONFIG_CSRF_COOKIE, new, max_age=12 * 3600,
+            samesite='Lax', httponly=True, secure=request.is_secure,
+        )
+    return resp
 
 
 # ---------------------------------------------------------------------------

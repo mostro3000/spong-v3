@@ -63,6 +63,7 @@
               {% if config_can('delete') %}
                 <form method="post" action="{{ url_for('config_admin.host_delete', hostname=name) }}"
                       onsubmit='return confirm({{ (_('¿Eliminar el host') ~ ' «' ~ name ~ '»?') | tojson }});' style="display:inline;">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                   <button type="submit" class="btn btn-danger btn-sm">{{ _('Borrar') }}</button>
                 </form>
               {% endif %}

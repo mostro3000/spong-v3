@@ -11,6 +11,7 @@
 <div class="card-header">{{ _('Nuevo reconocimiento') }}</div>
 <div class="card-body" style="padding:16px;">
 <form method="POST" action="{{ url_for('ack') }}">
+<input type="hidden" name="csrf_token" value="{{ csrf_token }}">
   <input type="hidden" name="host" value="{{ host }}">
   <table style="width:100%;">
     <tr>

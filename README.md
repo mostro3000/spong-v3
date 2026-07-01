@@ -1,4 +1,4 @@
-# SPONG v3.6.7 — Network & Services Monitor
+# SPONG v3.6.8 — Network & Services Monitor
 
 **SPONG** (Simple Preventive Operations Network Guardian) is a network and services monitoring system originally written in Perl. v3 is a complete rewrite in Python 3, keeping full compatibility with the original database and configuration files.
 
@@ -86,12 +86,12 @@ python3 /usr/local/spong/bin/spong-migrate.py --all --outdir /usr/local/spong/et
 
 ## Estado actual del código
 
-SPONG v3.6.7 está organizado como una aplicación Python 3 con cuatro procesos principales: servidor TCP asyncio, agente de red, agente local y UI Flask. La base de datos sigue siendo de archivos para mantener compatibilidad con SPONG Perl; los RRD se actualizan desde el servidor cuando llegan estados nuevos.
+SPONG v3.6.8 está organizado como una aplicación Python 3 con cuatro procesos principales: servidor TCP asyncio, agente de red, agente local y UI Flask. La base de datos sigue siendo de archivos para mantener compatibilidad con SPONG Perl; los RRD se actualizan desde el servidor cuando llegan estados nuevos.
 
 El repositorio contiene el código Python en `spong/`, la UI en `web/`, wrappers ejecutables en `bin/`, configuración en `etc/`, empaquetado Debian en `packaging/` y capturas en `docs/screenshots/`. También conserva datos locales bajo `var/` y código histórico Perl en `lib/`, `cgi-bin/` y `www/`; esos árboles no son necesarios para entender la implementación Python nueva.
 
 Resumen operativo:
-- **Versión actual:** `spong.__version__ = 3.6.7`, `setup.py = 3.6.7`, paquetes `3.6.7-1`
+- **Versión actual:** `spong.__version__ = 3.6.8`, `setup.py = 3.6.8`, paquetes `3.6.8-1`
 - **Runtime:** Python 3.10+ para instalación por `setup.py`; los paquetes Debian declaran `python3 >= 3.9`
 - **Dependencias principales:** `pyyaml`, `flask`, `werkzeug`, `rrdtool`, `fping`, `snmp`, `rpcbind`; `tinytuya` solo para plugins Tuya
 - **Persistencia:** `/usr/local/spong/var/database`, `/usr/local/spong/var/rrd`, `/usr/local/spong/var/archives`
@@ -1078,8 +1078,8 @@ Los paquetes `.deb` permiten instalar SPONG en cualquier sistema Debian/Ubuntu s
 cd /usr/local/spong/packaging
 bash build-deb.sh
 # Genera:
-#   dist/spong-server_3.6.7-1_all.deb
-#   dist/spong-client_3.6.7-1_all.deb
+#   dist/spong-server_3.6.8-1_all.deb
+#   dist/spong-client_3.6.8-1_all.deb
 ```
 
 ### Instalar el servidor
@@ -1154,13 +1154,13 @@ El archivo `.github/workflows/build-deb.yml` automatiza la construcción de los 
 |--------|----------|
 | Push a `main` | Construye los `.deb` y los sube como artefacto del workflow (disponibles 30 días) |
 | Pull Request a `main` | Verifica que el build no se rompe |
-| Tag `v*` (ej: `v3.6.7`) | Build + crea un **GitHub Release** con los `.deb` adjuntos |
+| Tag `v*` (ej: `v3.6.8`) | Build + crea un **GitHub Release** con los `.deb` adjuntos |
 
 ### Crear una release oficial
 
 ```bash
-git tag v3.6.7
-git push origin v3.6.7
+git tag v3.6.8
+git push origin v3.6.8
 # GitHub Actions construye y publica la release automáticamente
 ```
 
@@ -1171,6 +1171,19 @@ En GitHub → pestaña **Actions** → seleccionar el workflow → sección **Ar
 ---
 
 ## 16. Historial de cambios
+
+### v3.6.8 — 2026-07-01
+
+**Protección CSRF en el monitor y en el panel de configuración**
+- La UI usa HTTP Basic Auth (sin sesión Flask), así que el navegador reenviaba las credenciales en cualquier POST cross-site: un sitio malicioso con un formulario autoenviado podía crear acks, disparar `/api/check`, crear tickets SGT o —en el panel— borrar hosts/usuarios/grupos, renombrar hosts o restaurar snapshots, todo a nombre de un admin autenticado
+- Se implementó CSRF con el patrón **double-submit cookie**: un token aleatorio (`secrets.token_urlsafe`) en una cookie `HttpOnly`/`SameSite=Lax` que el servidor inyecta en cada formulario (campo oculto `csrf_token`) y en un `<meta name="csrf-token">` (para los `fetch` JS), y revalida en cada POST comparando con `hmac.compare_digest`. Un atacante cross-site no puede leer la cookie, así que no puede reproducir el token
+- Cobertura: monitor (`/ack`, `/sgt-ticket`, y `/api/check` vía header `X-CSRF-Token`) y todo el panel `/config` (alta/edición/borrado de hosts, usuarios y grupos; rename; restore de historial). El panel usa una cookie propia (`spong_config_csrf`) independiente de la del monitor (`spong_csrf`)
+- Un POST sin token, con token ausente o inválido devuelve **403**. La validación corre antes de la lógica de cada vista y es complementaria a los chequeos de permisos existentes (p. ej. restaurar snapshots de `users` sigue exigiendo el permiso `users`)
+
+**Release**
+- `spong.__version__`: `3.6.8`
+- `setup.py`: `3.6.8`
+- Paquetes: `spong-server_3.6.8-1_all.deb`, `spong-client_3.6.8-1_all.deb`
 
 ### v3.6.7 — 2026-07-01
 

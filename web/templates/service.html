@@ -88,7 +88,7 @@
         .catch(function() { badge.textContent = prev; finishRequest(); });
     }
 
-    fetch(_base + '/api/check/' + host + '/' + svc, {method: 'POST'})
+    fetch(_base + '/api/check/' + host + '/' + svc, {method: 'POST', headers: {'X-CSRF-Token': ((document.querySelector('meta[name=csrf-token]')||{}).content||'')}})
       .then(function(r) {
         if (r.status === 400) { fallback(); return null; }
         return r.json().then(applyResult);

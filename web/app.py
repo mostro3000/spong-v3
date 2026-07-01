@@ -12,6 +12,7 @@ import time
 import os
 import re
 import html
+import hmac
 import secrets
 import threading
 from collections import OrderedDict
@@ -489,6 +490,51 @@ def _spong_auth_page(title, message, *, icon="🔒"):
         '<div class="auth-brand">● SPONG</div>'
         '</div></body></html>'
     )
+
+
+# ---------------------------------------------------------------------------
+# CSRF (double-submit cookie)
+#
+# La app usa HTTP Basic Auth (sin sesión Flask), así que el navegador reenvía
+# las credenciales en cualquier POST cross-site. Para frenar CSRF usamos un
+# token aleatorio en una cookie HttpOnly que el servidor inyecta en cada
+# formulario (campo oculto) y en un <meta> (para los fetch JS), y revalida en
+# cada POST: un atacante cross-site no puede leer la cookie ni, por lo tanto,
+# reproducir el token en su formulario/petición forjada.
+# ---------------------------------------------------------------------------
+
+_CSRF_COOKIE = "spong_csrf"
+
+
+def _csrf_token() -> str:
+    """Token CSRF de la request; genera uno si la cookie no existe todavía."""
+    token = request.cookies.get(_CSRF_COOKIE)
+    if not token:
+        token = getattr(g, "_csrf_new", None)
+        if not token:
+            token = secrets.token_urlsafe(32)
+            g._csrf_new = token
+    return token
+
+
+def _csrf_valid() -> bool:
+    cookie = request.cookies.get(_CSRF_COOKIE, "")
+    sent = request.form.get("csrf_token", "") or request.headers.get("X-CSRF-Token", "")
+    return bool(cookie) and bool(sent) and hmac.compare_digest(cookie, sent)
+
+
+@app.before_request
+def csrf_protect():
+    # /config tiene su propia protección CSRF en el Blueprint.
+    if request.path.startswith('/config'):
+        return
+    # Asegura que exista la cookie CSRF en toda navegación (GET incluidos), para
+    # que los formularios y fetch posteriores tengan un token con el cual validar.
+    _csrf_token()
+    if request.method in ("POST", "PUT", "PATCH", "DELETE"):
+        if not _csrf_valid():
+            from flask import abort
+            abort(403, "CSRF token inválido o ausente")
 
 
 @app.before_request
@@ -1768,6 +1814,7 @@ def inject_i18n():
         "lang_meta": _LANG_META,
         "current_theme": theme,
         "auto_refresh_seconds": _auto_refresh_seconds(),
+        "csrf_token": _csrf_token(),
     }
 
 
@@ -2032,6 +2079,13 @@ def sgt_ticket():
 
 @app.after_request
 def refresh_cookies(response):
+    # Persistir la cookie CSRF recién generada (double-submit).
+    new_csrf = getattr(g, "_csrf_new", None)
+    if new_csrf:
+        response.set_cookie(
+            _CSRF_COOKIE, new_csrf, max_age=12 * 3600,
+            samesite="Lax", httponly=True, secure=request.is_secure,
+        )
     if getattr(g, "spong_clear_logout", False):
         response.delete_cookie("spong_logged_out")
         response.delete_cookie("spong_reauth")

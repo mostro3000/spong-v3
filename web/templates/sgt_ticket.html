@@ -21,6 +21,7 @@
 {% else %}
 <div class="card" style="padding:16px;">
   <form method="POST" action="{{ url_for('sgt_ticket') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     <input type="hidden" name="host" value="{{ host }}">
     <input type="hidden" name="service" value="{{ service }}">
     <input type="hidden" name="color" value="{{ color }}">

@@ -58,3 +58,5 @@
 + actualizar version a v3.6.6, documentacion, .deb y github  [DONE v3.6.6]
 + seguridad servidor: path traversal por hostname ".."/"." (protocol.valid_host + handler BB + guards en database/rrd/ruta web /rrd), save_status atomico (temp+os.replace) con lock por (host,service), _update_ping ya no borra el RRD ante fallo transitorio de rrdtool info (-1 vs 0), gate de permiso "users" en /config/history (view/restore/listado)  [DONE v3.6.7]
 + actualizar version a v3.6.7, documentacion, .deb y github  [DONE v3.6.7]
++ proteccion CSRF (double-submit cookie con token en cookie HttpOnly + campo oculto/meta + hmac.compare_digest) en el monitor (/ack, /sgt-ticket, /api/check via header) y en todo el panel /config (alta/edit/borrado hosts/usuarios/grupos, rename, restore)  [DONE v3.6.8]
++ actualizar version a v3.6.8, documentacion, .deb y github  [DONE v3.6.8]

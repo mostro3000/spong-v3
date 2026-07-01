@@ -63,6 +63,7 @@
                     action="{{ url_for('config_admin.history_restore', config_name=entry.get('config',''), ts_key=entry.get('ts_key','')) }}"
                     onsubmit='return confirm({{ (_('¿Restaurar esta versión de') ~ ' ' ~ entry.get('config','') ~ '.yaml?\n\n' ~ _('El estado actual se guardará como backup automático antes de restaurar.')) | tojson }});'
                     style="display:inline;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                 <button type="submit" class="btn btn-sm restore-btn">
                   &#8629; {{ _('Restaurar') }}
                 </button>
