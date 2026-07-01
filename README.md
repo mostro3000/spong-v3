@@ -1,4 +1,4 @@
-# SPONG v3.6.5 — Network & Services Monitor
+# SPONG v3.6.6 — Network & Services Monitor
 
 **SPONG** (Simple Preventive Operations Network Guardian) is a network and services monitoring system originally written in Perl. v3 is a complete rewrite in Python 3, keeping full compatibility with the original database and configuration files.
 
@@ -86,12 +86,12 @@ python3 /usr/local/spong/bin/spong-migrate.py --all --outdir /usr/local/spong/et
 
 ## Estado actual del código
 
-SPONG v3.6.2 está organizado como una aplicación Python 3 con cuatro procesos principales: servidor TCP asyncio, agente de red, agente local y UI Flask. La base de datos sigue siendo de archivos para mantener compatibilidad con SPONG Perl; los RRD se actualizan desde el servidor cuando llegan estados nuevos.
+SPONG v3.6.6 está organizado como una aplicación Python 3 con cuatro procesos principales: servidor TCP asyncio, agente de red, agente local y UI Flask. La base de datos sigue siendo de archivos para mantener compatibilidad con SPONG Perl; los RRD se actualizan desde el servidor cuando llegan estados nuevos.
 
 El repositorio contiene el código Python en `spong/`, la UI en `web/`, wrappers ejecutables en `bin/`, configuración en `etc/`, empaquetado Debian en `packaging/` y capturas en `docs/screenshots/`. También conserva datos locales bajo `var/` y código histórico Perl en `lib/`, `cgi-bin/` y `www/`; esos árboles no son necesarios para entender la implementación Python nueva.
 
 Resumen operativo:
-- **Versión actual:** `spong.__version__ = 3.6.2`, `setup.py = 3.6.2`, paquetes `3.6.2-1`
+- **Versión actual:** `spong.__version__ = 3.6.6`, `setup.py = 3.6.6`, paquetes `3.6.6-1`
 - **Runtime:** Python 3.10+ para instalación por `setup.py`; los paquetes Debian declaran `python3 >= 3.9`
 - **Dependencias principales:** `pyyaml`, `flask`, `werkzeug`, `rrdtool`, `fping`, `snmp`, `rpcbind`; `tinytuya` solo para plugins Tuya
 - **Persistencia:** `/usr/local/spong/var/database`, `/usr/local/spong/var/rrd`, `/usr/local/spong/var/archives`
@@ -1078,8 +1078,8 @@ Los paquetes `.deb` permiten instalar SPONG en cualquier sistema Debian/Ubuntu s
 cd /usr/local/spong/packaging
 bash build-deb.sh
 # Genera:
-#   dist/spong-server_3.6.5-1_all.deb
-#   dist/spong-client_3.6.5-1_all.deb
+#   dist/spong-server_3.6.6-1_all.deb
+#   dist/spong-client_3.6.6-1_all.deb
 ```
 
 ### Instalar el servidor
@@ -1154,13 +1154,13 @@ El archivo `.github/workflows/build-deb.yml` automatiza la construcción de los 
 |--------|----------|
 | Push a `main` | Construye los `.deb` y los sube como artefacto del workflow (disponibles 30 días) |
 | Pull Request a `main` | Verifica que el build no se rompe |
-| Tag `v*` (ej: `v3.6.2`) | Build + crea un **GitHub Release** con los `.deb` adjuntos |
+| Tag `v*` (ej: `v3.6.6`) | Build + crea un **GitHub Release** con los `.deb` adjuntos |
 
 ### Crear una release oficial
 
 ```bash
-git tag v3.6.2
-git push origin v3.6.2
+git tag v3.6.6
+git push origin v3.6.6
 # GitHub Actions construye y publica la release automáticamente
 ```
 
@@ -1171,6 +1171,25 @@ En GitHub → pestaña **Actions** → seleccionar el workflow → sección **Ar
 ---
 
 ## 16. Historial de cambios
+
+### v3.6.6 — 2026-07-01
+
+**Correcciones de plugins (checks que reportaban color equivocado)**
+- **`https`**: el chequeo de expiración del certificado no funcionaba (código muerto). Con `verify_mode=CERT_NONE`, `getpeercert()` devuelve `{}`, así que un certificado vencido reportaba `green` para siempre. Ahora se lee el certificado en formato DER (`getpeercert(binary_form=True)`) y se parsea `notAfter` con `cryptography`; si la librería falta, degrada a "sin chequeo de expiración" en vez de fallar. Además, si el handshake TLS funciona pero el backend se cuelga sin responder el GET, ahora se reporta **rojo** ("no responde tras handshake TLS") en vez del falso verde que producía el fallback TCP
+- **`dns`**: el check nunca consultaba al servidor DNS del host monitoreado — hacía `getaddrinfo` contra el resolver local del propio spong, así que el servicio seguía verde aunque el DNS del host estuviera caído. Reescrito para enviar una consulta UDP directa a `host:53` y evaluar la respuesta (verifica bit QR y transaction id). El nombre a consultar es configurable con `dns.query_name` en `spong.yaml` (por defecto, el propio host)
+- **`processes`**: enviaba el estado bajo el servicio `jobs` (copy-paste), dejando `processes` stale/purple y pisando la celda de `jobs`. Corregido a `processes`
+- **`ups` (temp exterior)**: `_ups_snmp._normalize` usaba un umbral inconsistente con `ups.py` para la sonda de temperatura exterior (÷10 solo si `raw > 1000`), de modo que una sonda a 25 °C (raw 250) reportaba "250 °C" = **rojo falso permanente**. Ahora `temp_ext` y `freq` se dividen siempre por 10, igual que `ups.py` y la MIB APC (décimas)
+
+**Robustez de parsing dependiente de locale**
+- `safe_exec` ahora ejecuta todos los comandos con `LC_ALL=C`/`LANG=C`. En hosts con locale español la salida de `uptime` decía "2 usuarios" (en vez de "2 users") y el regex no matcheaba → `load=0.0` verde con carga real alta. Afecta también a otros parsers (`df`, `ps`, `chronyc`)
+
+**Packaging**
+- `spong-server` ahora depende de `python3-cryptography` (parseo del certificado en el check `https`); `setup.py` agrega `cryptography` a `install_requires`
+
+**Release**
+- `spong.__version__`: `3.6.6`
+- `setup.py`: `3.6.6`
+- Paquetes: `spong-server_3.6.6-1_all.deb`, `spong-client_3.6.6-1_all.deb`
 
 ### v3.6.5 — 2026-07-01
 

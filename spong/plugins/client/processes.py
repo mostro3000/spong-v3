@@ -38,4 +38,4 @@ def check_processes(hostname: str) -> None:
         total = len(ps_output.splitlines())
         summary = f"all required processes running ({total} total)"
 
-    send_status(hostname, "jobs", color, summary, ps_output[:2000])
+    send_status(hostname, "processes", color, summary, ps_output[:2000])

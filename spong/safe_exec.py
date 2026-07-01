@@ -1,10 +1,24 @@
 """Safe command execution with timeout."""
 
+import os
 import subprocess
 import shlex
 import logging
 
 log = logging.getLogger(__name__)
+
+
+def _c_locale_env() -> dict:
+    """Entorno del demonio con locale C forzado.
+
+    Los parsers de los plugins (uptime, df, ps, chronyc…) esperan la salida
+    en inglés/POSIX. En un host con locale es_AR el texto cambia ("2 usuarios"
+    en vez de "2 users") y los regex fallan silenciosamente.
+    """
+    env = os.environ.copy()
+    env["LC_ALL"] = "C"
+    env["LANG"] = "C"
+    return env
 
 
 def safe_exec(cmd: str, timeout: int = 30) -> list[str]:
@@ -15,6 +29,7 @@ def safe_exec(cmd: str, timeout: int = 30) -> list[str]:
             capture_output=True,
             text=True,
             timeout=timeout,
+            env=_c_locale_env(),
         )
         output = result.stdout
         if result.returncode != 0 and result.stderr:

@@ -22,11 +22,15 @@ UNITS = {
 
 
 def _normalize(metric: str, raw: int) -> float:
-    """Algunos UPS reportan freq en décimas de Hz y temp_ext en décimas de °C."""
-    if metric in ("freq_in", "freq_out"):
-        return round(raw / 10.0, 1) if raw > 100 else float(raw)
-    if metric == "temp_ext":
-        return round(raw / 10.0, 1) if raw > 1000 else float(raw)
+    """Normaliza la lectura SNMP a la unidad final.
+
+    La MIB APC PowerNet reporta freq y temp_ext en décimas (0.1 Hz / 0.1 °C).
+    Debe dividirse siempre por 10, igual que hace ups.py; el heurístico previo
+    (raw > 1000) nunca disparaba para temperaturas reales — una sonda a 25 °C
+    (raw 250) quedaba como 250 °C = rojo falso permanente.
+    """
+    if metric in ("freq_in", "freq_out", "temp_ext"):
+        return round(raw / 10.0, 1)
     return float(raw)
 
 

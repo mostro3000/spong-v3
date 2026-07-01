@@ -27,12 +27,25 @@ def _make_ctx(legacy: bool) -> ssl.SSLContext:
     return ctx
 
 
-def _cert_expiry_ts(cert: dict) -> float | None:
-    not_after = cert.get("notAfter") if cert else None
-    if not not_after:
+def _cert_expiry_ts(cert_der: bytes | None) -> float | None:
+    """Devuelve el epoch de notAfter a partir del certificado DER.
+
+    Con verify_mode=CERT_NONE, getpeercert() devuelve {} (el dict solo se
+    puebla si el cert fue validado), así que hay que pedir el DER con
+    binary_form=True y parsearlo. Si cryptography no está disponible, degrada
+    a None (sin chequeo de expiración) en vez de fallar.
+    """
+    if not cert_der:
         return None
     try:
-        return float(ssl.cert_time_to_seconds(not_after))
+        import datetime
+        from cryptography import x509
+        crt = x509.load_der_x509_certificate(cert_der)
+        try:
+            not_after = crt.not_valid_after_utc          # cryptography >= 42
+        except AttributeError:
+            not_after = crt.not_valid_after.replace(tzinfo=datetime.timezone.utc)
+        return not_after.timestamp()
     except Exception:
         return None
 
@@ -76,17 +89,26 @@ def _https_fetch(host: str, port: int, path: str, timeout: int = 10) -> tuple[st
             ctx = _make_ctx(legacy)
             with socket.create_connection((host, port), timeout=ssl_timeout) as raw:
                 with ctx.wrap_socket(raw, server_hostname=host) as sock:
-                    cert_expiry_ts = _cert_expiry_ts(sock.getpeercert())
-                    sock.sendall(request.encode())
-                    chunks = []
-                    while True:
-                        data = sock.recv(4096)
-                        if not data:
-                            break
-                        chunks.append(data)
-                        if len(b"".join(chunks)) > 65536:
-                            break
-            return b"".join(chunks).decode(errors="replace"), cert_expiry_ts
+                    # Handshake TLS completado: capturamos el cert antes de nada.
+                    cert_expiry_ts = _cert_expiry_ts(sock.getpeercert(binary_form=True))
+                    try:
+                        sock.settimeout(timeout)
+                        sock.sendall(request.encode())
+                        chunks = []
+                        total = 0
+                        while True:
+                            data = sock.recv(4096)
+                            if not data:
+                                break
+                            chunks.append(data)
+                            total += len(data)
+                            if total > 65536:
+                                break
+                        return b"".join(chunks).decode(errors="replace"), cert_expiry_ts
+                    except socket.timeout:
+                        # El handshake funcionó pero el backend no respondió el GET:
+                        # NO es un puerto simplemente abierto, es un servicio colgado.
+                        return "[timeout tras handshake TLS]", cert_expiry_ts
         except ssl.SSLError:
             if not legacy:
                 continue  # reintenta con legacy
@@ -94,6 +116,7 @@ def _https_fetch(host: str, port: int, path: str, timeout: int = 10) -> tuple[st
             # Cae a verificación de puerto TCP
             break
         except socket.timeout:
+            # Timeout durante connect/handshake (no post-handshake).
             if not legacy:
                 continue
             break
@@ -114,6 +137,7 @@ def check_https(hostname: str) -> tuple[str, str, str]:
     start = time.time()
     response, cert_expiry_ts = _https_fetch(host, 443, "/", timeout=5)
     elapsed = f"{time.time() - start:.3f}"
+    fetched = response          # marcador crudo antes de anteponer info del cert
     cert_now = time.time()
     cert_detail = ""
     cert_color = ""
@@ -123,7 +147,9 @@ def check_https(hostname: str) -> tuple[str, str, str]:
         expiry_str = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(cert_expiry_ts))
         response = f"certificate notAfter: {expiry_str} ({cert_detail})\n\n{response}"
 
-    if response == "[tcp-ok]":
+    if fetched.startswith("[timeout tras handshake"):
+        return "red", f"https no responde tras handshake TLS - {elapsed}s", response
+    if fetched == "[tcp-ok]":
         return "green", f"https port open - {elapsed}s", response
     code_m = re.search(r"HTTP/\S+\s+(\d{3})", response)
     if code_m:
