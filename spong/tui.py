@@ -7,10 +7,11 @@ misma fuente que la UI Flask. Pensada para correr en el servidor spong por SSH.
     spong top        # o: spong-tui
 
 Navegación:
-  ↑/↓ o j/k     mover selección          Enter/→   entrar al host / expandir grupo
-  ←/h           volver / colapsar grupo   Tab       cambiar de panel
-  g/G           ir arriba / abajo         m         mostrar/ocultar detalle del servicio
-  a             mostrar/ocultar acks      H         historial (del servicio sel. o del host)
+  ↑/↓ o j/k     mover selección          Enter/→   entrar al host / expandir grupo;
+  ←/h           volver / cerrar historial           sobre un servicio: ver su historial
+  g/G           ir arriba / abajo         Tab       cambiar de panel
+  m             detalle del servicio      a         mostrar/ocultar acks
+  H             historial (servicio sel. o host)    r  refrescar     q  salir
   r             refrescar ahora           q         salir
 
 Replica las reglas de color de la web:
@@ -290,7 +291,7 @@ class TUI:
         self._draw_right(1, left_w + 2, w - left_w - 2, h - 2)
 
         # Pie de ayuda
-        hint = " ↑↓ mover  ⏎ entrar  ← volver  Tab panel  m detalle  a acks  H hist(svc)  r refrescar  q salir "
+        hint = " ↑↓ mover  ⏎ entrar/historial  ←/h volver  Tab panel  m detalle  a acks  H host/svc  r refrescar  q salir "
         self._add(h - 1, 0, hint.ljust(w - 1)[: w - 1], curses.color_pair(_PAIRS["hint"]))
         if self.status:
             self._add(h - 1, 0, f" {self.status} ", curses.color_pair(_PAIRS["hint"]) | curses.A_BOLD)
@@ -389,7 +390,7 @@ class TUI:
         else:
             self._add(y, x0, "Historial del host (7 días) — cambios de estado:", curses.A_BOLD)
         y += 1
-        self._add(y, x0, "H: alternar servicio/host   ←/q: volver", curses.A_DIM)
+        self._add(y, x0, "H: alternar servicio/host    ← o h: volver", curses.A_DIM)
         y += 1
         try:
             entries = database.load_history(host.name, max_age_days=7, status_changes_only=True)
@@ -424,6 +425,14 @@ class TUI:
         self.sel = max(0, min(len(rows) - 1, self.sel + delta))
 
     def _enter(self):
+        # En el panel derecho, Enter sobre un servicio abre su historial
+        # (cortes y regresos), como hacer clic en un servicio en la web.
+        if self.focus == "right":
+            svc = self._selected_service_name()
+            if svc is not None:
+                self.show_history = True
+                self.history_service = svc
+            return
         rows = self._rows()
         if not (0 <= self.sel < len(rows)):
             return
@@ -438,6 +447,11 @@ class TUI:
             self.svc_sel = 0
 
     def _back(self):
+        # Si estamos viendo un historial, ← / h lo cierra primero.
+        if self.show_history:
+            self.show_history = False
+            self.history_service = None
+            return
         if self.focus == "right":
             self.focus = "left"
             return
