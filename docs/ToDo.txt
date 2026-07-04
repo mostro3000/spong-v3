@@ -71,3 +71,5 @@
 + actualizar version a v3.7.2, documentacion, .deb y github  [DONE v3.7.2]
 + TUI: Enter sobre un servicio abre su historial (como clic en la web); h/<- lo cierra. El "no veo el historial" era por apretar h minuscula (=volver) en vez de H mayuscula  [DONE v3.7.3]
 + actualizar version a v3.7.3, documentacion, .deb y github  [DONE v3.7.3]
++ TUI: el historial reciente del host se muestra inline debajo de los servicios (como la seccion Historial de la pagina de host de la web); parado sobre un servicio se filtra a ese servicio. Antes solo estaba detras de H mayuscula y confundia  [DONE v3.7.4]
++ actualizar version a v3.7.4, documentacion, .deb y github  [DONE v3.7.4]

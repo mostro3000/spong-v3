@@ -332,26 +332,61 @@ class TUI:
                 label = f" {hnode.name}"
                 self._add(y, x0 + 4, label.ljust(width - 4), rowattr)
 
+    def _history_entries(self, host, svc_filter):
+        """Transiciones de estado (7 días) del host, opcionalmente de un servicio."""
+        try:
+            entries = database.load_history(host.name, max_age_days=7, status_changes_only=True)
+        except Exception:  # noqa: BLE001
+            return None
+        if svc_filter:
+            entries = [e for e in entries if e.service == svc_filter]
+        entries.sort(key=lambda e: e.timestamp, reverse=True)
+        return entries
+
+    def _draw_hist_rows(self, entries, x0, y, width, bottom, with_service):
+        if entries is None:
+            self._add(y, x0, "error leyendo el historial", _color_attr("red"))
+            return
+        if not entries:
+            self._add(y, x0, "(sin eventos en el período)", curses.A_DIM)
+            return
+        for e in entries:
+            if y >= bottom:
+                self._add(y, x0, "…", curses.A_DIM)
+                break
+            ts = time.strftime("%d/%m %H:%M", time.localtime(e.timestamp))
+            self._add(y, x0, ts, curses.A_DIM)
+            self._add(y, x0 + 12, _CIRCLE, _color_attr(e.color or "clear"))
+            if with_service:
+                self._add(y, x0 + 14, f"{e.service:<12}", curses.A_BOLD)
+                self._add(y, x0 + 27, (e.summary or "")[: width - 28])
+            else:
+                self._add(y, x0 + 14, (e.summary or e.color or "")[: width - 15])
+            y += 1
+
     def _draw_right(self, y0, x0, width, height):
         host = self._selected_host()
         if host is None:
             self._add(y0, x0, "Elegí un host en el panel izquierdo (Tab / ⏎).", curses.A_DIM)
             return
+        bottom = y0 + height - 1
         y = y0
         self._add(y, x0, host.name, curses.A_BOLD | _color_attr(host.color))
         y += 1
         self._add(y, x0, "─" * (width - 1), curses.A_DIM)
         y += 1
 
+        # Vista ampliada de historial a pantalla completa (H / Enter sobre servicio)
         if self.show_history:
             self._draw_history(host, y0, x0, width, height, y)
             return
 
+        # --- Servicios (estado actual) ---
         names = _service_sort_key(host.name, host.services)
         if not names:
             self._add(y, x0, "(sin servicios reportados)", curses.A_DIM)
         for i, name in enumerate(names):
-            if y >= y0 + height - 1:
+            if y >= bottom:
                 self._add(y, x0, "…", curses.A_DIM)
                 break
             svc = host.services[name]
@@ -364,7 +399,7 @@ class TUI:
             y += 1
             if self.show_msg and selected and svc.message:
                 for mline in svc.message.splitlines()[:8]:
-                    if y >= y0 + height - 1:
+                    if y >= bottom:
                         break
                     self._add(y, x0 + 4, mline[: width - 5], curses.A_DIM)
                     y += 1
@@ -377,11 +412,26 @@ class TUI:
             if not acks:
                 self._add(y, x0 + 2, "(ninguno)", curses.A_DIM)
             for ack in acks:
-                if y >= y0 + height - 1:
+                if y >= bottom:
                     break
                 until = time.strftime("%d/%m %H:%M", time.localtime(ack.end_time)) if ack.end_time else "∞"
                 self._add(y, x0 + 2, f"{ack.services} → {ack.contact} (hasta {until})"[: width - 3], curses.A_DIM)
                 y += 1
+
+        # --- Historial reciente inline (como la sección de la web) ---
+        # Si estás parado sobre un servicio (panel derecho), se filtra a ese
+        # servicio; si no, muestra los cambios de estado de todo el host.
+        if y < bottom - 2:
+            svc_filter = self._selected_service_name() if self.focus == "right" else None
+            y += 1
+            if svc_filter:
+                self._add(y, x0, f"Historial de {svc_filter} (7d) — ⏎ o H para ampliar",
+                          curses.A_BOLD)
+            else:
+                self._add(y, x0, "Historial del host (7d) — H para ampliar", curses.A_BOLD)
+            y += 1
+            self._draw_hist_rows(self._history_entries(host, svc_filter),
+                                 x0, y, width, bottom, with_service=not svc_filter)
 
     def _draw_history(self, host, y0, x0, width, height, y):
         svc = self.history_service
@@ -392,30 +442,8 @@ class TUI:
         y += 1
         self._add(y, x0, "H: alternar servicio/host    ← o h: volver", curses.A_DIM)
         y += 1
-        try:
-            entries = database.load_history(host.name, max_age_days=7, status_changes_only=True)
-        except Exception as exc:  # noqa: BLE001
-            self._add(y, x0, f"error: {exc}", _color_attr("red"))
-            return
-        if svc:
-            entries = [e for e in entries if e.service == svc]
-        entries.sort(key=lambda e: e.timestamp, reverse=True)
-        if not entries:
-            self._add(y, x0, "(sin eventos en el período)", curses.A_DIM)
-        for e in entries:
-            if y >= y0 + height - 1:
-                self._add(y, x0, "…", curses.A_DIM)
-                break
-            ts = time.strftime("%d/%m %H:%M", time.localtime(e.timestamp))
-            self._add(y, x0, ts, curses.A_DIM)
-            self._add(y, x0 + 12, _CIRCLE, _color_attr(e.color or "clear"))
-            if svc:
-                # ya filtrado por servicio: mostramos el resumen con más ancho
-                self._add(y, x0 + 14, (e.summary or e.color or "")[: width - 15])
-            else:
-                self._add(y, x0 + 14, f"{e.service:<12}", curses.A_BOLD)
-                self._add(y, x0 + 27, (e.summary or "")[: width - 28])
-            y += 1
+        self._draw_hist_rows(self._history_entries(host, svc),
+                             x0, y, width, y0 + height - 1, with_service=not svc)
 
     # -- navegación --------------------------------------------------------
     def _move(self, delta):

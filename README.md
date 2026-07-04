@@ -1,4 +1,4 @@
-# SPONG v3.7.3 — Network & Services Monitor
+# SPONG v3.7.4 — Network & Services Monitor
 
 **SPONG** (Simple Preventive Operations Network Guardian) is a network and services monitoring system originally written in Perl. v3 is a complete rewrite in Python 3, keeping full compatibility with the original database and configuration files.
 
@@ -86,12 +86,12 @@ python3 /usr/local/spong/bin/spong-migrate.py --all --outdir /usr/local/spong/et
 
 ## Estado actual del código
 
-SPONG v3.7.3 está organizado como una aplicación Python 3 con cuatro procesos principales: servidor TCP asyncio, agente de red, agente local y UI Flask. La base de datos sigue siendo de archivos para mantener compatibilidad con SPONG Perl; los RRD se actualizan desde el servidor cuando llegan estados nuevos.
+SPONG v3.7.4 está organizado como una aplicación Python 3 con cuatro procesos principales: servidor TCP asyncio, agente de red, agente local y UI Flask. La base de datos sigue siendo de archivos para mantener compatibilidad con SPONG Perl; los RRD se actualizan desde el servidor cuando llegan estados nuevos.
 
 El repositorio contiene el código Python en `spong/`, la UI en `web/`, wrappers ejecutables en `bin/`, configuración en `etc/`, empaquetado Debian en `packaging/` y capturas en `docs/screenshots/`. También conserva datos locales bajo `var/` y código histórico Perl en `lib/`, `cgi-bin/` y `www/`; esos árboles no son necesarios para entender la implementación Python nueva.
 
 Resumen operativo:
-- **Versión actual:** `spong.__version__ = 3.7.3`, `setup.py = 3.7.3`, paquetes `3.7.3-1`
+- **Versión actual:** `spong.__version__ = 3.7.4`, `setup.py = 3.7.4`, paquetes `3.7.4-1`
 - **Runtime:** Python 3.10+ para instalación por `setup.py`; los paquetes Debian declaran `python3 >= 3.9`
 - **Dependencias principales:** `pyyaml`, `flask`, `werkzeug`, `rrdtool`, `fping`, `snmp`, `rpcbind`; `tinytuya` solo para plugins Tuya
 - **Persistencia:** `/usr/local/spong/var/database`, `/usr/local/spong/var/rrd`, `/usr/local/spong/var/archives`
@@ -747,7 +747,7 @@ spong top          # o: spong tui   |   spong-tui
 
 El paquete `spong-server` instala un alias `s` en `/usr/local/bin/` (en el PATH) que abre el dashboard directamente: basta tipear `s` desde cualquier lado.
 
-**Layout:** panel izquierdo con el árbol de grupos → hosts (círculo de color por host y por grupo, con conteo de servicios en rojo); panel derecho con los servicios del host seleccionado (círculo, nombre y resumen). Se refresca solo cada 10 s (releyendo config + base de datos, así que refleja cambios en vivo).
+**Layout:** panel izquierdo con el árbol de grupos → hosts (círculo de color por host y por grupo, con conteo de servicios en rojo); panel derecho con los servicios del host seleccionado (círculo, nombre y resumen) y, debajo, el **historial reciente** del host (cambios de estado de los últimos 7 días), igual que la página de host de la web. Si te parás sobre un servicio (panel derecho), el historial de abajo se **filtra a ese servicio** (como el filtro "Servicio" de la web). Con `H` o `Enter` sobre un servicio lo ampliás a pantalla completa. Se refresca solo cada 10 s (releyendo config + base de datos, así que refleja cambios en vivo).
 
 **Teclas:**
 
@@ -1150,8 +1150,8 @@ Los paquetes `.deb` permiten instalar SPONG en cualquier sistema Debian/Ubuntu s
 cd /usr/local/spong/packaging
 bash build-deb.sh
 # Genera:
-#   dist/spong-server_3.7.3-1_all.deb
-#   dist/spong-client_3.7.3-1_all.deb
+#   dist/spong-server_3.7.4-1_all.deb
+#   dist/spong-client_3.7.4-1_all.deb
 ```
 
 ### Instalar el servidor
@@ -1226,13 +1226,13 @@ El archivo `.github/workflows/build-deb.yml` automatiza la construcción de los 
 |--------|----------|
 | Push a `main` | Construye los `.deb` y los sube como artefacto del workflow (disponibles 30 días) |
 | Pull Request a `main` | Verifica que el build no se rompe |
-| Tag `v*` (ej: `v3.7.3`) | Build + crea un **GitHub Release** con los `.deb` adjuntos |
+| Tag `v*` (ej: `v3.7.4`) | Build + crea un **GitHub Release** con los `.deb` adjuntos |
 
 ### Crear una release oficial
 
 ```bash
-git tag v3.7.3
-git push origin v3.7.3
+git tag v3.7.4
+git push origin v3.7.4
 # GitHub Actions construye y publica la release automáticamente
 ```
 
@@ -1244,6 +1244,18 @@ En GitHub → pestaña **Actions** → seleccionar el workflow → sección **Ar
 
 ## 16. Historial de cambios
 
+### v3.7.4 — 2026-07-04
+
+**TUI: el historial del host se ve inline (como la página de host de la web)**
+- En `spong top`, al seleccionar un host el panel derecho muestra ahora los servicios **y debajo el historial reciente** del host (cambios de estado, 7 días), siempre visible — igual que la sección "Historial" de la página de host en la web. Antes el historial estaba sólo detrás de la tecla `H` (mayúscula), y como `h` (minúscula) es "volver", parecía que el historial "no estaba"
+- Si te parás sobre un servicio (panel derecho), el historial de abajo se **filtra a ese servicio**, como el filtro "Servicio" de la web. `H` o `Enter` sobre un servicio lo amplían a pantalla completa
+- Refactor: helpers `_history_entries()` / `_draw_hist_rows()` compartidos por la vista inline y la de pantalla completa. Verificado sin crashes de 40x6 a 140x45
+
+**Release**
+- `spong.__version__`: `3.7.4`
+- `setup.py`: `3.7.4`
+- Paquetes: `spong-server_3.7.4-1_all.deb`, `spong-client_3.7.4-1_all.deb`
+
 ### v3.7.3 — 2026-07-04
 
 **TUI: el historial de un servicio se abre con Enter (como la web)**
@@ -1253,7 +1265,7 @@ En GitHub → pestaña **Actions** → seleccionar el workflow → sección **Ar
 **Release**
 - `spong.__version__`: `3.7.3`
 - `setup.py`: `3.7.3`
-- Paquetes: `spong-server_3.7.3-1_all.deb`, `spong-client_3.7.3-1_all.deb`
+- Paquetes: `spong-server_3.7.4-1_all.deb`, `spong-client_3.7.4-1_all.deb`
 
 ### v3.7.2 — 2026-07-04
 
