@@ -10,7 +10,7 @@ Navegación:
   ↑/↓ o j/k     mover selección          Enter/→   entrar al host / expandir grupo
   ←/h           volver / colapsar grupo   Tab       cambiar de panel
   g/G           ir arriba / abajo         m         mostrar/ocultar detalle del servicio
-  a             mostrar/ocultar acks      H         historial reciente del host
+  a             mostrar/ocultar acks      H         historial (del servicio sel. o del host)
   r             refrescar ahora           q         salir
 
 Replica las reglas de color de la web:
@@ -220,7 +220,8 @@ class TUI:
         self.svc_sel = 0             # servicio seleccionado en el panel derecho
         self.show_msg = False        # mostrar detalle (message) del servicio
         self.show_acks = False       # mostrar acks del host
-        self.show_history = False    # mostrar historial del host
+        self.show_history = False    # mostrar historial
+        self.history_service = None  # None = historial del host; str = de ese servicio
         self.last_refresh = time.time()
         self.status = ""
 
@@ -241,6 +242,16 @@ class TUI:
             kind, g, h = rows[self.sel]
             if kind == "host":
                 return h
+        return None
+
+    def _selected_service_name(self):
+        """Nombre del servicio seleccionado en el panel derecho, o None."""
+        host = self._selected_host()
+        if host is None:
+            return None
+        names = _service_sort_key(host.name, host.services)
+        if names and 0 <= self.svc_sel < len(names):
+            return names[self.svc_sel]
         return None
 
     # -- dibujo ------------------------------------------------------------
@@ -279,7 +290,7 @@ class TUI:
         self._draw_right(1, left_w + 2, w - left_w - 2, h - 2)
 
         # Pie de ayuda
-        hint = " ↑↓ mover  ⏎ entrar  ← volver  Tab panel  m detalle  a acks  H hist  r refrescar  q salir "
+        hint = " ↑↓ mover  ⏎ entrar  ← volver  Tab panel  m detalle  a acks  H hist(svc)  r refrescar  q salir "
         self._add(h - 1, 0, hint.ljust(w - 1)[: w - 1], curses.color_pair(_PAIRS["hint"]))
         if self.status:
             self._add(h - 1, 0, f" {self.status} ", curses.color_pair(_PAIRS["hint"]) | curses.A_BOLD)
@@ -372,16 +383,24 @@ class TUI:
                 y += 1
 
     def _draw_history(self, host, y0, x0, width, height, y):
-        self._add(y, x0, "Historial reciente (7 días):", curses.A_BOLD)
+        svc = self.history_service
+        if svc:
+            self._add(y, x0, f"Historial de {svc} (7 días) — cortes y regresos:", curses.A_BOLD)
+        else:
+            self._add(y, x0, "Historial del host (7 días) — cambios de estado:", curses.A_BOLD)
+        y += 1
+        self._add(y, x0, "H: alternar servicio/host   ←/q: volver", curses.A_DIM)
         y += 1
         try:
             entries = database.load_history(host.name, max_age_days=7, status_changes_only=True)
         except Exception as exc:  # noqa: BLE001
             self._add(y, x0, f"error: {exc}", _color_attr("red"))
             return
+        if svc:
+            entries = [e for e in entries if e.service == svc]
         entries.sort(key=lambda e: e.timestamp, reverse=True)
         if not entries:
-            self._add(y, x0, "(sin eventos)", curses.A_DIM)
+            self._add(y, x0, "(sin eventos en el período)", curses.A_DIM)
         for e in entries:
             if y >= y0 + height - 1:
                 self._add(y, x0, "…", curses.A_DIM)
@@ -389,8 +408,12 @@ class TUI:
             ts = time.strftime("%d/%m %H:%M", time.localtime(e.timestamp))
             self._add(y, x0, ts, curses.A_DIM)
             self._add(y, x0 + 12, _CIRCLE, _color_attr(e.color or "clear"))
-            self._add(y, x0 + 14, f"{e.service:<12}", curses.A_BOLD)
-            self._add(y, x0 + 27, (e.summary or "")[: width - 28])
+            if svc:
+                # ya filtrado por servicio: mostramos el resumen con más ancho
+                self._add(y, x0 + 14, (e.summary or e.color or "")[: width - 15])
+            else:
+                self._add(y, x0 + 14, f"{e.service:<12}", curses.A_BOLD)
+                self._add(y, x0 + 27, (e.summary or "")[: width - 28])
             y += 1
 
     # -- navegación --------------------------------------------------------
@@ -488,8 +511,19 @@ class TUI:
                 self.show_msg = not self.show_msg
             elif ch in (ord("a"), ord("A")):
                 self.show_acks = not self.show_acks
-            elif ch in (ord("H"),):
-                self.show_history = not self.show_history
+            elif ch == ord("H"):
+                # H: entra al historial. Si estás sobre un servicio (panel
+                # derecho), filtra a ese servicio (cortes/regresos); si no, el
+                # del host. Repetir alterna servicio→host→apagar.
+                if not self.show_history:
+                    self.show_history = True
+                    self.history_service = (
+                        self._selected_service_name() if self.focus == "right" else None
+                    )
+                elif self.history_service is not None:
+                    self.history_service = None
+                else:
+                    self.show_history = False
             elif ch in (ord("r"), ord("R")):
                 self.refresh_data()
                 self.status = "actualizado"
