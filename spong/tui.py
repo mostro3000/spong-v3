@@ -47,6 +47,7 @@ _client_services_cache: set[str] | None = None
 
 
 def _client_service_names() -> set[str]:
+    """Servicios de cliente conocidos: los de `checks` + los plugins de cliente."""
     global _client_services_cache
     if _client_services_cache is not None:
         return _client_services_cache
@@ -66,6 +67,7 @@ def _client_service_names() -> set[str]:
 
 
 def _visible_service_names(host: str) -> set[str]:
+    """Servicios que se muestran para el host: configurados ∪ de cliente ∪ almacenados."""
     configured = {svc for svc, _ in config.host_services(host)}
     stored = set(database.load_all_services(host).keys())
     return configured | _client_service_names() | stored
@@ -88,6 +90,7 @@ def _effective_services(host: str) -> dict:
 
 
 def _host_color(services: dict) -> str:
+    """Color del host = el peor de sus servicios (azul/ack cuenta como verde)."""
     if not services:
         return "green"
     return worst_color(["green" if s.color == "blue" else s.color
@@ -95,6 +98,7 @@ def _host_color(services: dict) -> str:
 
 
 def _service_sort_key(host: str, services: dict):
+    """Nombres de servicio ordenados según hosts.yaml y luego alfabéticamente."""
     cfg_order = [s for s, _ in config.host_services(host)]
 
     def key(name: str):
@@ -104,6 +108,7 @@ def _service_sort_key(host: str, services: dict):
 
 @dataclass
 class HostNode:
+    """Un host con su color agregado y sus servicios (color ya efectivo)."""
     name: str
     color: str
     services: dict
@@ -112,6 +117,7 @@ class HostNode:
 
 @dataclass
 class GroupNode:
+    """Un grupo mostrado con sus hosts, color agregado y conteo de rojos."""
     key: str
     name: str
     color: str = "green"
@@ -121,6 +127,7 @@ class GroupNode:
 
 @dataclass
 class Snapshot:
+    """Foto del estado completo en un instante: grupos→hosts→servicios."""
     groups: list = field(default_factory=list)
     ts: float = 0.0
     error: str = ""
@@ -185,6 +192,7 @@ _PAIRS = {
 
 
 def _init_colors() -> None:
+    """Inicializa los pares de color curses (uno por color de estado + chrome)."""
     curses.start_color()
     try:
         curses.use_default_colors()
@@ -202,6 +210,7 @@ def _init_colors() -> None:
 
 
 def _color_attr(color: str) -> int:
+    """Atributo curses (par de color + negrita/tenue) para un color de estado."""
     pair = _PAIRS.get(color, _PAIRS["clear"])
     attr = curses.color_pair(pair)
     if color in ("red", "purple"):
@@ -212,6 +221,8 @@ def _color_attr(color: str) -> int:
 
 
 class TUI:
+    """Estado e interacción del dashboard: navegación, foco y vistas."""
+
     def __init__(self, stdscr):
         self.scr = stdscr
         self.snap = build_snapshot()
@@ -238,6 +249,7 @@ class TUI:
         return rows
 
     def _selected_host(self):
+        """HostNode bajo la selección del panel izquierdo, o None si es un grupo."""
         rows = self._rows()
         if 0 <= self.sel < len(rows):
             kind, g, h = rows[self.sel]
@@ -257,6 +269,7 @@ class TUI:
 
     # -- dibujo ------------------------------------------------------------
     def _add(self, y, x, text, attr=0):
+        """addstr seguro: recorta al ancho y traga errores de borde de curses."""
         h, w = self.scr.getmaxyx()
         if y < 0 or y >= h or x >= w:
             return
@@ -267,6 +280,7 @@ class TUI:
             pass
 
     def _draw(self):
+        """Redibuja toda la pantalla: cabecera, paneles y pie de ayuda."""
         self.scr.erase()
         h, w = self.scr.getmaxyx()
         if h < 6 or w < 40:
@@ -299,10 +313,12 @@ class TUI:
         self.scr.refresh()
 
     def _draw_vsep(self, y, x, height):
+        """Dibuja la línea vertical que separa los dos paneles."""
         for i in range(height):
             self._add(y + i, x, "│")
 
     def _draw_left(self, y0, x0, width, height):
+        """Panel izquierdo: árbol grupos→hosts con scroll para ver la selección."""
         rows = self._rows()
         # scroll para mantener la selección visible
         top = 0
@@ -344,6 +360,7 @@ class TUI:
         return entries
 
     def _draw_hist_rows(self, entries, x0, y, width, bottom, with_service):
+        """Dibuja las filas del historial (fecha, círculo, servicio/resumen)."""
         if entries is None:
             self._add(y, x0, "error leyendo el historial", _color_attr("red"))
             return
@@ -365,6 +382,8 @@ class TUI:
             y += 1
 
     def _draw_right(self, y0, x0, width, height):
+        """Panel derecho del host: servicios y, debajo, su historial reciente
+        (filtrado al servicio seleccionado si el foco está a la derecha)."""
         host = self._selected_host()
         if host is None:
             self._add(y0, x0, "Elegí un host en el panel izquierdo (Tab / ⏎).", curses.A_DIM)
@@ -434,6 +453,7 @@ class TUI:
                                  x0, y, width, bottom, with_service=not svc_filter)
 
     def _draw_history(self, host, y0, x0, width, height, y):
+        """Vista de historial a pantalla completa (del servicio o del host)."""
         svc = self.history_service
         if svc:
             self._add(y, x0, f"Historial de {svc} (7 días) — cortes y regresos:", curses.A_BOLD)
@@ -447,12 +467,14 @@ class TUI:
 
     # -- navegación --------------------------------------------------------
     def _move(self, delta):
+        """Mueve la selección del panel izquierdo (con clamp a los límites)."""
         rows = self._rows()
         if not rows:
             return
         self.sel = max(0, min(len(rows) - 1, self.sel + delta))
 
     def _enter(self):
+        """Enter/→: expande grupo, entra al host, o abre el historial de un servicio."""
         # En el panel derecho, Enter sobre un servicio abre su historial
         # (cortes y regresos), como hacer clic en un servicio en la web.
         if self.focus == "right":
@@ -475,6 +497,7 @@ class TUI:
             self.svc_sel = 0
 
     def _back(self):
+        """←/h: cierra el historial, vuelve al panel izquierdo o colapsa el grupo."""
         # Si estamos viendo un historial, ← / h lo cierra primero.
         if self.show_history:
             self.show_history = False
@@ -497,6 +520,7 @@ class TUI:
                         break
 
     def _move_service(self, delta):
+        """Mueve la selección de servicio en el panel derecho (con clamp)."""
         host = self._selected_host()
         if host is None:
             return
@@ -506,6 +530,7 @@ class TUI:
         self.svc_sel = max(0, min(len(names) - 1, self.svc_sel + delta))
 
     def refresh_data(self):
+        """Reconstruye el snapshot desde disco y reajusta selección/expandidos."""
         self.snap = build_snapshot()
         # mantener expandidos los grupos que sigan existiendo; expandir nuevos
         keys = {g.key for g in self.snap.groups}
@@ -518,6 +543,7 @@ class TUI:
 
     # -- loop principal ----------------------------------------------------
     def run(self):
+        """Loop principal: dibuja, lee una tecla (timeout 1s) y auto-refresca."""
         curses.curs_set(0)
         self.scr.timeout(1000)   # getch cada 1s → refresca el countdown
         while True:
@@ -574,11 +600,13 @@ class TUI:
 
 
 def _run(stdscr):
+    """Callback de curses.wrapper: inicializa colores y corre el TUI."""
     _init_colors()
     TUI(stdscr).run()
 
 
 def main():
+    """Punto de entrada de `spong-tui` / `spong top`."""
     config.load_all()
     try:
         curses.wrapper(_run)
