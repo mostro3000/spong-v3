@@ -3,12 +3,12 @@
 # Ejecutar desde /usr/local/spong/packaging/
 #
 # Produce:
-#   spong-server_3.7.0-1_all.deb  — servidor completo (server + network + client + web)
-#   spong-client_3.7.0-1_all.deb  — solo agente cliente
+#   spong-server_3.7.1-1_all.deb  — servidor completo (server + network + client + web)
+#   spong-client_3.7.1-1_all.deb  — solo agente cliente
 
 set -e
 
-VERSION="3.7.0-1"
+VERSION="3.7.1-1"
 # Directorio raíz del repo: funciona tanto en /usr/local/spong como en CI (GitHub Actions)
 SPONG_SRC="$(cd "$(dirname "$0")/.." && pwd)"
 BUILD_DIR="/tmp/spong-deb-build"
@@ -60,6 +60,11 @@ for f in spong spong-tui spong-server spong-network spong-client spong-web spong
     [ -f "$SPONG_SRC/bin/$f" ] && cp "$SPONG_SRC/bin/$f" "$PKG/usr/local/spong/bin/"
 done
 chmod +x "$PKG/usr/local/spong/bin/"*
+
+# Alias global 's' -> dashboard TUI, en el PATH del sistema (/usr/local/bin).
+# dpkg trackea el symlink y lo elimina al desinstalar el paquete.
+mkdir -p "$PKG/usr/local/bin"
+ln -sf /usr/local/spong/bin/spong-tui "$PKG/usr/local/bin/s"
 
 # Configuración de ejemplo (no sobreescribir si existe)
 mkdir -p "$PKG/usr/local/spong/etc"

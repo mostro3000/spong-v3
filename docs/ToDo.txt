@@ -64,3 +64,5 @@
 + actualizar version a v3.6.9, documentacion, .deb y github  [DONE v3.6.9]
 + dashboard TUI en terminal (spong top / spong-tui): vista curses en vivo que lee var/database + etc/*.yaml (misma fuente que la web), arbol grupos->hosts con circulos de color, panel de servicios con detalle/acks/historial, auto-refresh 10s, navegacion con flechas; robusto ante terminales chicas y resize  [DONE v3.7.0]
 + actualizar version a v3.7.0, documentacion, .deb y github  [DONE v3.7.0]
++ el .deb del server instala alias global 's' en /usr/local/bin/ -> spong-tui (tipear s abre el dashboard TUI)  [DONE v3.7.1]
++ actualizar version a v3.7.1, documentacion, .deb y github  [DONE v3.7.1]
