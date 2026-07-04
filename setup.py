@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="spong",
-    version="3.6.9",
+    version="3.7.0",
     description="SPONG - Simple System/Network Monitoring (Python 3 rewrite)",
     packages=find_packages(),
     python_requires=">=3.10",
@@ -13,7 +13,7 @@ setup(
     ],
     entry_points={
         "console_scripts": [
-            "spong=spong.status_sender:query_server",
+            "spong-tui=spong.tui:main",
             "spong-server=spong.server:main",
             "spong-client=spong.client_agent:main",
             "spong-network=spong.network_agent:main",

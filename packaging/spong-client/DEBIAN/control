@@ -1,5 +1,5 @@
 Package: spong-client
-Version: 3.6.9-1
+Version: 3.7.0-1
 Architecture: all
 Maintainer: SPONG <spong@localhost>
 Depends: python3 (>= 3.9), python3-yaml

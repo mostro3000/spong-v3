@@ -1,0 +1,63 @@
+#!/usr/bin/env python3
+"""SPONG - text-based CLI client for querying the server."""
+
+import argparse
+import sys
+import os
+
+sys.path.insert(0, "/usr/local/spong")
+from spong import config
+from spong.status_sender import query_server
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="SPONG monitoring system CLI",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Commands:
+  summary   [hosts]   Show summary for hosts (default: all)
+  problems  [hosts]   Show current problems
+  history   [hosts]   Show recent history
+  host      <host>    Show all services for a host
+  services  [hosts]   Show services across all hosts
+  acks      [hosts]   Show active acknowledgments
+  grpsummary          Show group summary
+  grpproblems         Show problems by group
+""",
+    )
+    parser.add_argument("command", nargs="?", default="grpsummary",
+                        help="Command to run (default: grpsummary). Usá 'top' o 'tui' "
+                             "para la vista interactiva en vivo.")
+    parser.add_argument("hosts", nargs="?", default="all",
+                        help="Host or group name (default: all)")
+    parser.add_argument("--brief", action="store_const", const="brief",
+                        dest="view", help="Brief output")
+    parser.add_argument("--standard", action="store_const", const="standard",
+                        dest="view", help="Standard output (default)")
+    parser.add_argument("--full", action="store_const", const="full",
+                        dest="view", help="Full output")
+    parser.add_argument("--config", default=None)
+    parser.add_argument("--server", default=None, help="Override server host")
+    args = parser.parse_args()
+
+    # Vista interactiva en vivo (lee la base de datos local directamente).
+    if args.command in ("top", "tui"):
+        from spong.tui import main as tui_main
+        tui_main()
+        return
+
+    config.load_all(config_file=args.config)
+
+    view = args.view or "standard"
+    result = query_server(
+        command=args.command,
+        hosts=args.hosts,
+        fmt="text",
+        view=view,
+    )
+    print(result, end="")
+
+
+if __name__ == "__main__":
+    main()

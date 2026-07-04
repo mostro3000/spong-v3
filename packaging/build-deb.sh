@@ -3,12 +3,12 @@
 # Ejecutar desde /usr/local/spong/packaging/
 #
 # Produce:
-#   spong-server_3.6.9-1_all.deb  — servidor completo (server + network + client + web)
-#   spong-client_3.6.9-1_all.deb  — solo agente cliente
+#   spong-server_3.7.0-1_all.deb  — servidor completo (server + network + client + web)
+#   spong-client_3.7.0-1_all.deb  — solo agente cliente
 
 set -e
 
-VERSION="3.6.9-1"
+VERSION="3.7.0-1"
 # Directorio raíz del repo: funciona tanto en /usr/local/spong como en CI (GitHub Actions)
 SPONG_SRC="$(cd "$(dirname "$0")/.." && pwd)"
 BUILD_DIR="/tmp/spong-deb-build"
@@ -55,7 +55,7 @@ copy_tree "$SPONG_SRC/web"   "$PKG/usr/local/spong/web"
 
 # Binarios
 mkdir -p "$PKG/usr/local/spong/bin"
-for f in spong-server spong-network spong-client spong-web spong-ack \
+for f in spong spong-tui spong-server spong-network spong-client spong-web spong-ack \
           spong-cleanup spong-message spong-status spong-client spong-migrate.py; do
     [ -f "$SPONG_SRC/bin/$f" ] && cp "$SPONG_SRC/bin/$f" "$PKG/usr/local/spong/bin/"
 done

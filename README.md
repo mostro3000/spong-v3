@@ -1,4 +1,4 @@
-# SPONG v3.6.9 — Network & Services Monitor
+# SPONG v3.7.0 — Network & Services Monitor
 
 **SPONG** (Simple Preventive Operations Network Guardian) is a network and services monitoring system originally written in Perl. v3 is a complete rewrite in Python 3, keeping full compatibility with the original database and configuration files.
 
@@ -86,12 +86,12 @@ python3 /usr/local/spong/bin/spong-migrate.py --all --outdir /usr/local/spong/et
 
 ## Estado actual del código
 
-SPONG v3.6.9 está organizado como una aplicación Python 3 con cuatro procesos principales: servidor TCP asyncio, agente de red, agente local y UI Flask. La base de datos sigue siendo de archivos para mantener compatibilidad con SPONG Perl; los RRD se actualizan desde el servidor cuando llegan estados nuevos.
+SPONG v3.7.0 está organizado como una aplicación Python 3 con cuatro procesos principales: servidor TCP asyncio, agente de red, agente local y UI Flask. La base de datos sigue siendo de archivos para mantener compatibilidad con SPONG Perl; los RRD se actualizan desde el servidor cuando llegan estados nuevos.
 
 El repositorio contiene el código Python en `spong/`, la UI en `web/`, wrappers ejecutables en `bin/`, configuración en `etc/`, empaquetado Debian en `packaging/` y capturas en `docs/screenshots/`. También conserva datos locales bajo `var/` y código histórico Perl en `lib/`, `cgi-bin/` y `www/`; esos árboles no son necesarios para entender la implementación Python nueva.
 
 Resumen operativo:
-- **Versión actual:** `spong.__version__ = 3.6.9`, `setup.py = 3.6.9`, paquetes `3.6.9-1`
+- **Versión actual:** `spong.__version__ = 3.7.0`, `setup.py = 3.7.0`, paquetes `3.7.0-1`
 - **Runtime:** Python 3.10+ para instalación por `setup.py`; los paquetes Debian declaran `python3 >= 3.9`
 - **Dependencias principales:** `pyyaml`, `flask`, `werkzeug`, `rrdtool`, `fping`, `snmp`, `rpcbind`; `tinytuya` solo para plugins Tuya
 - **Persistencia:** `/usr/local/spong/var/database`, `/usr/local/spong/var/rrd`, `/usr/local/spong/var/archives`
@@ -735,6 +735,35 @@ La operación valida que el nombre use solo letras, números, punto, guion y gui
 
 ---
 
+## 8b. Dashboard en terminal (TUI)
+
+Además de la web, SPONG trae una vista interactiva en vivo para la terminal, pensada para mirar el estado desde una sesión SSH sin abrir el navegador. Lee **directamente** la base de datos de archivos (`var/database`) y la config (`etc/*.yaml`) — la misma fuente que la UI web — y aplica las mismas reglas de color (ack → azul, ventana de silencio → clear, color del host/grupo = el peor de sus servicios). Corre en el servidor spong.
+
+```bash
+spong top          # o: spong tui   |   spong-tui
+```
+
+**Layout:** panel izquierdo con el árbol de grupos → hosts (círculo de color por host y por grupo, con conteo de servicios en rojo); panel derecho con los servicios del host seleccionado (círculo, nombre y resumen). Se refresca solo cada 10 s (releyendo config + base de datos, así que refleja cambios en vivo).
+
+**Teclas:**
+
+| Tecla | Acción |
+|-------|--------|
+| `↑`/`↓` o `j`/`k` | Mover la selección |
+| `Enter` / `→` / `l` | Entrar al host (foco al panel derecho) o expandir/colapsar grupo |
+| `←` / `h` | Volver / colapsar grupo |
+| `Tab` | Alternar entre panel izquierdo y derecho |
+| `g` / `G` | Ir al principio / al final |
+| `m` | Mostrar/ocultar el detalle (mensaje) del servicio seleccionado |
+| `a` | Mostrar/ocultar los ACKs del host |
+| `H` | Historial reciente del host (7 días, solo cambios de estado) |
+| `r` | Refrescar ahora |
+| `q` | Salir |
+
+Requiere una terminal con soporte de color (cualquier `xterm`/`vt` moderno). No necesita dependencias extra: usa `curses` de la librería estándar de Python. También existe el CLI de texto de una pasada (`spong summary`, `spong problems`, `spong host <h>`, …) que consulta el servidor por el puerto 1999.
+
+---
+
 ## 9. Gráficos RRD
 
 Los archivos RRD se guardan en `/usr/local/spong/var/rrd/<hostname>/`.
@@ -1078,8 +1107,8 @@ Los paquetes `.deb` permiten instalar SPONG en cualquier sistema Debian/Ubuntu s
 cd /usr/local/spong/packaging
 bash build-deb.sh
 # Genera:
-#   dist/spong-server_3.6.9-1_all.deb
-#   dist/spong-client_3.6.9-1_all.deb
+#   dist/spong-server_3.7.0-1_all.deb
+#   dist/spong-client_3.7.0-1_all.deb
 ```
 
 ### Instalar el servidor
@@ -1154,13 +1183,13 @@ El archivo `.github/workflows/build-deb.yml` automatiza la construcción de los 
 |--------|----------|
 | Push a `main` | Construye los `.deb` y los sube como artefacto del workflow (disponibles 30 días) |
 | Pull Request a `main` | Verifica que el build no se rompe |
-| Tag `v*` (ej: `v3.6.9`) | Build + crea un **GitHub Release** con los `.deb` adjuntos |
+| Tag `v*` (ej: `v3.7.0`) | Build + crea un **GitHub Release** con los `.deb` adjuntos |
 
 ### Crear una release oficial
 
 ```bash
-git tag v3.6.9
-git push origin v3.6.9
+git tag v3.7.0
+git push origin v3.7.0
 # GitHub Actions construye y publica la release automáticamente
 ```
 
@@ -1171,6 +1200,19 @@ En GitHub → pestaña **Actions** → seleccionar el workflow → sección **Ar
 ---
 
 ## 16. Historial de cambios
+
+### v3.7.0 — 2026-07-04
+
+**Dashboard en terminal (TUI) — nueva vista interactiva en vivo**
+- Nuevo módulo `spong/tui.py` y comandos `spong top` / `spong tui` / `spong-tui`: una vista curses tipo navegador para mirar el estado desde la terminal (pensada para SSH al servidor). Panel izquierdo con árbol grupos → hosts (círculo de color por host y grupo, conteo de servicios en rojo); panel derecho con los servicios del host, su color y resumen, con detalle del mensaje (`m`), ACKs (`a`) e historial reciente (`H`) a demanda. Auto-refresh cada 10 s releyendo config + base de datos
+- Lee **directamente** `var/database` + `etc/*.yaml` (misma fuente que la web) y replica exactamente las reglas de color: servicio reconocido (ack) que no está en verde → azul, rojo/amarillo dentro de una ventana de silencio → clear, color del host/grupo = el peor de sus servicios (azul cuenta como verde). Los hosts que no están en ningún grupo mostrado aparecen bajo "(sin grupo)" para no ocultarlos
+- Navegación con flechas / `hjkl`, `Tab` para cambiar de panel, `g`/`G`, `r` refrescar, `q` salir. Dibujo con clamping y manejo de resize: no crashea ni en terminales chicas (probado en pty de 20x5 a 120x40). Sin dependencias nuevas: usa `curses` de la stdlib
+- Empaquetado: `bin/spong` (CLI de texto que consulta el puerto 1999, antes no se incluía) y `bin/spong-tui` ahora se copian al `.deb`; entry point `spong-tui=spong.tui:main` en `setup.py`
+
+**Release**
+- `spong.__version__`: `3.7.0`
+- `setup.py`: `3.7.0`
+- Paquetes: `spong-server_3.7.0-1_all.deb`, `spong-client_3.7.0-1_all.deb`
 
 ### v3.6.9 — 2026-07-01
 

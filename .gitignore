@@ -42,7 +42,6 @@ etc/message.yaml
 # Código Perl legacy y web original
 bin/perl-backup/
 bin/s
-bin/spong
 cgi-bin/
 lib/
 www/
