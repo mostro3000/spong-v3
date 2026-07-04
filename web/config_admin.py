@@ -389,6 +389,7 @@ def _config_csrf_token() -> str:
 
 
 def _config_csrf_valid() -> bool:
+    """True si el token del formulario/header coincide con el de la cookie del panel."""
     cookie = request.cookies.get(_CONFIG_CSRF_COOKIE, '')
     sent = request.form.get('csrf_token', '') or request.headers.get('X-CSRF-Token', '')
     return bool(cookie) and bool(sent) and hmac.compare_digest(cookie, sent)
@@ -396,6 +397,7 @@ def _config_csrf_valid() -> bool:
 
 @config_bp.before_request
 def _config_csrf_protect():
+    """Valida el token CSRF en cada POST/PUT/PATCH/DELETE del panel /config."""
     _config_csrf_token()
     if request.method in ('POST', 'PUT', 'PATCH', 'DELETE'):
         if not _config_csrf_valid():
@@ -404,6 +406,7 @@ def _config_csrf_protect():
 
 @config_bp.after_request
 def _config_csrf_cookie(resp):
+    """Persiste la cookie CSRF del panel recién generada (double-submit)."""
     new = getattr(g, '_config_csrf_new', None)
     if new:
         resp.set_cookie(
@@ -433,6 +436,7 @@ _path_locks_guard = threading.Lock()
 
 
 def _path_lock(path) -> threading.Lock:
+    """Devuelve (creándolo si hace falta) el lock que serializa escrituras a esa ruta."""
     key = str(path)
     with _path_locks_guard:
         lk = _path_locks.get(key)

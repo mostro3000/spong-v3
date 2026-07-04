@@ -33,6 +33,7 @@ def _valid_host(host: str) -> bool:
 
 
 def _valid_service(service: str) -> bool:
+    """Defensa en profundidad: rechaza servicios que escaparían del directorio."""
     return bool(service) and _NAME_OK.fullmatch(service) is not None and service not in (".", "..")
 
 
@@ -45,6 +46,7 @@ _save_locks_guard = threading.Lock()
 
 
 def _service_lock(host: str, service: str) -> threading.Lock:
+    """Devuelve (creándolo si hace falta) el lock que serializa este servicio."""
     key = (host, service)
     with _save_locks_guard:
         lk = _save_locks.get(key)

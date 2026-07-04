@@ -114,6 +114,7 @@ Resumen operativo:
 11. [Base de datos](#11-base-de-datos)
 12. [Logs](#12-logs)
 13. [Mantenimiento](#13-mantenimiento)
+13b. [Seguridad y robustez](#13b-seguridad-y-robustez)
 14. [Empaquetado .deb](#14-empaquetado-deb)
 15. [GitHub Actions (CI)](#15-github-actions-ci)
 16. [Historial de cambios](#16-historial-de-cambios)
@@ -1097,6 +1098,43 @@ rm /usr/local/spong/var/database/<hostname>/services/<servicio>-purple
 ### Archivar historial viejo
 
 El servidor archiva automáticamente según `cleanup.old_history_days` (30 días por defecto). Los archivos de servicio sin actividad por más de `cleanup.old_service_days` (20 días) también se eliminan.
+
+---
+
+## 13b. Seguridad y robustez
+
+Resumen de las protecciones implementadas (auditoría de julio 2026, releases v3.6.6–v3.7.1). El detalle completo de hallazgos —corregidos y pendientes— está en [`docs/auditoria-2026-07.md`](docs/auditoria-2026-07.md).
+
+### Autenticación y autorización
+
+- **Basic Auth** en el monitor y en el panel `/config` (ver §8). Roles: `admin`, `editor`, `add`, `read`/`view` en el monitor; `admin`, `editor`, `add`, `read` (+ permisos `restore`, `users`) en el panel.
+- Las contraseñas se guardan como **hash** (`werkzeug.security`). El formulario las toma en claro pero nunca las muestra ni las persiste sin hashear.
+- **Historial de configuración protegido:** ver o restaurar snapshots de `users` (que contienen los `password_hash`) exige el permiso `users`; el índice de historial oculta esas entradas a quien no lo tiene.
+
+### Protección CSRF
+
+- La UI usa Basic Auth (sin sesión Flask), por lo que el navegador reenvía las credenciales en peticiones cross-site. Para frenar CSRF se usa el patrón **double-submit cookie**: un token aleatorio en una cookie `HttpOnly`/`SameSite=Lax` que el servidor inyecta en cada formulario (campo oculto `csrf_token`) y en un `<meta name="csrf-token">` (para los `fetch` JS), y revalida en cada `POST` con `hmac.compare_digest`.
+- Cubre el monitor (`/ack`, `/sgt-ticket`, y `/api/check` vía header `X-CSRF-Token`) y **todo** el panel `/config` (alta/edición/borrado de hosts, usuarios y grupos; rename; restore). El panel usa una cookie propia (`spong_config_csrf`) independiente de la del monitor (`spong_csrf`).
+- Un `POST` sin token, con token ausente o inválido devuelve **403**.
+
+### Validación de entrada (anti path-traversal)
+
+- Los nombres de host y servicio que llegan por la red (puertos 1998/1984) se validan con `protocol.valid_host()` / `valid_service()`, que rechazan `.` y `..` además de aplicar la lista blanca de caracteres. Se aplica en `parse_update` (status/ack/ack-del) y en el handler BigBrother.
+- Defensa en profundidad: guards equivalentes en `database` (`save_status`/`load_service`/…), en `rrd._rrd_dir` y en la ruta web `/rrd/<host>/<svc>.png`. Un hostname `..` no puede escribir ni leer fuera de `var/database`, `var/rrd` ni `var/archives`.
+- El rename de hosts desde `/config` valida el nombre (solo letras, números, punto, guion y guion bajo) y aborta si el destino ya tiene datos (ver §8, "Renombrar hosts").
+
+### Integridad de datos (escrituras atómicas)
+
+- **Estado de servicios** (`database.save_status`): escritura atómica (temp único + `os.replace`) serializada por un lock por `(host, service)`. Un lector nunca ve un archivo a medio escribir ni una ventana sin archivo de estado, y updates concurrentes del mismo servicio no dejan dos archivos de color a la vez.
+- **YAML de configuración** (`config_admin._save_yaml`, snapshots de historial y `log.json`): temporal de nombre único (`tempfile.mkstemp`) + `fsync` + `os.replace`, con lock por ruta. Evita el YAML corrupto por dos guardados simultáneos.
+- **`sgt_links.json`** (`sgt_link`): escritura atómica bajo `flock` sobre un archivo de lock aparte, que serializa entre los hilos del web y el proceso separado `spong-sgt-sync`. El dedup de creación de tickets corre bajo ese lock, así que un doble clic no crea dos tickets en SGT.
+- **Historial de RRD de ping**: `_update_ping` sólo recrea el RRD ante un conteo de DS positivo real (`0 < n < 4`); un fallo transitorio de `rrdtool info` ya no borra el historial.
+
+### Notas
+
+- **TLS del check `https`**: la expiración del certificado se lee del DER (con `verify_mode=CERT_NONE`, `getpeercert()` viene vacío). Un backend que negocia TLS pero no responde el GET se reporta rojo, no verde.
+- **Locale**: `safe_exec` fuerza `LC_ALL=C`/`LANG=C` para que los parsers de salidas de comandos (`uptime`, `df`, `ps`, `chronyc`) no fallen en hosts con locale no inglés.
+- **Limitación conocida**: el "logout" del panel/monitor usa cookies; las credenciales Basic cacheadas por el navegador siguen válidas hasta cerrar la ventana (limitación inherente de HTTP Basic Auth).
 
 ---
 

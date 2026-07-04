@@ -518,6 +518,7 @@ def _csrf_token() -> str:
 
 
 def _csrf_valid() -> bool:
+    """True si el token del formulario/header coincide con el de la cookie."""
     cookie = request.cookies.get(_CSRF_COOKIE, "")
     sent = request.form.get("csrf_token", "") or request.headers.get("X-CSRF-Token", "")
     return bool(cookie) and bool(sent) and hmac.compare_digest(cookie, sent)
@@ -525,6 +526,7 @@ def _csrf_valid() -> bool:
 
 @app.before_request
 def csrf_protect():
+    """Valida el token CSRF en cada POST/PUT/PATCH/DELETE del monitor."""
     # /config tiene su propia protección CSRF en el Blueprint.
     if request.path.startswith('/config'):
         return
