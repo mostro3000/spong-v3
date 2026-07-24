@@ -226,6 +226,10 @@ def _service_status_payload(hostname, service, svc=None):
         "summary": svc.summary,
         "message": svc.message,
         "report_time": svc.report_time,
+        # Formateado server-side (hora local del server): el JS lo muestra tal
+        # cual, sin pasar por la TZ del navegador.
+        "report_time_str": time.strftime("%Y-%m-%d %H:%M:%S",
+                                         time.localtime(svc.report_time)),
         "duration": svc.duration,
     }
 
@@ -1817,6 +1821,12 @@ def inject_i18n():
         "current_theme": theme,
         "auto_refresh_seconds": _auto_refresh_seconds(),
         "csrf_token": _csrf_token(),
+        # Epoch del server ya desplazado a su zona horaria (ms). El reloj del
+        # header lo usa para mostrar SIEMPRE la hora local del server, aunque
+        # el navegador tenga otra TZ u hora corrida (el historial y todos los
+        # timestamps se renderizan server-side; sin esto el reloj JS del
+        # navegador los contradecía y parecían "mal").
+        "server_now_local_ms": int((time.time() + (time.localtime().tm_gmtoff or 0)) * 1000),
     }
 
 

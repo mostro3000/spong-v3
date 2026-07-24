@@ -574,15 +574,24 @@ function toggleSidebar() {
 </script>
 
 <script>
-// Live clock
+// Live clock — muestra la hora LOCAL DEL SERVER, no la del navegador.
+// El server inyecta su epoch ya corrido a su zona horaria; acá sólo se avanza
+// con el delta transcurrido y se formatea con getUTC* para que la TZ o el
+// reloj del navegador no puedan alterarlo (así el reloj nunca contradice los
+// timestamps del historial, que también son hora del server).
 (function() {
   var el = document.getElementById('live-clock');
+  if (!el) return;
+  var serverLocalMs = {{ server_now_local_ms|int }};
+  var t0 = Date.now();
   function pad(n) { return String(n).padStart(2,'0'); }
-  setInterval(function() {
-    var d = new Date();
-    el.textContent = d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+
-      ' '+pad(d.getHours())+':'+pad(d.getMinutes())+':'+pad(d.getSeconds());
-  }, 1000);
+  function tick() {
+    var d = new Date(serverLocalMs + (Date.now() - t0));
+    el.textContent = d.getUTCFullYear()+'-'+pad(d.getUTCMonth()+1)+'-'+pad(d.getUTCDate())+
+      ' '+pad(d.getUTCHours())+':'+pad(d.getUTCMinutes())+':'+pad(d.getUTCSeconds());
+  }
+  tick();
+  setInterval(tick, 1000);
 })();
 
 // Countdown refresh (overview pages only, and never in background tabs)

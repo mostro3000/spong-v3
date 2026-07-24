@@ -73,3 +73,5 @@
 + actualizar version a v3.7.3, documentacion, .deb y github  [DONE v3.7.3]
 + TUI: el historial reciente del host se muestra inline debajo de los servicios (como la seccion Historial de la pagina de host de la web); parado sobre un servicio se filtra a ese servicio. Antes solo estaba detras de H mayuscula y confundia  [DONE v3.7.4]
 + actualizar version a v3.7.4, documentacion, .deb y github  [DONE v3.7.4]
++ "historial de un host con la hora mal": el historial estaba bien (server-side, localtime correcto, verificado contra epochs); lo que usaba hora del NAVEGADOR era el reloj del header (new Date) y el "ultimo reporte" post-check (toLocaleString). Ahora el reloj muestra la hora del server (epoch inyectado + getUTC*) y el API devuelve report_time_str formateado server-side  [DONE v3.7.5]
++ actualizar version a v3.7.5, documentacion, .deb y github  [DONE v3.7.5]

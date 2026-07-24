@@ -65,8 +65,13 @@
       badge.style.cursor = 'pointer';
       badge.textContent = d.color;
       if (d.summary) document.getElementById('svc-summary').textContent = d.summary;
-      if (d.report_time) document.getElementById('svc-report').textContent =
-        new Date(d.report_time * 1000).toLocaleString('sv').replace('T', ' ');
+      if (d.report_time_str) {
+        // Hora local del server, formateada server-side (no usar la TZ del navegador)
+        document.getElementById('svc-report').textContent = d.report_time_str;
+      } else if (d.report_time) {
+        document.getElementById('svc-report').textContent =
+          new Date(d.report_time * 1000).toLocaleString('sv').replace('T', ' ');
+      }
       if (d.message !== undefined) {
         var wrap = document.getElementById('svc-message-wrap');
         var pre  = document.getElementById('svc-message');
