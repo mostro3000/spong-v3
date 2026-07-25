@@ -75,3 +75,6 @@
 + actualizar version a v3.7.4, documentacion, .deb y github  [DONE v3.7.4]
 + "historial de un host con la hora mal": el historial estaba bien (server-side, localtime correcto, verificado contra epochs); lo que usaba hora del NAVEGADOR era el reloj del header (new Date) y el "ultimo reporte" post-check (toLocaleString). Ahora el reloj muestra la hora del server (epoch inyectado + getUTC*) y el API devuelve report_time_str formateado server-side  [DONE v3.7.5]
 + actualizar version a v3.7.5, documentacion, .deb y github  [DONE v3.7.5]
++ TUI bug: el historial inline se releia en CADA repintado (1/seg), no por refresco: 125ms de I/O por segundo en hosts con historial grande (5.6MB). Cacheado por (host,servicio,ultimo refresco): 119.7ms -> 0.07ms  [DONE v3.7.6]
++ TUI bug: refresh_data re-expandia todos los grupos cada 10s, deshaciendo el colapso del usuario; ahora respeta lo colapsado y solo auto-expande grupos nuevos  [DONE v3.7.6]
++ actualizar version a v3.7.6, documentacion, .deb y github  [DONE v3.7.6]

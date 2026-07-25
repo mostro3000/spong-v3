@@ -227,6 +227,7 @@ class TUI:
         self.scr = stdscr
         self.snap = build_snapshot()
         self.expanded: set[str] = {g.key for g in self.snap.groups}  # todo expandido
+        self._known_groups: set[str] = set(self.expanded)
         self.sel = 0                 # índice en la lista plana del panel izquierdo
         self.focus = "left"          # left | right
         self.svc_sel = 0             # servicio seleccionado en el panel derecho
@@ -236,6 +237,11 @@ class TUI:
         self.history_service = None  # None = historial del host; str = de ese servicio
         self.last_refresh = time.time()
         self.status = ""
+        # Caché del historial: leerlo cuesta hasta ~125 ms en hosts con archivos
+        # grandes (varios MB) y la pantalla se repinta 1 vez por segundo. Se
+        # relee sólo si cambia el host/servicio mostrado o llega un refresco.
+        self._hist_key = None
+        self._hist_entries = None
 
     # -- lista plana navegable del panel izquierdo -------------------------
     def _rows(self) -> list:
@@ -349,14 +355,25 @@ class TUI:
                 self._add(y, x0 + 4, label.ljust(width - 4), rowattr)
 
     def _history_entries(self, host, svc_filter):
-        """Transiciones de estado (7 días) del host, opcionalmente de un servicio."""
+        """Transiciones de estado (7 días) del host, opcionalmente de un servicio.
+
+        Cacheado por (host, servicio, último refresco): el dibujo ocurre cada
+        segundo y releer el archivo de historial en cada repintado cuesta hasta
+        ~125 ms en los hosts con más eventos.
+        """
+        key = (host.name, svc_filter, self.last_refresh)
+        if key == self._hist_key:
+            return self._hist_entries
         try:
             entries = database.load_history(host.name, max_age_days=7, status_changes_only=True)
         except Exception:  # noqa: BLE001
-            return None
-        if svc_filter:
-            entries = [e for e in entries if e.service == svc_filter]
-        entries.sort(key=lambda e: e.timestamp, reverse=True)
+            entries = None
+        if entries is not None:
+            if svc_filter:
+                entries = [e for e in entries if e.service == svc_filter]
+            entries.sort(key=lambda e: e.timestamp, reverse=True)
+        self._hist_key = key
+        self._hist_entries = entries
         return entries
 
     def _draw_hist_rows(self, entries, x0, y, width, bottom, with_service):
@@ -532,13 +549,18 @@ class TUI:
     def refresh_data(self):
         """Reconstruye el snapshot desde disco y reajusta selección/expandidos."""
         self.snap = build_snapshot()
-        # mantener expandidos los grupos que sigan existiendo; expandir nuevos
+        # Respetar lo que el usuario colapsó: sólo se descartan los grupos que
+        # ya no existen y se expanden los que aparecieron desde el último ciclo.
         keys = {g.key for g in self.snap.groups}
-        self.expanded = {k for k in self.expanded if k in keys} or keys
-        for g in self.snap.groups:
-            self.expanded.add(g.key)
+        self.expanded = {k for k in self.expanded if k in keys}
+        self.expanded |= (keys - self._known_groups)
+        self._known_groups = keys
         rows = self._rows()
         self.sel = min(self.sel, max(0, len(rows) - 1))
+        host = self._selected_host()
+        if host is not None:
+            names = _service_sort_key(host.name, host.services)
+            self.svc_sel = min(self.svc_sel, max(0, len(names) - 1))
         self.last_refresh = time.time()
 
     # -- loop principal ----------------------------------------------------

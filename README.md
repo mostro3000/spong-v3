@@ -1,4 +1,4 @@
-# SPONG v3.7.5 — Network & Services Monitor
+# SPONG v3.7.6 — Network & Services Monitor
 
 **SPONG** (Simple Preventive Operations Network Guardian) is a network and services monitoring system originally written in Perl. v3 is a complete rewrite in Python 3, keeping full compatibility with the original database and configuration files.
 
@@ -86,12 +86,12 @@ python3 /usr/local/spong/bin/spong-migrate.py --all --outdir /usr/local/spong/et
 
 ## Estado actual del código
 
-SPONG v3.7.5 está organizado como una aplicación Python 3 con cuatro procesos principales: servidor TCP asyncio, agente de red, agente local y UI Flask. La base de datos sigue siendo de archivos para mantener compatibilidad con SPONG Perl; los RRD se actualizan desde el servidor cuando llegan estados nuevos.
+SPONG v3.7.6 está organizado como una aplicación Python 3 con cuatro procesos principales: servidor TCP asyncio, agente de red, agente local y UI Flask. La base de datos sigue siendo de archivos para mantener compatibilidad con SPONG Perl; los RRD se actualizan desde el servidor cuando llegan estados nuevos.
 
 El repositorio contiene el código Python en `spong/`, la UI en `web/`, wrappers ejecutables en `bin/`, configuración en `etc/`, empaquetado Debian en `packaging/` y capturas en `docs/screenshots/`. También conserva datos locales bajo `var/` y código histórico Perl en `lib/`, `cgi-bin/` y `www/`; esos árboles no son necesarios para entender la implementación Python nueva.
 
 Resumen operativo:
-- **Versión actual:** `spong.__version__ = 3.7.5`, `setup.py = 3.7.5`, paquetes `3.7.5-1`
+- **Versión actual:** `spong.__version__ = 3.7.6`, `setup.py = 3.7.6`, paquetes `3.7.6-1`
 - **Runtime:** Python 3.10+ para instalación por `setup.py`; los paquetes Debian declaran `python3 >= 3.9`
 - **Dependencias principales:** `pyyaml`, `flask`, `werkzeug`, `rrdtool`, `fping`, `snmp`, `rpcbind`; `tinytuya` solo para plugins Tuya
 - **Persistencia:** `/usr/local/spong/var/database`, `/usr/local/spong/var/rrd`, `/usr/local/spong/var/archives`
@@ -1150,8 +1150,8 @@ Los paquetes `.deb` permiten instalar SPONG en cualquier sistema Debian/Ubuntu s
 cd /usr/local/spong/packaging
 bash build-deb.sh
 # Genera:
-#   dist/spong-server_3.7.5-1_all.deb
-#   dist/spong-client_3.7.5-1_all.deb
+#   dist/spong-server_3.7.6-1_all.deb
+#   dist/spong-client_3.7.6-1_all.deb
 ```
 
 ### Instalar el servidor
@@ -1226,13 +1226,13 @@ El archivo `.github/workflows/build-deb.yml` automatiza la construcción de los 
 |--------|----------|
 | Push a `main` | Construye los `.deb` y los sube como artefacto del workflow (disponibles 30 días) |
 | Pull Request a `main` | Verifica que el build no se rompe |
-| Tag `v*` (ej: `v3.7.5`) | Build + crea un **GitHub Release** con los `.deb` adjuntos |
+| Tag `v*` (ej: `v3.7.6`) | Build + crea un **GitHub Release** con los `.deb` adjuntos |
 
 ### Crear una release oficial
 
 ```bash
-git tag v3.7.5
-git push origin v3.7.5
+git tag v3.7.6
+git push origin v3.7.6
 # GitHub Actions construye y publica la release automáticamente
 ```
 
@@ -1243,6 +1243,18 @@ En GitHub → pestaña **Actions** → seleccionar el workflow → sección **Ar
 ---
 
 ## 16. Historial de cambios
+
+### v3.7.6 — 2026-07-24
+
+**TUI: dos bugs encontrados al revisar el código nuevo (v3.6.6–v3.7.5)**
+- **I/O de disco por segundo**: el historial inline agregado en v3.7.4 se releía en **cada repintado** (la pantalla se repinta 1 vez por segundo por el timeout de `getch`), no en cada refresco. En hosts con archivos de historial grandes eso significaba leer y parsear varios MB por segundo: medido **125 ms por repintado** en el peor host real (5,6 MB). Ahora el historial se cachea por `(host, servicio, último refresco)` y sólo se relee al cambiar la selección o al refrescar: **119,7 ms → 0,07 ms** por repintado
+- **Los grupos colapsados se volvían a expandir solos**: `refresh_data()` re-expandía *todos* los grupos en cada ciclo, así que colapsar uno se deshacía a los ≤10 s. Ahora se respeta lo que el usuario colapsó; sólo se auto-expanden los grupos que aparecieron desde el ciclo anterior. De paso, `svc_sel` se acota al refrescar si el host perdió servicios
+- Verificado también que `_rrd_ds_count()` devolviendo `-1` (v3.6.7) **no** cambió el comportamiento de `graph_png`: cae en la misma rama que el `0` anterior
+
+**Release**
+- `spong.__version__`: `3.7.6`
+- `setup.py`: `3.7.6`
+- Paquetes: `spong-server_3.7.6-1_all.deb`, `spong-client_3.7.6-1_all.deb`
 
 ### v3.7.5 — 2026-07-24
 
