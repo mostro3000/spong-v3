@@ -1827,6 +1827,7 @@ def inject_i18n():
         # timestamps se renderizan server-side; sin esto el reloj JS del
         # navegador los contradecía y parecían "mal").
         "server_now_local_ms": int((time.time() + (time.localtime().tm_gmtoff or 0)) * 1000),
+        "server_tz_offset": time.localtime().tm_gmtoff or 0,
     }
 
 

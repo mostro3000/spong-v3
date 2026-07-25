@@ -70,7 +70,7 @@
         document.getElementById('svc-report').textContent = d.report_time_str;
       } else if (d.report_time) {
         document.getElementById('svc-report').textContent =
-          new Date(d.report_time * 1000).toLocaleString('sv').replace('T', ' ');
+          new Date((d.report_time + {{ server_tz_offset|int }}) * 1000).toISOString().slice(0, 19).replace('T', ' ');
       }
       if (d.message !== undefined) {
         var wrap = document.getElementById('svc-message-wrap');
