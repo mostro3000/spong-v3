@@ -109,3 +109,32 @@ HEAD de s2, más hotfixes aplicados en caliente. Antes de diagnosticar un bug
 "del server", conviene revisar si s2 ya lo arregló en un release posterior
 (`git log -S <símbolo>` en s2) y considerar actualizar la instancia con el
 `.deb` actual.
+
+## 7. Clientes legacy (Perl) — p. ej. i19
+
+Algunos hosts viejos siguen corriendo el spong-client **Perl original** (no el
+cliente Python de este repo). Cómo reconocerlos y operarlos:
+
+- **Identificación**: no hay unit systemd ni paquete `.deb`; el proceso es
+  `spong-client (sleeping)` (Perl) y el código vive en
+  `/usr/local/spong/bin/spong-client` + `/usr/local/spong/lib/Spong/`.
+- **Config**: `/etc/spong/spong.conf`. Los checks activos están en la línea
+  `$CHECKS = 'disk diski cpu ... chronyc btrfs';`.
+- **Plugins**: `/usr/local/spong/lib/Spong/Client/plugins/check_<nombre>`.
+  Se cargan todos al iniciar; corre solo lo listado en `$CHECKS`. El plugin
+  registra `$CHECKFUNCS{'<nombre>'} = \&check_<nombre>;` y reporta con
+  `status($SPONGSERVER, $HOST, "<nombre>", $color, $summary, $message)`.
+- **Validar sintaxis** (el `use Spong::SafeExec` necesita el include path):
+  `perl -I/usr/local/spong/lib -c .../plugins/check_<nombre>`
+- **Reiniciar / recargar**: `kill -HUP <pid>` — el cliente se re-ejecuta a sí
+  mismo releyendo config y plugins (también acepta USR1; QUIT lo termina).
+- **Paths**: los hosts legacy pueden NO estar usr-mergeados (`/bin` real, no
+  symlink) — usar `/bin/btrfs`, `/bin/findmnt`, etc. en los plugins: esos
+  paths funcionan también en sistemas modernos usr-mergeados.
+- **Copia maestra del árbol Perl**: en s2 `/usr/local/spong/lib/` (está en
+  `.gitignore`, no es parte del repo v3). Plugins Perl custom existentes:
+  `check_btrfs` (s2 + i19, equivalente al `btrfs.py` de v3.7.7) y
+  `check_chronyc` (solo i19; el equivalente v3 es `chronyc.py` desde 3.6.4).
+- **Migración**: para pasar un host legacy al cliente nuevo, instalar el
+  `spong-client_*.deb` actual (ver §1) y replicar en `checks:` lo que tenía en
+  `$CHECKS` (ojo con checks sin equivalente directo, p. ej. `processes`).
