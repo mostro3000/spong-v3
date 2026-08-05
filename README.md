@@ -1,4 +1,4 @@
-# SPONG v3.7.6 — Network & Services Monitor
+# SPONG v3.7.7 — Network & Services Monitor
 
 **SPONG** (Simple Preventive Operations Network Guardian) is a network and services monitoring system originally written in Perl. v3 is a complete rewrite in Python 3, keeping full compatibility with the original database and configuration files.
 
@@ -1150,8 +1150,8 @@ Los paquetes `.deb` permiten instalar SPONG en cualquier sistema Debian/Ubuntu s
 cd /usr/local/spong/packaging
 bash build-deb.sh
 # Genera:
-#   dist/spong-server_3.7.6-1_all.deb
-#   dist/spong-client_3.7.6-1_all.deb
+#   dist/spong-server_3.7.7-1_all.deb
+#   dist/spong-client_3.7.7-1_all.deb
 ```
 
 ### Instalar el servidor
@@ -1243,6 +1243,27 @@ En GitHub → pestaña **Actions** → seleccionar el workflow → sección **Ar
 ---
 
 ## 16. Historial de cambios
+
+### v3.7.7 — 2026-08-05
+
+**Plugin cliente `btrfs` — salud de filesystems btrfs**
+- Nuevo plugin `spong/plugins/client/btrfs.py`. Por cada filesystem btrfs montado (deduplicado por UUID, así los subvolúmenes del mismo fs cuentan una sola vez) revisa:
+  - `btrfs device stats`: contadores de error por disco (write/read/flush/corruption/generation) — cualquiera > 0 → **rojo** (son acumulativos y la señal principal de salud de btrfs)
+  - `btrfs filesystem show`: device *missing*/degradado → **rojo**
+  - `btrfs scrub status`: `Uncorrectable` > 0 → rojo; `Corrected` > 0 → amarillo; sin scrub previo ("no stats available") = ok
+- Timeout/error al consultar btrfs → amarillo (un comando colgado es síntoma de disco muriendo, no se silencia). Host sin btrfs o sin btrfs-progs → verde
+- No entra en los checks por defecto (es específico de hosts con btrfs): habilitar agregando `btrfs` al `checks:` del host
+- Agregado a la categoría "Cliente" del panel admin. Desplegado en i14 (dir de overrides) e i19 (variante Perl `check_btrfs` para el cliente legacy, copiada también al árbol Perl original en `lib/`, fuera del repo)
+- Edita: `spong/plugins/client/btrfs.py`, `web/config_admin.py`
+
+**También entra en estos paquetes (commiteado después de v3.7.6)**
+- Vista de servicio: el fallback de "último reporte" del refresh AJAX también usa la hora del server (completa lo de v3.7.5)
+- Nueva guía operativa `docs/troubleshooting-clientes.md` (fallas reales de despliegue de clientes y sus fixes)
+
+**Release**
+- `spong.__version__`: `3.7.7`
+- `setup.py`: `3.7.7`
+- Paquetes: `spong-server_3.7.7-1_all.deb`, `spong-client_3.7.7-1_all.deb`
 
 ### v3.7.6 — 2026-07-24
 

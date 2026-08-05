@@ -601,7 +601,7 @@ _SERVICE_CATEGORIES = [
                          'volt_in', 'volt_out']),
     ('Cámaras',         ['rtsp', 'camara', 'dvrcam']),
     ('UPS',             ['ups']),
-    ('Cliente',         ['jobs', 'logs', 'memory', 'sensors', 'hddtemp', 'uptime', 'speedtest', 'chronyc', 'disktemp']),
+    ('Cliente',         ['jobs', 'logs', 'memory', 'sensors', 'hddtemp', 'uptime', 'speedtest', 'chronyc', 'disktemp', 'btrfs']),
 ]
 
 
