@@ -462,7 +462,7 @@ Vigila la instalación de [Claude Code](https://code.claude.com) del host para u
 | ¿Está instalado y arranca? | `claude --version` (instantáneo, no toca la config) | falta o falla → **rojo**; la versión va en el summary |
 | ¿Hay que rehacer login? | `~/.claude/.credentials.json` → `refreshTokenExpiresAt` (la misma fecha con la que la CLI avisa *"Your login expires in N days"*) | vencido → **rojo** "rehacer `claude auth login`"; vence en < `refresh_warn_days` → **amarillo** |
 | ¿Falta de pago? | `GET api.anthropic.com/api/oauth/profile` con el token de la sesión → `subscription_status` | distinto de `active`/`trialing`, factura pendiente de autorización o sin plan Pro/Max → **rojo** |
-| ¿Cuota agotada? | `GET api/oauth/usage` (lo mismo que `/usage` en la CLI) → % de la ventana de 5 h, semanal y por modelo | ≥ `usage_crit` o ventana bloqueada → **rojo** (con hora de reset); ≥ `usage_warn` → **amarillo** |
+| ¿Cuota agotada ("sin tokens" temporal)? | `GET api/oauth/usage` (lo mismo que `/usage` en la CLI) → % de la ventana de 5 h, semanal y por modelo, más `limits[].severity` | % redondeado ≥ `usage_crit`, `locked_reason` o `severity` terminal (`exhausted`/`blocked`/…) → **rojo** `cuota 5h agotada (100%): bloqueado hasta HH:MM`; ≥ `usage_warn` → **amarillo** |
 
 Esos dos endpoints no pasan por `/v1/messages`: **no consumen tokens ni cuota**. El plugin nunca ejecuta `claude -p` (gastaría cuota) ni refresca tokens por su cuenta (podría invalidar la sesión de la CLI). El token de acceso (`expiresAt`, ~8 h) se renueva solo al usar la CLI; si está vencido porque la máquina no usó Claude Code, el plugin no consulta la API y lo indica como "uso s/d" sin cambiar de color. 401 con token vigente → rojo (sesión revocada); sin respuesta de Anthropic → amarillo.
 
@@ -477,7 +477,8 @@ thresholds:
     usage_warn: 80         # % de una ventana de uso -> amarillo
     usage_crit: 100        # % -> rojo (Claude Code bloqueado hasta el reset)
     refresh_warn_days: 3   # amarillo si el login vence en menos de N días
-    interval: 600          # segundos entre consultas a api.anthropic.com (entre medio reusa la respuesta)
+    interval: 600          # segundos entre consultas a api.anthropic.com (entre medio reusa la respuesta;
+                           # bajarlo a 300 acorta la detección de la cuota agotada)
 commands:
   claude: "/usr/local/bin/claude"   # opcional; si falta busca ~/.local/bin/claude del usuario y el PATH
 ```
@@ -492,7 +493,7 @@ Varios usuarios (`users: "root mauri"`) se reportan en el mismo servicio `claude
 | `sin login: correr claude auth login` / `login vencido el …` / `sesión rechazada por Anthropic (401)` | `claude auth login` como ese usuario (el 401 con token vigente = sesión revocada, p. ej. logout desde otro equipo) |
 | `login vence en N días …` (amarillo) | Abrir la CLI y correr `/login` antes de esa fecha |
 | `suscripción past_due/canceled/…` / `pago pendiente de autorización` / `sin plan Pro/Max activo` | Revisar el pago en claude.ai → Configuración → Facturación (el detalle incluye la URL de la factura si Anthropic la manda) |
-| `límite 5h/semana alcanzado (…, resetea HH:MM)` / `… bloqueado` | Esperar el reset indicado; no hay nada que arreglar en el host |
+| `cuota 5h/semana agotada (100%): bloqueado hasta HH:MM` | Claude Code rechaza prompts hasta esa hora; no hay nada que arreglar en el host. Se ve como máximo `interval` + un ciclo después de agotarse, y vuelve a verde en el primer ciclo tras el reset (el caché se invalida solo al pasar `resets_at`) |
 | `sin respuesta de api.anthropic.com (…)` (amarillo) | Red/DNS/proxy del host hacia `api.anthropic.com:443`; Claude Code tampoco va a andar |
 | `uso s/d (token de acceso vencido hace …)` (verde) | Normal en hosts que no usan la CLI hace más de ~8 h; al abrir `claude` se renueva y vuelven los datos de uso |
 
@@ -1306,6 +1307,7 @@ En GitHub → pestaña **Actions** → seleccionar el workflow → sección **Ar
 
 **Después del tag v3.7.8 (commit `fbda7a8`, entra en los `.deb` del próximo release)**
 - Fix: `from __future__ import annotations` en `claude.py` — las anotaciones `float | None` rompían el import en Python 3.9 (mínimo declarado por el `.deb`). Los assets de v3.7.8 sólo cargan el plugin con Python ≥ 3.10; s2 (3.11) y mmg1 (3.13) no se ven afectados
+- Cuota agotada más robusta: el % se compara redondeado (99.6 → 100), `limits[].severity` terminal (`exhausted`/`blocked`/`locked`/`reached`) da rojo aunque el % no llegue a `usage_crit`, el summary dice explícitamente `cuota 5h agotada (100%): bloqueado hasta HH:MM`, y el caché se invalida al pasar `resets_at` para volver a verde en el primer ciclo tras el reset. Verificado con la cuenta real al 88 % (amarillo, `severity: warning`). `interval` bajado a 300 en s2 y mmg1
 
 **Release**
 - `spong.__version__`: `3.7.8`

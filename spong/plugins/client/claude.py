@@ -83,6 +83,10 @@ _PLAN = {
 # subscription_status (estilo Stripe) que no son problema de pago.
 _SUB_OK = {"active", "trialing"}
 
+# limits[].severity que significan "cuota agotada" (red de seguridad por si
+# utilization no llega a 100 cuando la CLI ya está bloqueada).
+_EXHAUSTED = {"exhausted", "blocked", "locked", "reached", "limit_reached", "rejected"}
+
 _VERSION_RE = re.compile(r"\d+\.\d+[\w.\-]*")
 _TIER_MULT_RE = re.compile(r"_(\d+x)$")
 
@@ -249,16 +253,32 @@ def _save_cache(cache: dict) -> None:
         log.warning("claude check: no se pudo escribir %s: %s", path, e)
 
 
+def _reset_passed(entry: dict, now: float) -> bool:
+    """True si alguna ventana de uso cacheada ya pasó su ``resets_at``:
+    la respuesta vieja seguiría mostrando la cuota agotada aunque ya se
+    destrabó, así que se vuelve a consultar sin esperar ``interval``."""
+    data = ((entry.get("usage") or {}).get("data")) or {}
+    for key, _ in _WINDOWS:
+        win = data.get(key)
+        if isinstance(win, dict):
+            resets = _iso(win.get("resets_at"))
+            if resets is not None and resets <= now:
+                return True
+    return False
+
+
 def _query(cfg_key: str, creds: dict, now: float, interval: int, cache: dict) -> dict:
     """Perfil + uso, reusando la respuesta anterior durante ``interval`` s.
 
     Se cachea toda respuesta HTTP (incluidos 401/403: son definitivos hasta
     que cambie el login); los errores de red no, para reintentar al ciclo
-    siguiente. Un cambio en .credentials.json (re-login, refresh) invalida.
+    siguiente. Un cambio en .credentials.json (re-login, refresh) o el paso
+    del ``resets_at`` de una ventana invalidan antes de tiempo.
     """
     entry = cache.get(cfg_key)
     if (isinstance(entry, dict) and entry.get("creds_mtime") == creds["mtime"]
-            and now - float(entry.get("ts", 0)) < interval):
+            and now - float(entry.get("ts", 0)) < interval
+            and not _reset_passed(entry, now)):
         return entry
     profile = _api_get("profile", creds["token"])
     usage = _api_get("usage", creds["token"])
@@ -362,23 +382,31 @@ def _eval_usage(resp: dict, warn: float, crit: float, lines: list[str],
         if not isinstance(win, dict) or win.get("utilization") is None:
             continue
         found = True
-        pct = float(win["utilization"])
+        # Se compara el valor redondeado, que es el que se muestra: 99.6 -> 100.
+        pct = round(float(win["utilization"]))
         resets = _iso(win.get("resets_at"))
-        lines.append(_kv(f"uso {label}", f"{pct:.0f}% (resetea {_fmt(resets)})"))
+        lines.append(_kv(f"uso {label}", f"{pct}% (resetea {_fmt(resets)})"))
         locked = win.get("locked_reason")
-        if locked:
+        if locked or pct >= crit:
             color = _worse(color, "red")
-            issues.append(f"{label} bloqueado: {locked}")
-        elif pct >= crit:
-            color = _worse(color, "red")
-            issues.append(f"límite {label} alcanzado ({pct:.0f}%, resetea {_fmt(resets)})")
+            issues.append(f"cuota {label} agotada ({pct}%): bloqueado hasta {_fmt(resets)}"
+                          + (f" [{locked}]" if locked else ""))
         elif pct >= warn:
             color = _worse(color, "yellow")
-            issues.append(f"{label} al {pct:.0f}% (resetea {_fmt(resets)})")
+            issues.append(f"{label} al {pct}% (resetea {_fmt(resets)})")
         else:
-            oks.append(f"{label} {pct:.0f}%")
+            oks.append(f"{label} {pct}%")
     if not found:
         lines.append(_kv("uso", "sin ventanas en la respuesta"))
+    # Red de seguridad: si la API marca un límite como agotado aunque el %
+    # no llegue a crit (o la ventana no esté entre las conocidas).
+    if color != "red":
+        for lim in data.get("limits") or []:
+            if isinstance(lim, dict) and str(lim.get("severity", "")).lower() in _EXHAUSTED:
+                color = "red"
+                issues.append(f"cuota agotada ({lim.get('kind', '?')}, {lim.get('percent', '?')}%): "
+                              f"bloqueado hasta {_fmt(_iso(lim.get('resets_at')))}")
+                break
     extra = data.get("extra_usage") or {}
     if extra.get("is_enabled") and extra.get("spend_limit_reached"):
         color = _worse(color, "yellow")

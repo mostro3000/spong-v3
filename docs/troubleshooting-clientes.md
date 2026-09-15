@@ -213,8 +213,14 @@ Siempre en el host y como el usuario de `users` (root en s2/mmg1):
 - **rojo `suscripción past_due/canceled/…` / `pago pendiente de autorización` /
   `sin plan Pro/Max activo`**: problema de pago en claude.ai → Facturación.
   El detalle del servicio incluye la URL de la factura si Anthropic la manda.
-- **rojo `límite 5h/semana alcanzado (…, resetea HH:MM)` / `… bloqueado`**:
-  cuota agotada; se destraba sola a la hora indicada. Nada que tocar.
+- **rojo `cuota 5h/semana agotada (100%): bloqueado hasta HH:MM`** ("me
+  quedé sin tokens"): Claude Code rechaza prompts hasta esa hora; se destraba
+  solo. Nada que tocar. Aparece como máximo `interval` + un ciclo después de
+  agotarse (300 s en s2/mmg1) y vuelve a verde en el primer ciclo tras el
+  reset (el caché se invalida al pasar `resets_at`). Lo dispara el %
+  redondeado ≥ `usage_crit`, `locked_reason`, o `limits[].severity`
+  terminal (`exhausted`/`blocked`/`locked`/`reached`); al 88 % la API
+  devuelve `severity: warning`, que no es rojo.
 - **amarillo `sin respuesta de api.anthropic.com (…)`**: red/DNS/proxy del
   host hacia `api.anthropic.com:443` (Claude Code tampoco anda). Transitorio
   si Anthropic está caído; no se cachea, reintenta al ciclo siguiente.
