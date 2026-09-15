@@ -138,3 +138,107 @@ cliente Python de este repo). Cómo reconocerlos y operarlos:
 - **Migración**: para pasar un host legacy al cliente nuevo, instalar el
   `spong-client_*.deb` actual (ver §1) y replicar en `checks:` lo que tenía en
   `$CHECKS` (ojo con checks sin equivalente directo, p. ej. `processes`).
+
+## 8. Plugin `claude` (estado de Claude Code) — desde v3.7.8
+
+Check de cliente que responde, **sin gastar tokens ni cuota**, si Claude
+Code está instalado, si hay que rehacer login, si la suscripción está al día
+y cuánto de la cuota (5 h / semana) va usada. Pensado para cuentas Pro/Max
+con login de claude.ai (no usa API key). Detalle y umbrales en README §5.
+
+### 8.1 Dónde está desplegado (sep 2026)
+
+| Host | Spong | Cómo | Cuenta |
+|------|-------|------|--------|
+| s2 | repo `main` corriendo en vivo (`/usr/local/spong`) | plugin bundled (`spong/plugins/client/claude.py`) | root, Max |
+| mmg1.esc10sl.edu.ar | **servidor propio** `spong-server 3.5.11-1` (`.deb`); se monitorea a sí mismo, NO reporta a s3vz | override `etc/plugins/client/claude.py` (copiado el 2026-09-15, igual al de `fbda7a8`) | root, Max |
+| s3vz / resto de la flota | — | no instalado | — |
+
+mmg1 tiene su propia web (puerto 8090) y su propio `hosts.yaml`; el servicio
+`claude` se agregó ahí, no en s2. Backups de sus yaml previos en
+`var/config_history/manual-20260915-155241/` (en mmg1).
+
+### 8.2 Instalar en otro host sin actualizar el `.deb`
+
+Funciona con cualquier spong ≥ 3.5.x (necesita `plugin_loader` con dir de
+overrides y `config.get_threshold`) y Python ≥ 3.9 (con el fix `fbda7a8`;
+el `claude.py` del tag v3.7.8 pide 3.10).
+
+```bash
+# desde s2
+scp spong/plugins/client/claude.py root@HOST:/usr/local/spong/etc/plugins/client/claude.py
+ssh root@HOST
+  cd /usr/local/spong
+  # spong.yaml: agregar claude a checks y el bloque thresholds.claude
+  #   checks: "... claude"
+  #   thresholds:
+  #     claude:
+  #       users: root          # usuario con ~/.claude/.credentials.json
+  #       usage_warn: 80
+  #       usage_crit: 100
+  #       refresh_warn_days: 3
+  #       interval: 600
+  # hosts.yaml DEL SERVIDOR que lo muestra: agregar claude a services del host
+  systemctl restart spong-client            # + spong-web (y server) en el servidor
+  ls var/database/HOST/services/ | grep claude   # si el server es local
+  grep "Loaded override plugin" /var/log/spong-client.log | tail -1
+```
+
+Prueba en seco sin mandar nada al server (imprime color y summary):
+
+```bash
+cd /usr/local/spong && python3 - <<'PY'
+from spong import config; config.load_all()
+from spong.plugin_loader import load_plugin
+m = load_plugin("client", "claude")
+m.send_status = lambda h, s, c, summ, msg="", ttl=0: print(c, summ, "\n" + msg)
+m.check_claude("prueba")
+PY
+```
+
+Ojo con el override: tiene prioridad sobre el `claude.py` que traiga un
+`.deb` posterior. Si el plugin cambia en un release, borrar o reemplazar
+`etc/plugins/client/claude.py` en ese host.
+
+### 8.3 Qué significa cada estado y qué hacer
+
+Siempre en el host y como el usuario de `users` (root en s2/mmg1):
+
+- **rojo `sin login` / `login vencido el …` / `sesión rechazada por Anthropic (401)`**:
+  `claude auth login`. El 401 con token vigente aparece si se hizo logout
+  desde otro equipo o se revocó la sesión.
+- **amarillo `login vence en N días`**: abrir `claude` y correr `/login`
+  antes de esa fecha. Es la misma fecha (`refreshTokenExpiresAt`) con la que
+  la CLI avisa "Your login expires in N days".
+- **rojo `suscripción past_due/canceled/…` / `pago pendiente de autorización` /
+  `sin plan Pro/Max activo`**: problema de pago en claude.ai → Facturación.
+  El detalle del servicio incluye la URL de la factura si Anthropic la manda.
+- **rojo `límite 5h/semana alcanzado (…, resetea HH:MM)` / `… bloqueado`**:
+  cuota agotada; se destraba sola a la hora indicada. Nada que tocar.
+- **amarillo `sin respuesta de api.anthropic.com (…)`**: red/DNS/proxy del
+  host hacia `api.anthropic.com:443` (Claude Code tampoco anda). Transitorio
+  si Anthropic está caído; no se cachea, reintenta al ciclo siguiente.
+- **verde `uso s/d (token de acceso vencido hace …)`**: el host no usó la CLI
+  en ~8 h; el token de acceso se renueva solo al abrirla. Normal.
+- **rojo `claude no instalado` / `… no arranca`**: reinstalar la CLI
+  (`curl -fsSL https://claude.ai/install.sh | bash` como ese usuario) o
+  fijar la ruta en `commands.claude`. Busca `~/.local/bin/claude` del
+  usuario y después el PATH del daemon (que bajo systemd no incluye
+  `~/.local/bin` de nadie).
+
+### 8.4 Cómo funciona por dentro (para no romperlo)
+
+- Lee `~/.claude/.credentials.json` (`expiresAt` = token de acceso ~8 h;
+  `refreshTokenExpiresAt` = cuándo la CLI exige re-login) y consulta con ese
+  token `GET api.anthropic.com/api/oauth/profile` (`subscription_status`) y
+  `GET api/oauth/usage` (lo mismo que `/usage` en la CLI). Ninguno pasa por
+  `/v1/messages`: 0 tokens.
+- Caché de las dos respuestas en `tmp/claude_check.json` (0600, sin tokens)
+  durante `interval` s; un cambio en `.credentials.json` lo invalida.
+  Borrarlo fuerza la consulta en el próximo ciclo.
+- **No** ejecuta `claude -p` (gasta cuota y con credenciales inválidas se
+  cuelga >150 s), **no** corre `claude auth status` (escribe `.claude.json`
+  + backups en el dir de config: como root en el home de otro usuario deja
+  archivos de root) y **no** refresca tokens (podría invalidar la sesión de
+  la CLI). Si alguna vez hace falta un chequeo activo, que sea opt-in.
+- Solo Linux: en macOS las credenciales van al Keychain, no a un archivo.

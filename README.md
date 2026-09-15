@@ -484,6 +484,22 @@ commands:
 
 Varios usuarios (`users: "root mauri"`) se reportan en el mismo servicio `claude`, con el peor color y el summary prefijado por usuario. El caché de respuestas vive en `tmp/claude_check.json` (modo 0600, sin tokens). Solo Linux: en macOS las credenciales van al Keychain.
 
+**Qué hacer según el estado** (la acción siempre es en el host y como el usuario configurado en `users`):
+
+| Summary | Acción |
+|---------|--------|
+| `claude no instalado` / `… no arranca` | Instalar/reparar la CLI (`curl -fsSL https://claude.ai/install.sh \| bash`) o fijar la ruta en `commands.claude` |
+| `sin login: correr claude auth login` / `login vencido el …` / `sesión rechazada por Anthropic (401)` | `claude auth login` como ese usuario (el 401 con token vigente = sesión revocada, p. ej. logout desde otro equipo) |
+| `login vence en N días …` (amarillo) | Abrir la CLI y correr `/login` antes de esa fecha |
+| `suscripción past_due/canceled/…` / `pago pendiente de autorización` / `sin plan Pro/Max activo` | Revisar el pago en claude.ai → Configuración → Facturación (el detalle incluye la URL de la factura si Anthropic la manda) |
+| `límite 5h/semana alcanzado (…, resetea HH:MM)` / `… bloqueado` | Esperar el reset indicado; no hay nada que arreglar en el host |
+| `sin respuesta de api.anthropic.com (…)` (amarillo) | Red/DNS/proxy del host hacia `api.anthropic.com:443`; Claude Code tampoco va a andar |
+| `uso s/d (token de acceso vencido hace …)` (verde) | Normal en hosts que no usan la CLI hace más de ~8 h; al abrir `claude` se renueva y vuelven los datos de uso |
+
+Para forzar una consulta antes de que venza `interval`, borrar `tmp/claude_check.json` (o cualquier cambio en `.credentials.json`, p. ej. un re-login, invalida el caché solo).
+
+**Instalar en un host con un spong anterior a 3.7.8 sin actualizar el `.deb`**: copiar `spong/plugins/client/claude.py` a `/usr/local/spong/etc/plugins/client/claude.py` (dir de overrides, sobrevive upgrades; requiere `plugin_loader` y `config.get_threshold`, presentes desde 3.5.x, y Python ≥ 3.9), agregar `claude` a `checks:` y el bloque `thresholds.claude` en `spong.yaml`, agregar `claude` a los `services` del host en `hosts.yaml` del servidor que lo muestra y reiniciar `spong-client` (+ `spong-web` en el servidor). Ojo: el override tiene prioridad sobre el `claude.py` que traiga un `.deb` posterior; si el plugin cambia en un release, borrar o reemplazar la copia de `etc/plugins/client/`.
+
 ---
 
 ## 6. Plugins de red (checks remotos)
@@ -1285,7 +1301,11 @@ En GitHub → pestaña **Actions** → seleccionar el workflow → sección **Ar
 - Config en `thresholds.claude` (`users`, `usage_warn`, `usage_crit`, `refresh_warn_days`, `interval`) y `commands.claude`; varios usuarios en el mismo servicio. Caché de respuestas en `tmp/claude_check.json` (0600, sin tokens) para no consultar más que cada `interval`
 - Documentado en README §5 y `etc/spong.yaml.example`; agregado a la categoría "Cliente" del panel admin
 - Edita: `spong/plugins/client/claude.py`, `web/config_admin.py`, `etc/spong.yaml.example`
-- Desplegado en s2 (`checks` + `thresholds.claude` en `spong.yaml`, servicio `claude` en `hosts.yaml`)
+- Desplegado en s2 (`checks` + `thresholds.claude` en `spong.yaml`, servicio `claude` en `hosts.yaml`) y en mmg1.esc10sl.edu.ar, que corre su propio `spong-server 3.5.11-1` (`.deb`, se monitorea a sí mismo): plugin vía dir de overrides `etc/plugins/client/claude.py`, misma config; no se actualizó su `.deb`
+- Guía operativa: README §5 (tabla "qué hacer según el estado", instalación por override) y `docs/troubleshooting-clientes.md` §8
+
+**Después del tag v3.7.8 (commit `fbda7a8`, entra en los `.deb` del próximo release)**
+- Fix: `from __future__ import annotations` en `claude.py` — las anotaciones `float | None` rompían el import en Python 3.9 (mínimo declarado por el `.deb`). Los assets de v3.7.8 sólo cargan el plugin con Python ≥ 3.10; s2 (3.11) y mmg1 (3.13) no se ven afectados
 
 **Release**
 - `spong.__version__`: `3.7.8`
