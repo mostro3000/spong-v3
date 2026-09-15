@@ -78,3 +78,5 @@
 + TUI bug: el historial inline se releia en CADA repintado (1/seg), no por refresco: 125ms de I/O por segundo en hosts con historial grande (5.6MB). Cacheado por (host,servicio,ultimo refresco): 119.7ms -> 0.07ms  [DONE v3.7.6]
 + TUI bug: refresh_data re-expandia todos los grupos cada 10s, deshaciendo el colapso del usuario; ahora respeta lo colapsado y solo auto-expande grupos nuevos  [DONE v3.7.6]
 + actualizar version a v3.7.6, documentacion, .deb y github  [DONE v3.7.6]
++ plugin cliente claude: estado de Claude Code sin gastar tokens (claude --version, refreshTokenExpiresAt de .credentials.json para "rehacer login", api/oauth/profile para subscription_status = falta de pago, api/oauth/usage para % de cuota 5h/semana con hora de reset). Cuenta Max con login claude.ai, sin API key. No usa claude -p ni auth status ni refresca tokens. Config thresholds.claude (users/usage_warn/usage_crit/refresh_warn_days/interval), cache tmp/claude_check.json  [DONE v3.7.8]
++ actualizar version a v3.7.8, documentacion, .deb y github  [DONE v3.7.8]

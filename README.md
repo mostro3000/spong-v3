@@ -1,4 +1,4 @@
-# SPONG v3.7.7 — Network & Services Monitor
+# SPONG v3.7.8 — Network & Services Monitor
 
 **SPONG** (Simple Preventive Operations Network Guardian) is a network and services monitoring system originally written in Perl. v3 is a complete rewrite in Python 3, keeping full compatibility with the original database and configuration files.
 
@@ -49,10 +49,10 @@
 
 ```bash
 # 1. Descargar el .deb desde Releases
-wget https://github.com/mostro3000/spong-v3/releases/latest/download/spong-server_3.6.2-1_all.deb
+wget https://github.com/mostro3000/spong-v3/releases/latest/download/spong-server_3.7.8-1_all.deb
 
 # 2. Instalar (el postinst configura dependencias y activa los 4 servicios systemd)
-dpkg -i spong-server_3.6.2-1_all.deb
+dpkg -i spong-server_3.7.8-1_all.deb
 
 # 3. Editar la configuración
 nano /usr/local/spong/etc/spong.yaml    # servidor, thresholds, checks
@@ -69,11 +69,11 @@ xdg-open http://localhost:8090/
 ### Cliente remoto (en otro host)
 
 ```bash
-wget https://github.com/mostro3000/spong-v3/releases/latest/download/spong-client_3.6.2-1_all.deb
-dpkg -i spong-client_3.6.2-1_all.deb   # instalación interactiva: pregunta servidor, hostname, checks
+wget https://github.com/mostro3000/spong-v3/releases/latest/download/spong-client_3.7.8-1_all.deb
+dpkg -i spong-client_3.7.8-1_all.deb   # instalación interactiva: pregunta servidor, hostname, checks
 ```
 
-> Si el asset `3.6.2-1` todavía no está publicado en GitHub Releases, construir localmente con `cd packaging && bash build-deb.sh` o crear el tag `v3.6.2` para que CI publique los `.deb`.
+> Si el asset `3.7.8-1` todavía no está publicado en GitHub Releases, construir localmente con `cd packaging && bash build-deb.sh` o crear el tag `v3.7.8` para que CI publique los `.deb`.
 
 ### Migración desde SPONG Perl (spong.conf / spong.hosts / spong.groups)
 
@@ -86,12 +86,12 @@ python3 /usr/local/spong/bin/spong-migrate.py --all --outdir /usr/local/spong/et
 
 ## Estado actual del código
 
-SPONG v3.7.6 está organizado como una aplicación Python 3 con cuatro procesos principales: servidor TCP asyncio, agente de red, agente local y UI Flask. La base de datos sigue siendo de archivos para mantener compatibilidad con SPONG Perl; los RRD se actualizan desde el servidor cuando llegan estados nuevos.
+SPONG v3.7.8 está organizado como una aplicación Python 3 con cuatro procesos principales: servidor TCP asyncio, agente de red, agente local y UI Flask. La base de datos sigue siendo de archivos para mantener compatibilidad con SPONG Perl; los RRD se actualizan desde el servidor cuando llegan estados nuevos.
 
 El repositorio contiene el código Python en `spong/`, la UI en `web/`, wrappers ejecutables en `bin/`, configuración en `etc/`, empaquetado Debian en `packaging/` y capturas en `docs/screenshots/`. También conserva datos locales bajo `var/` y código histórico Perl en `lib/`, `cgi-bin/` y `www/`; esos árboles no son necesarios para entender la implementación Python nueva.
 
 Resumen operativo:
-- **Versión actual:** `spong.__version__ = 3.7.6`, `setup.py = 3.7.6`, paquetes `3.7.6-1`
+- **Versión actual:** `spong.__version__ = 3.7.8`, `setup.py = 3.7.8`, paquetes `3.7.8-1`
 - **Runtime:** Python 3.10+ para instalación por `setup.py`; los paquetes Debian declaran `python3 >= 3.9`
 - **Dependencias principales:** `pyyaml`, `flask`, `werkzeug`, `rrdtool`, `fping`, `snmp`, `rpcbind`; `tinytuya` solo para plugins Tuya
 - **Persistencia:** `/usr/local/spong/var/database`, `/usr/local/spong/var/rrd`, `/usr/local/spong/var/archives`
@@ -449,8 +449,40 @@ El `spong-client` ejecuta estos plugins en el host local. El nombre reportado sa
 | `logs.py` | `logs` | Patrones en archivos de log | `log_checks[]` en spong.yaml |
 | `speedtest.py` | `speedtest` | Bajada/subida/ping/jitter via Ookla CLI | `thresholds.speedtest.*` |
 | `processes.py` | `jobs` | Alias legacy del check de procesos | `processes.crit/warn` |
+| `claude.py` | `claude` | Estado de Claude Code: instalado, login vigente, suscripción, % de cuota (0 tokens) | `thresholds.claude.*` |
 
-Para que la UI muestre los checks locales, los mismos servicios deben figurar también en `hosts.yaml` para ese hostname.
+Para que la UI muestre los checks locales, los mismos servicios deben figurar también en `hosts.yaml` para ese hostname (en `/config` → editar host → "Servicios adicionales").
+
+### Plugin `claude` — estado de Claude Code sin gastar tokens
+
+Vigila la instalación de [Claude Code](https://code.claude.com) del host para una cuenta Pro/Max con login de claude.ai (no hace falta API key). Por cada usuario configurado responde:
+
+| Pregunta | Cómo | Resultado |
+|----------|------|-----------|
+| ¿Está instalado y arranca? | `claude --version` (instantáneo, no toca la config) | falta o falla → **rojo**; la versión va en el summary |
+| ¿Hay que rehacer login? | `~/.claude/.credentials.json` → `refreshTokenExpiresAt` (la misma fecha con la que la CLI avisa *"Your login expires in N days"*) | vencido → **rojo** "rehacer `claude auth login`"; vence en < `refresh_warn_days` → **amarillo** |
+| ¿Falta de pago? | `GET api.anthropic.com/api/oauth/profile` con el token de la sesión → `subscription_status` | distinto de `active`/`trialing`, factura pendiente de autorización o sin plan Pro/Max → **rojo** |
+| ¿Cuota agotada? | `GET api/oauth/usage` (lo mismo que `/usage` en la CLI) → % de la ventana de 5 h, semanal y por modelo | ≥ `usage_crit` o ventana bloqueada → **rojo** (con hora de reset); ≥ `usage_warn` → **amarillo** |
+
+Esos dos endpoints no pasan por `/v1/messages`: **no consumen tokens ni cuota**. El plugin nunca ejecuta `claude -p` (gastaría cuota) ni refresca tokens por su cuenta (podría invalidar la sesión de la CLI). El token de acceso (`expiresAt`, ~8 h) se renueva solo al usar la CLI; si está vencido porque la máquina no usó Claude Code, el plugin no consulta la API y lo indica como "uso s/d" sin cambiar de color. 401 con token vigente → rojo (sesión revocada); sin respuesta de Anthropic → amarillo.
+
+Summary típico: `Max 5x ok · 5h 6% · semana 1% · login ok hasta 30/09 · v2.1.272`. El detalle lista cuenta/org, estado de suscripción, vencimientos y cada ventana de uso con su reset.
+
+```yaml
+checks: "disk cpu memory uptime claude"
+thresholds:
+  claude:
+    users: "root"          # usuarios cuyo ~/.claude se verifica (o rutas a un CLAUDE_CONFIG_DIR);
+                           # default: el usuario que corre spong-client (root bajo systemd)
+    usage_warn: 80         # % de una ventana de uso -> amarillo
+    usage_crit: 100        # % -> rojo (Claude Code bloqueado hasta el reset)
+    refresh_warn_days: 3   # amarillo si el login vence en menos de N días
+    interval: 600          # segundos entre consultas a api.anthropic.com (entre medio reusa la respuesta)
+commands:
+  claude: "/usr/local/bin/claude"   # opcional; si falta busca ~/.local/bin/claude del usuario y el PATH
+```
+
+Varios usuarios (`users: "root mauri"`) se reportan en el mismo servicio `claude`, con el peor color y el summary prefijado por usuario. El caché de respuestas vive en `tmp/claude_check.json` (modo 0600, sin tokens). Solo Linux: en macOS las credenciales van al Keychain.
 
 ---
 
@@ -1150,14 +1182,14 @@ Los paquetes `.deb` permiten instalar SPONG en cualquier sistema Debian/Ubuntu s
 cd /usr/local/spong/packaging
 bash build-deb.sh
 # Genera:
-#   dist/spong-server_3.7.7-1_all.deb
-#   dist/spong-client_3.7.7-1_all.deb
+#   dist/spong-server_3.7.8-1_all.deb
+#   dist/spong-client_3.7.8-1_all.deb
 ```
 
 ### Instalar el servidor
 
 ```bash
-dpkg -i spong-server_3.6.2-1_all.deb
+dpkg -i spong-server_3.7.8-1_all.deb
 # Depends: python3, python3-flask, python3-werkzeug, python3-yaml,
 #          rrdtool, fping, iputils-ping, snmp, rpcbind
 # Recommends: apache2
@@ -1173,7 +1205,7 @@ dpkg -i spong-server_3.6.2-1_all.deb
 ### Instalar solo el agente cliente
 
 ```bash
-dpkg -i spong-client_3.6.2-1_all.deb
+dpkg -i spong-client_3.7.8-1_all.deb
 # Depends: python3
 # Recommends: smartmontools, lm-sensors
 # El postinst es interactivo — pregunta:
@@ -1243,6 +1275,22 @@ En GitHub → pestaña **Actions** → seleccionar el workflow → sección **Ar
 ---
 
 ## 16. Historial de cambios
+
+### v3.7.8 — 2026-09-15
+
+**Plugin cliente `claude` — estado de Claude Code sin gastar tokens**
+- Nuevo plugin `spong/plugins/client/claude.py` (servicio `claude`). Para cuenta Pro/Max con login de claude.ai (sin API key) responde: ¿está instalado? (`claude --version`), ¿hay que rehacer login? (`refreshTokenExpiresAt` de `~/.claude/.credentials.json`, el mismo dato con el que la CLI avisa "Your login expires in N days"), ¿falta de pago? (`api/oauth/profile` → `subscription_status`) y ¿cuota agotada? (`api/oauth/usage`, lo que muestra `/usage`: % de la ventana de 5 h, semanal y por modelo, con hora de reset)
+- Cero consumo: los endpoints de perfil/uso no pasan por `/v1/messages`. No ejecuta `claude -p` (gasta cuota y con credenciales inválidas se cuelga) ni `claude auth status` (escribe `.claude.json` en el dir de config: como root en el home de otro usuario dejaría archivos de root) ni refresca tokens (podría invalidar la sesión de la CLI)
+- Colores: sin binario / sin login / login vencido / 401 / suscripción no activa / factura pendiente / límite alcanzado o ventana bloqueada → **rojo**; login por vencer / uso ≥ `usage_warn` / sin respuesta de Anthropic → **amarillo**; token de acceso vencido por no usar la CLI → verde con "uso s/d"
+- Config en `thresholds.claude` (`users`, `usage_warn`, `usage_crit`, `refresh_warn_days`, `interval`) y `commands.claude`; varios usuarios en el mismo servicio. Caché de respuestas en `tmp/claude_check.json` (0600, sin tokens) para no consultar más que cada `interval`
+- Documentado en README §5 y `etc/spong.yaml.example`; agregado a la categoría "Cliente" del panel admin
+- Edita: `spong/plugins/client/claude.py`, `web/config_admin.py`, `etc/spong.yaml.example`
+- Desplegado en s2 (`checks` + `thresholds.claude` en `spong.yaml`, servicio `claude` en `hosts.yaml`)
+
+**Release**
+- `spong.__version__`: `3.7.8`
+- `setup.py`: `3.7.8`
+- Paquetes: `spong-server_3.7.8-1_all.deb`, `spong-client_3.7.8-1_all.deb`
 
 ### v3.7.7 — 2026-08-05
 

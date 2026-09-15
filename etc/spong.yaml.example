@@ -72,6 +72,12 @@ thresholds:
   iftraffic:
     warn: 70                  # % interface utilization
     crit: 90
+  claude:                     # plugin cliente "claude" (estado de Claude Code, 0 tokens)
+    users: "root"             # usuarios cuyo ~/.claude se verifica (o rutas a un CLAUDE_CONFIG_DIR)
+    usage_warn: 80            # % de la ventana de uso (5h / semana) -> amarillo
+    usage_crit: 100           # % -> rojo (limite alcanzado)
+    refresh_warn_days: 3      # amarillo si el login vence en menos de N dias
+    interval: 600             # segundos entre consultas a api.anthropic.com
 
 # Required/warned processes (client check)
 processes:
