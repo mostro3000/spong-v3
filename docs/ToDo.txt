@@ -80,3 +80,4 @@
 + actualizar version a v3.7.6, documentacion, .deb y github  [DONE v3.7.6]
 + plugin cliente claude: estado de Claude Code sin gastar tokens (claude --version, refreshTokenExpiresAt de .credentials.json para "rehacer login", api/oauth/profile para subscription_status = falta de pago, api/oauth/usage para % de cuota 5h/semana con hora de reset). Cuenta Max con login claude.ai, sin API key. No usa claude -p ni auth status ni refresca tokens. Config thresholds.claude (users/usage_warn/usage_crit/refresh_warn_days/interval), cache tmp/claude_check.json  [DONE v3.7.8]
 + actualizar version a v3.7.8, documentacion, .deb y github  [DONE v3.7.8]
++ plugin claude: from __future__ import annotations (anotaciones `X | None` rompian el import en Python 3.9, minimo del .deb); desplegado en mmg1 (spong-server 3.5.11, via etc/plugins/client/ override) y s2

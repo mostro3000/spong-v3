@@ -37,6 +37,8 @@ del usuario (instalador nativo) y después en el PATH. Habilitar agregando
 Keychain, no a un archivo).
 """
 
+from __future__ import annotations
+
 import json
 import logging
 import os
