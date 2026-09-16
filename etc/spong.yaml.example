@@ -57,6 +57,9 @@ thresholds:
   memory:
     warn: 90
     crit: 95
+  zfs:
+    warn: 85                  # % de ocupación del pool -> amarillo
+    crit: 95                  # -> rojo
   mailq:
     warn: 80
     crit: 100

@@ -1,4 +1,4 @@
-# SPONG v3.7.8 — Network & Services Monitor
+# SPONG v3.7.9 — Network & Services Monitor
 
 **SPONG** (Simple Preventive Operations Network Guardian) is a network and services monitoring system originally written in Perl. v3 is a complete rewrite in Python 3, keeping full compatibility with the original database and configuration files.
 
@@ -49,10 +49,10 @@
 
 ```bash
 # 1. Descargar el .deb desde Releases
-wget https://github.com/mostro3000/spong-v3/releases/latest/download/spong-server_3.7.8-1_all.deb
+wget https://github.com/mostro3000/spong-v3/releases/latest/download/spong-server_3.7.9-1_all.deb
 
 # 2. Instalar (el postinst configura dependencias y activa los 4 servicios systemd)
-dpkg -i spong-server_3.7.8-1_all.deb
+dpkg -i spong-server_3.7.9-1_all.deb
 
 # 3. Editar la configuración
 nano /usr/local/spong/etc/spong.yaml    # servidor, thresholds, checks
@@ -69,11 +69,11 @@ xdg-open http://localhost:8090/
 ### Cliente remoto (en otro host)
 
 ```bash
-wget https://github.com/mostro3000/spong-v3/releases/latest/download/spong-client_3.7.8-1_all.deb
-dpkg -i spong-client_3.7.8-1_all.deb   # instalación interactiva: pregunta servidor, hostname, checks
+wget https://github.com/mostro3000/spong-v3/releases/latest/download/spong-client_3.7.9-1_all.deb
+dpkg -i spong-client_3.7.9-1_all.deb   # instalación interactiva: pregunta servidor, hostname, checks
 ```
 
-> Si el asset `3.7.8-1` todavía no está publicado en GitHub Releases, construir localmente con `cd packaging && bash build-deb.sh` o crear el tag `v3.7.8` para que CI publique los `.deb`.
+> Si el asset `3.7.9-1` todavía no está publicado en GitHub Releases, construir localmente con `cd packaging && bash build-deb.sh` o crear el tag `v3.7.9` para que CI publique los `.deb`.
 
 ### Migración desde SPONG Perl (spong.conf / spong.hosts / spong.groups)
 
@@ -86,12 +86,12 @@ python3 /usr/local/spong/bin/spong-migrate.py --all --outdir /usr/local/spong/et
 
 ## Estado actual del código
 
-SPONG v3.7.8 está organizado como una aplicación Python 3 con cuatro procesos principales: servidor TCP asyncio, agente de red, agente local y UI Flask. La base de datos sigue siendo de archivos para mantener compatibilidad con SPONG Perl; los RRD se actualizan desde el servidor cuando llegan estados nuevos.
+SPONG v3.7.9 está organizado como una aplicación Python 3 con cuatro procesos principales: servidor TCP asyncio, agente de red, agente local y UI Flask. La base de datos sigue siendo de archivos para mantener compatibilidad con SPONG Perl; los RRD se actualizan desde el servidor cuando llegan estados nuevos.
 
 El repositorio contiene el código Python en `spong/`, la UI en `web/`, wrappers ejecutables en `bin/`, configuración en `etc/`, empaquetado Debian en `packaging/` y capturas en `docs/screenshots/`. También conserva datos locales bajo `var/` y código histórico Perl en `lib/`, `cgi-bin/` y `www/`; esos árboles no son necesarios para entender la implementación Python nueva.
 
 Resumen operativo:
-- **Versión actual:** `spong.__version__ = 3.7.8`, `setup.py = 3.7.8`, paquetes `3.7.8-1`
+- **Versión actual:** `spong.__version__ = 3.7.9`, `setup.py = 3.7.9`, paquetes `3.7.9-1`
 - **Runtime:** Python 3.10+ para instalación por `setup.py`; los paquetes Debian declaran `python3 >= 3.9`
 - **Dependencias principales:** `pyyaml`, `flask`, `werkzeug`, `rrdtool`, `fping`, `snmp`, `rpcbind`; `tinytuya` solo para plugins Tuya
 - **Persistencia:** `/usr/local/spong/var/database`, `/usr/local/spong/var/rrd`, `/usr/local/spong/var/archives`
@@ -450,6 +450,7 @@ El `spong-client` ejecuta estos plugins en el host local. El nombre reportado sa
 | `speedtest.py` | `speedtest` | Bajada/subida/ping/jitter via Ookla CLI | `thresholds.speedtest.*` |
 | `processes.py` | `jobs` | Alias legacy del check de procesos | `processes.crit/warn` |
 | `claude.py` | `claude` | Estado de Claude Code: instalado, login vigente, suscripción, % de cuota (0 tokens) | `thresholds.claude.*` |
+| `zfs.py` | `zfs` | Salud de pools ZFS: health, errores por dispositivo, scrub y ocupación | `thresholds.zfs.warn/crit` |
 
 Para que la UI muestre los checks locales, los mismos servicios deben figurar también en `hosts.yaml` para ese hostname (en `/config` → editar host → "Servicios adicionales").
 
@@ -1199,14 +1200,14 @@ Los paquetes `.deb` permiten instalar SPONG en cualquier sistema Debian/Ubuntu s
 cd /usr/local/spong/packaging
 bash build-deb.sh
 # Genera:
-#   dist/spong-server_3.7.8-1_all.deb
-#   dist/spong-client_3.7.8-1_all.deb
+#   dist/spong-server_3.7.9-1_all.deb
+#   dist/spong-client_3.7.9-1_all.deb
 ```
 
 ### Instalar el servidor
 
 ```bash
-dpkg -i spong-server_3.7.8-1_all.deb
+dpkg -i spong-server_3.7.9-1_all.deb
 # Depends: python3, python3-flask, python3-werkzeug, python3-yaml,
 #          rrdtool, fping, iputils-ping, snmp, rpcbind
 # Recommends: apache2
@@ -1222,7 +1223,7 @@ dpkg -i spong-server_3.7.8-1_all.deb
 ### Instalar solo el agente cliente
 
 ```bash
-dpkg -i spong-client_3.7.8-1_all.deb
+dpkg -i spong-client_3.7.9-1_all.deb
 # Depends: python3
 # Recommends: smartmontools, lm-sensors
 # El postinst es interactivo — pregunta:
@@ -1292,6 +1293,29 @@ En GitHub → pestaña **Actions** → seleccionar el workflow → sección **Ar
 ---
 
 ## 16. Historial de cambios
+### v3.7.9 — 2026-09-16
+
+**Plugin cliente `zfs` — salud de pools ZFS**
+- Nuevo plugin `spong/plugins/client/zfs.py` (servicio `zfs`), port del `check_zfs` Perl del cliente legacy, que sólo miraba si `zpool status` decía ` state: ONLINE`. Por cada pool, con `zpool list -H -o name,health,capacity,size,free` y `zpool status`:
+  - health distinto de ONLINE (DEGRADED/FAULTED/UNAVAIL/REMOVED/OFFLINE) → **rojo**
+  - dispositivo de datos en estado no sano, o con contadores READ/WRITE/CKSUM > 0 → **rojo**; si es de `cache`, `logs` o `spares` → amarillo (perderlo no arriesga los datos del pool)
+  - `errors:` distinto de "No known data errors" (errores permanentes) → **rojo**
+  - scrub/resilver terminado con errores → rojo; con datos reparados → amarillo; resilver en curso → amarillo
+  - ocupación del pool ≥ `thresholds.zfs.crit` (95) → rojo; ≥ `thresholds.zfs.warn` (85) → amarillo. Es distinto del uso por dataset que ve el check `disk`: en i27 el pool va 83 % con `/disco` al 45 %
+- La línea `status:` de zpool **no** define el color: en pools sanos suele decir "Some supported and requested features are not enabled" o "non-native block size", y tomarla como falla pintaba de amarillo a hosts sin ningún problema. Los fallos reales ya salen por health, por los contadores o por `errors:`
+- La fila del propio pool y los vdev contenedores (`mirror-N`, `raidz-N`, `replacing-N`…) no aportan contadores: agregan los de sus hijos y cada error aparecería dos veces. Las filas de dispositivo se parsean con regex para tolerar la nota final ("too many errors"), que un split por columnas se come
+- Sin `zpool` o sin pools importados → verde; timeout/error de zpool → amarillo (síntoma de pool colgado)
+- No entra en los checks por defecto: habilitar agregando `zfs` al `checks:` del host. Agregado a la categoría "Cliente" del panel admin y a `etc/spong.yaml.example`
+- Probado con 17 casos (salidas reales de i27/i28 más pool degradado, disco FAULTED, errores de checksum, resilver en curso, errores permanentes, cache UNAVAIL, sin pools y timeouts). Desplegado en i27, i28, i29, i30 e i31 por el dir de overrides; con este release esas copias quedan redundantes
+- Edita: `spong/plugins/client/zfs.py`, `web/config_admin.py`, `etc/spong.yaml.example`
+
+**Además, ya estaba en `main` desde el tag v3.7.8** (ahora sí entra en los `.deb`)
+- `claude.py`: `from __future__ import annotations` para Python 3.9 y detección más robusta de cuota agotada (commits `fbda7a8`, `2854de6`)
+
+**Release**
+- `spong.__version__`: `3.7.9`
+- `setup.py`: `3.7.9`
+- Paquetes: `spong-server_3.7.9-1_all.deb`, `spong-client_3.7.9-1_all.deb`
 
 ### v3.7.8 — 2026-09-15
 
